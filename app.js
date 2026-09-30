@@ -7,7 +7,7 @@ function parseCsv(text) { const lines = text.trim().split(/\r?\n/); const parse 
 function issue(id, column, type, label, rows, severity, summary, recommendation, details = {}) { return { id, column, type, label, rows, severity, summary, recommendation, status: "open", ...details }; }
 function numericColumns() { return state.headers.filter((header) => state.rows.filter((row) => Number.isFinite(Number(row[header])) && String(row[header]).trim() !== "").length >= Math.max(4, state.rows.length * .6)); }
 function quantile(sorted, p) { const position = (sorted.length - 1) * p; const lower = Math.floor(position); const upper = Math.ceil(position); return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower); }
-function numericStats(values) { const sorted = values.filter(Number.isFinite).sort((a, b) => a - b); const mean = sorted.reduce((sum, value) => sum + value, 0) / (sorted.length || 1); return { mean, median: quantile(sorted, .5) || 0, min: sorted[0] || 0, max: sorted.at(-1) || 0, q1: quantile(sorted, .25) || 0, q3: quantile(sorted, .75) || 0 }; }
+function numericStats(values) { const sorted = values.filter(Number.isFinite).sort((a, b) => a - b); const mean = sorted.reduce((sum, value) => sum + value, 0) / (sorted.length || 1); return { mean, median: quantile(sorted, .5) || 0, min: sorted[0] || 0, max: sorted[sorted.length - 1] || 0, q1: quantile(sorted, .25) || 0, q3: quantile(sorted, .75) || 0 }; }
 function numericValues(column) { return state.rows.map((row) => ({ raw: String(row[column] ?? "").trim(), value: Number(row[column]) })).filter(({ raw, value }) => raw && Number.isFinite(value)).map(({ value }) => value); }
 function outlierProfile(column, multiplier = 1.5) { const values = state.rows.map((row) => ({ row, raw: String(row[column] ?? "").trim(), value: Number(row[column]) })).filter(({ raw, value }) => raw && Number.isFinite(value)); if (values.length < 4) return null; const stats = numericStats(values.map(({ value }) => value)); const iqr = stats.q3 - stats.q1; if (!iqr) return null; const lower = stats.q1 - multiplier * iqr; const upper = stats.q3 + multiplier * iqr; const rows = values.filter(({ value }) => value < lower || value > upper).map(({ row }) => row); return { rows, stats, lower, upper, multiplier }; }
 function detectIssues() {
@@ -21,7 +21,7 @@ function detectIssues() {
   const profiles = numericColumns().map((column) => [column, outlierProfile(column)]).filter(([, profile]) => profile?.rows.length); const preferred = profiles.find(([column]) => column === "spend_usd") || profiles[0]; if (preferred) { const [column, profile] = preferred; issues.push(issue(id++, column, "IQR numerical outliers", `IQR outliers in ${column}`, profile.rows, "medium", `${profile.rows.length} values fall outside the 1.5 × IQR fences (${profile.lower.toFixed(2)} to ${profile.upper.toFixed(2)}).`, "outlier", { outlier: profile })); }
   state.issues = issues;
 }
-function loadData(text, name) { const data = parseCsv(text); Object.assign(state, { headers: data.headers, original: structuredClone(data.rows), rows: data.rows, fileName: name, changes: [], selectedIssue: null, customProposals: {}, aiMessage: "", proposalPending: false, scatter: {}, issueFilters: {} }); detectIssues(); enableWorkspace(); render(); }
+function loadData(text, name) { const data = parseCsv(text); Object.assign(state, { headers: data.headers, original: data.rows.map((row) => ({ ...row })), rows: data.rows, fileName: name, changes: [], selectedIssue: null, customProposals: {}, aiMessage: "", proposalPending: false, scatter: {}, issueFilters: {} }); detectIssues(); enableWorkspace(); render(); }
 function enableWorkspace() { document.querySelectorAll(".nav-link").forEach((button) => { button.disabled = false; }); $("#batchButton").disabled = false; $("#contextAction").classList.remove("hidden"); $("#headerIssues").classList.remove("hidden"); }
 function openCount() { return state.issues.filter((item) => item.status === "open").length; }
 function inferType(header) { return numericColumns().includes(header) ? "Number" : /date/.test(header) ? "Date" : "Text"; }
@@ -55,10 +55,13 @@ function loadSample(name) {
     ["marketing_campaign_performance_dirty.csv", "Marketing performance", "Campaign delivery and conversion metrics"],
   ];
   if (name) {
-    fetch(name).then((response) => {
-      if (!response.ok) throw new Error("Sample could not be loaded.");
+    fetch(new URL(name, window.location.origin), { cache: "no-store" }).then((response) => {
+      if (!response.ok) throw new Error(`Sample request returned ${response.status}.`);
       return response.text();
-    }).then((text) => loadData(text, name)).catch((error) => notify(error.message));
+    }).then((text) => loadData(text, name)).catch((error) => {
+      console.error("Sample load failed:", error);
+      notify(`Could not open ${name}: ${error.message}`);
+    });
     return;
   }
   screen.innerHTML = `<section class="empty-state sample-picker"><p class="eyebrow">BUNDLED SAMPLE DATA</p><h1>Choose a dataset to review.</h1><p>Each sample contains realistic quality problems for a local, reversible cleaning workflow.</p><div class="sample-list">${samples.map(([file, title, description]) => `<button class="sample-option" data-sample="${file}"><b>${title}</b><small>${description}</small></button>`).join("")}</div><button class="ghost" id="backToSource">Back</button></section>`;
