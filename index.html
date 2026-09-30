@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clearview | Data Quality Copilot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#data"><span class="brand-mark">C</span>clearview</a>
+        <p class="product-label">DATA QUALITY COPILOT</p>
+        <nav id="navigation" aria-label="Primary navigation">
+          <button class="nav-link active" data-screen="data"><span>▤</span>Data</button>
+          <button class="nav-link" data-screen="view" disabled><span>▦</span>View</button>
+          <button class="nav-link" data-screen="issues" disabled><span>◉</span>Issues <b id="navIssueCount">0</b></button>
+          <button class="nav-link" data-screen="changes" disabled><span>⇄</span>Changes <b id="navChangeCount" class="hidden">0</b></button>
+          <button class="nav-link" data-screen="report" disabled><span>▱</span>Report</button>
+        </nav>
+        <button class="batch-card" id="batchButton" disabled><span class="pulse"></span><span><small>LIVE-FEED DEMO</small><strong>Incoming batch</strong><em>Load data to simulate</em></span></button>
+        <p class="sidebar-note">Original data is preserved. Every approved decision can be reversed.</p>
+      </aside>
+      <main>
+        <header class="topbar"><div><p class="eyebrow" id="topEyebrow">DATA SOURCE</p><strong id="datasetName">No dataset loaded</strong></div><div class="header-actions"><span class="status-badge neutral" id="versionBadge">Original</span><span class="status-badge warning hidden" id="headerIssues">0 unresolved</span><button class="ghost hidden" id="undoButton">Undo last change</button><button class="primary hidden" id="contextAction">Open in View</button></div></header>
+        <div id="screen" class="screen"></div>
+      </main>
+    </div>
+    <input type="file" id="fileInput" accept=".csv,text/csv" hidden />
+    <dialog id="confirmDialog"><div id="dialogContent"></div></dialog>
+    <div class="toast" id="toast" role="status"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+login.txt
+node_modules/
+.wrangler/
+*.pem
+*.key

@@ -1,0 +1,33 @@
+## 2026-09-27 - Issues Review and Custom AI Fixes
+
+- Preserved the existing column-grouped, three-panel Issues review layout.
+- Added a clear `Collapse ↑` control and retained unfinalized selected fixes when reopening an issue.
+- Added calculated category-variant evidence for Paid Social labels, including value counts, shares, example-derived variants, and ambiguity guidance for `Social`.
+- Expanded category fixes with a full standardization option, a limited underscore-only mapping, and a keep-valid option.
+- Added calculated categorical impact preview metrics, frequency bars, category counts, percentage changed, and a Related Impact disclosure.
+- Added contextual decision actions so non-transforming treatments use `Mark as valid` and transforming treatments use `Finalize change`.
+- Added the bounded `Ask AI for another fix` workflow, including scope validation, ambiguity clarification, unsupported-request feedback, generated proposal cards, edit/remove controls, simulation, and finalization.
+- Added an Ollama model selector for the Issues review mode and a same-origin `/api/ollama` proxy in `server.js` using `OLLAMA_URL` or the configured local server.
+- Verified JavaScript syntax, the local Node host, and Ollama model discovery. A live generation request exceeded 120 seconds without a response, so generation speed remains dependent on the local Ollama server.
+
+## 2026-09-27 - Expanded Issue Review
+
+- Added a full-width, resizable affected-records subview with sticky headers, repeatable AND/OR filters, record counts, row selection, and View location actions.
+- Added unsaved preview definitions for IQR, Z-score, percentile, business thresholds, and custom rules; saving is explicit and does not change source data.
+- Kept outlier definitions distinct from possible fixes and clarified that unusual values are not automatically errors.
+
+## 2026-09-27 - Expanded Issue Layout Correction
+
+- Restored each expanded issue to a vertical sequence: analytical three-panel row, its own affected-records subview, and decision footer.
+- Kept the reusable multi-filter record table issue-scoped, with selection highlighting and View links intact.
+- Made record columns adapt to the active issue and set the subview table to a resizable 320px viewport with sticky headers and both scroll directions.
+- Kept outlier controls compact in AI Analysis while allowing the impact scatter plot to fill its panel.
+## 2026-09-29 - Channel and Date Issue Layout
+
+- Removed filter controls from bounded Channel and Launch Date previews so they no longer compete with AI proposal controls.
+- Kept configurable filters for outlier review and stacked issue panels below 1180px to prevent overlaps.
+
+## 2026-09-29 - Bundled Sample Datasets
+
+- Replaced the single legacy campaign sample action with a picker for the healthcare encounters, sales pipeline, and marketing campaign performance CSV samples.
+- Retained local Ollama mode and the existing local-only CSV import workflow.
