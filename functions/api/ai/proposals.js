@@ -46,6 +46,23 @@ function validatePlan(plan, context) {
   };
 }
 
+async function verifyTurnstile(request, token, env) {
+  if (!env.TURNSTILE_SECRET_KEY) return;
+  if (typeof token !== "string" || !token) throw new Error("Complete the security check before requesting an AI proposal.");
+  const form = new FormData();
+  form.set("secret", env.TURNSTILE_SECRET_KEY);
+  form.set("response", token);
+  const ip = request.headers.get("cf-connecting-ip");
+  if (ip) form.set("remoteip", ip);
+  const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: form });
+  const result = await response.json();
+  if (!result.success) throw new Error("The security check could not be verified. Try again.");
+}
+
+export function onRequestGet({ env }) {
+  return json({ turnstileSiteKey: env.TURNSTILE_SITE_KEY || "" });
+}
+
 export async function onRequestPost({ request, env }) {
   try {
     if (!env.OPENAI_API_KEY) return json({ error: "AI is not configured for this deployment." }, 503);
@@ -54,6 +71,7 @@ export async function onRequestPost({ request, env }) {
     const payload = await request.json();
     if (JSON.stringify(payload).length > MAX_BODY_BYTES) return json({ error: "Request too large." }, 413);
     const { instruction, context } = validateRequest(payload);
+    await verifyTurnstile(request, payload.turnstileToken, env);
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENAI_API_KEY}` },
