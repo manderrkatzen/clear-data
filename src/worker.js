@@ -124,6 +124,13 @@ async function handleProposal(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/api/ai/status") {
+      return json({
+        available: Boolean(env.OPENAI_API_KEY),
+        model: env.OPENAI_MODEL || "gpt-4.1-mini",
+        provider: "openai",
+      });
+    }
     if (url.pathname === "/api/ai/proposals") return handleProposal(request, env);
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
     return env.ASSETS.fetch(request);
