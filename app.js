@@ -243,7 +243,11 @@ function bindIssueLinks() {
 }
 
 function renderIssueWorkspace(item) { return item.recommendation === "outlier" ? renderOutlierWorkspace(item) : renderLegacyIssueWorkspace(item); }
-function bindIssueLinks() { bindLegacyIssueLinks(); }
+function bindIssueLinks() {
+  bindLegacyIssueLinks();
+  document.querySelectorAll("[data-generate-proposal]").forEach((button) => button.onclick = () => requestProposal(state.issues.find((item) => item.id === Number(button.dataset.generateProposal))));
+  document.querySelectorAll("[data-remove-proposal]").forEach((button) => button.onclick = () => { const list = proposals({ id: button.dataset.issue }); state.customProposals[button.dataset.issue] = list.filter((proposal) => proposal.id !== button.dataset.removeProposal); state.selectedFix = ""; renderIssues(); });
+}
 
 // The active definitions keep one reusable, issue-scoped record subview below the analytical row.
 function issueFilter(item) { return state.issueFilters[item.id] ||= { join: "AND", conditions: [{ column: state.headers[0], operator: "contains", value: "" }] }; }
