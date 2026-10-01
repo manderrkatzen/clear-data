@@ -1,5 +1,7 @@
 # Clearview: AI Data Quality Copilot
 
+[Open the live demo](https://clearview-data-quality-copilot.ritwikranjanpandey.workers.dev)
+
 Clearview is an AI-assisted, human-controlled workspace for reviewing and improving CSV data quality. It helps a business analyst identify issues, compare remediation options, assess analytical impact, and retain a reversible record of approved changes.
 
 ## Why It Exists
