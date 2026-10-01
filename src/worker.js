@@ -35,6 +35,15 @@ function parsePlan(text) {
   return JSON.parse(jsonText);
 }
 
+function responseText(result) {
+  if (typeof result.output_text === "string") return result.output_text;
+  return (result.output || [])
+    .flatMap((item) => item.content || [])
+    .filter((item) => item.type === "output_text" && typeof item.text === "string")
+    .map((item) => item.text)
+    .join("");
+}
+
 function validatePlan(plan, context) {
   if (!plan || !context.allowedOperations.includes(plan.operation)) {
     throw new Error("The proposed operation is not allowed for this issue.");
@@ -106,7 +115,7 @@ async function handleProposal(request, env) {
     });
     if (!response.ok) return json({ error: "The AI provider did not accept the proposal request." }, 502);
     const result = await response.json();
-    return json({ proposal: validatePlan(parsePlan(result.output_text || ""), context), provider: "openai" });
+    return json({ proposal: validatePlan(parsePlan(responseText(result)), context), provider: "openai" });
   } catch (error) {
     return json({ error: error.message || "Proposal could not be created." }, 422);
   }
