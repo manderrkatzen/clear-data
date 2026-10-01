@@ -1,8 +1,8 @@
-# Clearview: AI Data Quality Copilot
+# ClearData: AI Data Quality Copilot
 
 ## What It Is
 
-Clearview is an AI-assisted data-quality workspace for CSV data. It helps an analyst inspect a dataset, identify quality risks, compare possible corrections, understand the effect of a change, and retain a reversible record of every approved decision.
+ClearData is an AI-assisted data-quality workspace for CSV data. It helps an analyst inspect a dataset, identify quality risks, compare possible corrections, understand the effect of a change, and retain a reversible record of every approved decision.
 
 The workflow is deliberately analyst-led:
 
@@ -14,7 +14,7 @@ Rather than presenting a generic dashboard, the application keeps the data table
 
 Business analysts often receive operational data with missing values, inconsistent labels, formatting conflicts, duplicate records, and statistical anomalies. The cost is not only data preparation time. Undocumented or automatic cleanup can change analytical conclusions without a defensible audit trail.
 
-Clearview addresses that gap with **an AI-assisted data-quality workspace combining deterministic issue detection with context-aware remediation, visual impact analysis, and reversible human-approved corrections**.
+ClearData addresses that gap with **an AI-assisted data-quality workspace combining deterministic issue detection with context-aware remediation, visual impact analysis, and reversible human-approved corrections**.
 
 ## Value Proposition For A Business Analyst
 
@@ -78,4 +78,4 @@ This project demonstrates:
 
 ## Current Scope
 
-Clearview is a portfolio demonstration, not a production governance platform. It supports local CSV workflows and bundled datasets. A public deployment will add Cloudflare-hosted server-side AI access with abuse protection before any OpenAI key is enabled.
+ClearData is a portfolio demonstration, not a production governance platform. It supports local CSV workflows and bundled datasets. A public deployment will add Cloudflare-hosted server-side AI access with abuse protection before any OpenAI key is enabled.

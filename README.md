@@ -1,12 +1,12 @@
-# Clearview: AI Data Quality Copilot
+# ClearData: AI Data Quality Copilot
 
 [Open the live demo](https://clearview-data-quality-copilot.ritwikranjanpandey.workers.dev)
 
-Clearview is an AI-assisted, human-controlled workspace for reviewing and improving CSV data quality. It helps a business analyst identify issues, compare remediation options, assess analytical impact, and retain a reversible record of approved changes.
+ClearData is an AI-assisted, human-controlled workspace for reviewing and improving CSV data quality. It helps a business analyst identify issues, compare remediation options, assess analytical impact, and retain a reversible record of approved changes.
 
 ## Why It Exists
 
-Data cleaning should not be a black box. Clearview combines deterministic issue detection with context-aware remediation, visual impact analysis, and reversible human-approved corrections.
+Data cleaning should not be a black box. ClearData combines deterministic issue detection with context-aware remediation, visual impact analysis, and reversible human-approved corrections.
 
 The analyst remains in control: detected issues can be finalized, marked valid, or left unresolved. The original source is preserved.
 
@@ -55,4 +55,4 @@ AI does not silently modify data. It receives only bounded issue context and ret
 
 ## Portfolio Context
 
-Clearview demonstrates business analysis, data-quality reasoning, product workflow design, structured AI integration, and secure deployment practices. See [PROJECT_WRITEUP.md](PROJECT_WRITEUP.md) for the full project narrative.
+ClearData demonstrates business analysis, data-quality reasoning, product workflow design, structured AI integration, and secure deployment practices. See [PROJECT_WRITEUP.md](PROJECT_WRITEUP.md) for the full project narrative.
