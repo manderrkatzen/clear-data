@@ -43,7 +43,7 @@ Configure local AI behavior with a non-committed `.env` file if needed. See `.en
 
 ## Public Deployment
 
-The repository includes a Cloudflare Pages Function at `functions/api/ai/proposals.js` for public deployment. It calls OpenAI server-side and reads `OPENAI_API_KEY` only from a Cloudflare encrypted secret.
+Cloudflare Workers serves the static site and runs `src/worker.js` for `/api/*` requests. The Worker calls OpenAI server-side and reads `OPENAI_API_KEY` only from a Cloudflare runtime secret. See [DEPLOYMENT.md](DEPLOYMENT.md) for the required Worker secrets.
 
 Never commit API keys, `.env` files, or credential files. The included `.gitignore` excludes them.
 

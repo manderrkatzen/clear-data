@@ -1,0 +1,9 @@
+# Only browser-delivered application files belong in the static asset bundle.
+*
+!index.html
+!app.js
+!styles.css
+!campaign-performance-demo-1000-rows.csv
+!healthcare_encounters_dirty.csv
+!marketing_campaign_performance_dirty.csv
+!sales_pipeline_dirty.csv

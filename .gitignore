@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+.dev.vars
 login.txt
 node_modules/
 .wrangler/
