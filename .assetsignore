@@ -2,7 +2,10 @@
 *
 !index.html
 !app.js
+!spreadsheet.js
+!distribution-demo.csv
 !styles.css
+!spreadsheet.css
 !campaign-performance-demo-1000-rows.csv
 !healthcare_encounters_dirty.csv
 !marketing_campaign_performance_dirty.csv

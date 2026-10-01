@@ -23,6 +23,20 @@ The analyst remains in control: detected issues can be finalized, marked valid, 
 
 ## Features
 
+### Try the visual treatment demo
+
+Choose **Use sample CSV → Distribution & treatment demo**. This reproducible synthetic
+dataset has 320 campaigns, a right-skewed budget distribution, and 80 missing spend
+values. Open **Missing spend_usd** and compare mean versus median fills in the
+overlaid histogram. Mean imputation preserves the observed mean; median imputation
+pulls the mean downward. An AI proposal to fill with zero makes a third, visibly
+different distribution. These are demonstrations of tradeoffs, not recommended
+defaults for real business data. Regenerate it with
+`python3 scripts/generate_distribution_demo.py`.
+
+Blank cells are review findings, not automatic errors: fields such as an open
+opportunity's actual close date can legitimately be empty.
+
 - Local CSV upload plus healthcare, sales, and marketing sample datasets.
 - Spreadsheet-style inspection with highlighted issue cells.
 - Deterministic checks for missing values, category variants, format conflicts, cross-column rules, and numerical outliers.
