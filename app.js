@@ -26,7 +26,7 @@ function detectIssues() {
   const profiles = numericColumns().map((column) => [column, outlierProfile(column)]).filter(([, profile]) => profile?.rows.length); const preferred = profiles.find(([column]) => column === "spend_usd") || profiles[0]; if (preferred) { const [column, profile] = preferred; issues.push(issue(id++, column, "IQR numerical outliers", `IQR outliers in ${column}`, profile.rows, "medium", `${profile.rows.length} values fall outside the 1.5 × IQR fences (${profile.lower.toFixed(2)} to ${profile.upper.toFixed(2)}).`, "outlier", { outlier: profile })); }
   state.issues = issues;
 }
-function loadData(text, name) { const data = parseCsv(text); Object.assign(state, { headers: data.headers, original: data.rows.map((row) => ({ ...row })), rows: data.rows, fileName: name, changes: [], selectedIssue: null, customProposals: {}, aiMessage: "", proposalPending: false, scatter: {}, issueFilters: {} }); detectIssues(); enableWorkspace(); render(); }
+function loadData(text, name) { const data = parseCsv(text); Object.assign(state, { headers: data.headers, original: data.rows.map((row) => ({ ...row })), rows: data.rows, fileName: name, changes: [], selectedIssue: null, selectedRecord: null, query: "", flaggedOnly: false, outlierDrafts: {}, customProposals: {}, aiMessage: "", proposalPending: false, scatter: {}, issueFilters: {} }); detectIssues(); enableWorkspace(); render(); }
 function enableWorkspace() { document.querySelectorAll(".nav-link").forEach((button) => { button.disabled = false; }); $("#batchButton").disabled = false; $("#contextAction").classList.remove("hidden"); $("#headerIssues").classList.remove("hidden"); }
 function openCount() { return state.issues.filter((item) => item.status === "open").length; }
 function inferType(header) { return numericColumns().includes(header) ? "Number" : /date/.test(header) ? "Date" : "Text"; }
@@ -55,10 +55,9 @@ function confirmRollback(id) { const change = state.changes.find((entry) => entr
 function go(name) { if (!state.rows.length && name !== "data") return; state.screen = name; render(); }
 function loadSample(name) {
   const samples = [
-    ["distribution-demo.csv", "Distribution & treatment demo", "Skewed campaign spend with 25% missing values — compare mean, median, and zero fills"],
-    ["healthcare_encounters_dirty.csv", "Healthcare encounters", "Appointments, payments, and clinical operations"],
-    ["sales_pipeline_dirty.csv", "Sales pipeline", "Opportunities, forecasts, and deal activity"],
-    ["marketing_campaign_performance_dirty.csv", "Marketing performance", "Campaign delivery and conversion metrics"],
+    ["healthcare_patient_visits.csv", "Healthcare patient visits", "Patient visits, clinical measurements, and readmissions"],
+    ["sales_orders.csv", "Sales orders", "Orders, pricing, profitability, and delivery metrics"],
+    ["marketing_campaigns.csv", "Marketing campaigns", "Campaign spend, conversions, and performance metrics"],
   ];
   if (name) {
     fetch(new URL(name, window.location.origin), { cache: "no-store" }).then((response) => {
@@ -74,7 +73,7 @@ function loadSample(name) {
   document.querySelectorAll("[data-sample]").forEach((button) => button.onclick = () => loadSample(button.dataset.sample));
   $("#backToSource").onclick = renderData;
 }
-function downloadCsv() { const csv = [state.headers.join(","), ...state.rows.map((row) => state.headers.map((header) => `"${String(row[header]).replaceAll('"', '""')}"`).join(","))].join("\n"); const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); link.download = "cleaned-campaign-performance.csv"; link.click(); URL.revokeObjectURL(link.href); }
+function downloadCsv() { const csv = [state.headers.join(","), ...state.rows.map((row) => state.headers.map((header) => `"${String(row[header]).replaceAll('"', '""')}"`).join(","))].join("\n"); const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); link.download = `cleaned-${state.fileName || "dataset.csv"}`; link.click(); URL.revokeObjectURL(link.href); }
 function notify(message) { const toast = $("#toast"); toast.textContent = message; toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 3000); }
 $("#navigation").onclick = (event) => { const button = event.target.closest("[data-screen]"); if (button && !button.disabled) go(button.dataset.screen); }; $("#fileInput").onchange = (event) => { const file = event.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = () => loadData(reader.result, file.name); reader.readAsText(file); } }; $("#contextAction").onclick = () => state.screen === "report" ? downloadCsv() : state.screen === "data" ? go("view") : openIssue(state.issues.find((item) => item.status === "open")?.id); $("#undoButton").onclick = () => state.changes[0] && confirmRollback(state.changes[0].id); $("#batchButton").onclick = () => notify("Live-feed demo: load a new CSV to review incoming data."); render();
 function scatterData(item) {
