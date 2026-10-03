@@ -32,6 +32,8 @@ Open `http://localhost:4174`. The server reads configuration from `process.env`;
 
 For Workers development, use `npx wrangler dev`. See `DEPLOYMENT.md` for runtime variables and secrets; deploy only when requested.
 
+The permanent hosted URL is `https://clearview-data-quality-copilot.ritwikranjanpandey.workers.dev`. Releases and rollbacks must update that existing Worker. Keep its name unchanged, `workers_dev: true`, and `preview_urls: false`; preserve alternative versions in Git rather than publishing separate preview URLs unless the user explicitly changes this requirement.
+
 For JavaScript edits, run syntax checks on affected files:
 
 ```bash

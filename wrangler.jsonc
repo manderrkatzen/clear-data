@@ -2,7 +2,8 @@
   "name": "clearview-data-quality-copilot",
   "main": "src/worker.js",
   "compatibility_date": "2026-09-30",
-  "preview_urls": true,
+  "workers_dev": true,
+  "preview_urls": false,
   "assets": {
     "directory": ".",
     "binding": "ASSETS",
