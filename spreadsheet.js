@@ -4,8 +4,12 @@ const sheetIssueTypes = {
   category: { symbol: "≠", label: "Inconsistent category", tab: "Category" },
   format: { symbol: "↔", label: "Date/number format", tab: "Format" },
   conflict: { symbol: "!", label: "Cross-column conflict", tab: "Conflict" },
+  duplicate: { symbol: "⧉", label: "Duplicate record", tab: "Duplicate" },
+  schema: { symbol: "§", label: "Schema violation", tab: "Schema" },
 };
 function sheetIssueType(item) {
+  if (item.recommendation === "duplicates") return "duplicate";
+  if (item.recommendation === "schema") return "schema";
   if (/missing/i.test(item.type)) return "missing";
   if (item.recommendation === "outlier") return "outlier";
   if (item.recommendation === "standardize") return "category";
@@ -26,12 +30,27 @@ function sheetInspection(item, row) {
       evidence.push(["Column median", format(stats.median)], ["Column mean", format(stats.mean)]);
     }
     evidence.push(["Missing across dataset", `${item.rows.length.toLocaleString()} of ${state.rows.length.toLocaleString()} rows`]);
+  } else if (type === "duplicate") {
+    title = "Record shares a duplicate signature or business key";
+    explanation = "Repeated keys can be legitimate. Inspect the full group before removing a record; the proposed survivor is the earliest source record.";
+    const profile = duplicateProfile();
+    const group = profile.groups.find((entry) => entry.rows.some((entryRow) => entryRow._row === row._row));
+    evidence.push(["Compared columns", profile.columns.join(", ")], ["Group row IDs", group?.rows.map((entry) => entry._row).join(", ") || ""], ["Comparison", group?.conflict ? "Conflicting values outside key" : "Identical record values"]);
+    action = "Review duplicate group →";
+  } else if (type === "schema" || ["metric", "metricBlocked"].includes(item.recommendation)) {
+    title = item.label;
+    explanation = "This finding comes from an analyst-defined business rule. Detection does not change data values.";
+    evidence.push(["Rule evidence", ruleEvidence(item, row)]);
+    action = "Review configured rule →";
   } else if (type === "outlier") {
     const profile = item.outlier;
-    title = `${column.replaceAll("_", " ")} ${Number(raw) < profile.lower ? "falls below the IQR lower bound" : "exceeds the IQR upper bound"}`;
+    title = `${column.replaceAll("_", " ")} matches the saved ${profile.method || "iqr"} review rule`;
     explanation = "An unusual value may be legitimate. Flagging it does not mean it should be changed. Review the distribution and context first.";
-    evidence[0][1] = format(Number(raw));
-    evidence.push(["Lower bound", format(profile.lower)], ["Upper bound", format(profile.upper)], ["IQR multiplier", `${profile.multiplier} × IQR`]);
+    evidence[0][1] = raw.trim() && Number.isFinite(Number(raw)) ? format(Number(raw)) : raw || "Empty";
+    evidence.push(["Saved rule", profile.note || `${profile.multiplier} × IQR`]);
+    if (Number.isFinite(profile.lower)) evidence.push(["Lower bound", format(profile.lower)]);
+    if (Number.isFinite(profile.upper)) evidence.push(["Upper bound", format(profile.upper)]);
+    if (Number.isFinite(profile.sd)) evidence.push(["Population standard deviation", format(profile.sd)]);
     action = "Inspect distribution →";
   } else if (type === "category") {
     title = "Category label differs from the standard spelling";
@@ -40,8 +59,7 @@ function sheetInspection(item, row) {
   } else if (item.recommendation === "date") {
     title = "Date uses a different format";
     explanation = "This cell uses MM/DD/YYYY rather than ISO format. Confirm the month/day interpretation before converting it.";
-    const [month, day, year] = raw.split("/");
-    evidence.push(["ISO interpretation", `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`]);
+    try { evidence.push(["ISO interpretation", isoDate(raw)]); } catch (error) { evidence.push(["Parsing problem", error.message]); }
   } else if (item.recommendation === "convert") {
     title = "Rate uses a whole-percentage scale";
     explanation = "This rate is above 1 while comparable rates use decimals. Confirm the scale before dividing it by 100.";
@@ -147,6 +165,17 @@ function renderSpreadsheet() {
   window.sheetResizeObserver = new ResizeObserver(updateMarkers);
   window.sheetResizeObserver.observe(viewport);
   updateMarkers();
+  if (state.locateRow != null) {
+    const rowId = state.locateRow;
+    state.locateRow = null;
+    const target = elements.find((element) => Number(element.dataset.sheetRow) === rowId);
+    if (target) {
+      target.classList.add("sheet-selected-row");
+      viewport.scrollTop += target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - viewport.clientHeight / 2;
+      if (rowIssues.has(rowId)) showDetails(rowId);
+      updateMarkers();
+    }
+  }
   $("#search").oninput = (event) => {
     const position = event.target.selectionStart;
     state.query = event.target.value;

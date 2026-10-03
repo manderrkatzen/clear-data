@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="spreadsheet.css" />
+    <link rel="stylesheet" href="workspace.css" />
   </head>
   <body>
     <div class="app-shell">
@@ -31,10 +32,13 @@
       </main>
     </div>
     <input type="file" id="fileInput" accept=".csv,text/csv" hidden />
+    <input type="file" id="projectInput" accept=".json,application/json" hidden />
+    <input type="file" id="rulesInput" accept=".json,application/json" hidden />
     <dialog id="confirmDialog"><div id="dialogContent"></div></dialog>
     <div class="toast" id="toast" role="status"></div>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
     <script src="spreadsheet.js"></script>
+    <script src="workspace.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

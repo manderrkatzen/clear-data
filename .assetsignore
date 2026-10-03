@@ -3,8 +3,10 @@
 !index.html
 !app.js
 !spreadsheet.js
+!workspace.js
 !styles.css
 !spreadsheet.css
+!workspace.css
 !healthcare_patient_visits.csv
 !marketing_campaigns.csv
 !sales_orders.csv
