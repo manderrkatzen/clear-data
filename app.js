@@ -49,16 +49,29 @@ function csvText(headers = state.headers, rows = state.rows) {
   return [headers.map(quote).join(","), ...rows.map((row) => headers.map((header) => quote(row[header])).join(","))].join("\r\n");
 }
 function issue(id, column, type, label, rows, severity, summary, recommendation, details = {}) { return { id, column, type, label, rows, severity, summary, recommendation, status: "open", ...details }; }
-function numericColumns() { return state.headers.filter((header) => state.rows.filter((row) => Number.isFinite(Number(row[header])) && String(row[header]).trim() !== "").length >= Math.max(4, state.rows.length * .6)); }
+function numericColumns() { return cleaningProfile().columns.filter(profile => ["number", "integer"].includes(profile.role)).map(profile => profile.column); }
 function quantile(sorted, p) { const position = (sorted.length - 1) * p; const lower = Math.floor(position); const upper = Math.ceil(position); return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower); }
 function numericStats(values) { const sorted = values.filter(Number.isFinite).sort((a, b) => a - b); const mean = sorted.reduce((sum, value) => sum + value, 0) / (sorted.length || 1); return { mean, median: quantile(sorted, .5) || 0, min: sorted[0] || 0, max: sorted[sorted.length - 1] || 0, q1: quantile(sorted, .25) || 0, q3: quantile(sorted, .75) || 0 }; }
-function numericValues(column) { return state.rows.map((row) => ({ raw: String(row[column] ?? "").trim(), value: Number(row[column]) })).filter(({ raw, value }) => raw && Number.isFinite(value)).map(({ value }) => value); }
-function outlierProfile(column, multiplier = 1.5) { const values = state.rows.map((row) => ({ row, raw: String(row[column] ?? "").trim(), value: Number(row[column]) })).filter(({ raw, value }) => raw && Number.isFinite(value)); if (values.length < 4) return null; const stats = numericStats(values.map(({ value }) => value)); const iqr = stats.q3 - stats.q1; if (!iqr) return null; const lower = stats.q1 - multiplier * iqr; const upper = stats.q3 + multiplier * iqr; const rows = values.filter(({ value }) => value < lower || value > upper).map(({ row }) => row); return { rows, stats, lower, upper, multiplier }; }
+function observedNumericEntries(column) {
+  return state.rows.flatMap(row => {
+    if (["missing", "not_applicable"].includes(cellInterpretation(row, column)) || CleaningEngine.missing(row[column], columnPolicy(column))) return [];
+    try { return [{ row, raw: String(row[column]).trim(), value: CleaningEngine.parseNumber(row[column]) }]; } catch { return []; }
+  });
+}
+function numericValues(column) { return observedNumericEntries(column).map(entry => entry.value); }
+function outlierProfile(column, multiplier = 1.5) {
+  const values = observedNumericEntries(column);
+  if (values.length < 4) return null;
+  const stats = numericStats(values.map(entry => entry.value)), iqr = stats.q3 - stats.q1;
+  if (!iqr) return null;
+  const lower = stats.q1 - multiplier * iqr, upper = stats.q3 + multiplier * iqr;
+  return { rows: values.filter(entry => entry.value < lower || entry.value > upper).map(entry => entry.row), stats, lower, upper, multiplier };
+}
 function detectIssues() {
   const rows = state.rows; const issues = []; let id = 1;
   const numeric = new Set(numericColumns());
   state.headers.forEach((column) => {
-    const missing = rows.filter((row) => !String(row[column] ?? "").trim());
+    const missing = rows.filter((row) => !String(row[column] ?? "").trim() && cellInterpretation(row, column) !== "not_applicable");
     if (!missing.length) return;
     const isNumeric = numeric.has(column);
     issues.push(issue(id++, column, isNumeric ? "Missing numerical values" : "Missing values", `Missing ${column}`, missing, "high", `${missing.length} blank cells in ${column}. Review whether these are expected before filling; a blank is not necessarily an error.`, isNumeric ? "impute" : "keep"));
@@ -72,6 +85,7 @@ function detectIssues() {
     if (profile?.rows.length) issues.push(issue(id++, column, "IQR numerical outliers", `Potential outliers in ${column}`, profile.rows, "medium", `${profile.rows.length} values fall outside the 1.5 × IQR fences (${profile.lower.toFixed(2)} to ${profile.upper.toFixed(2)}). Unusual does not mean incorrect.`, "outlier", { outlier: profile }));
   });
   appendReviewFindings(issues, id);
+  appendCleaningCandidates(issues);
   state.issues = issues;
 }
 function loadData(text, name) {
@@ -80,12 +94,14 @@ function loadData(text, name) {
   Object.assign(state, { screen: "data", headers: data.headers, original: data.rows.map((row) => ({ ...row })), allRows: data.rows, rows: data.rows, fileName: name, changes: [], selectedIssue: null, selectedRecord: null, locateRow: null, query: "", flaggedOnly: false, outlierDrafts: {}, customProposals: {}, aiMessage: "", proposalPending: false, scatter: {}, issueFilters: {}, datasetRevision: (state.datasetRevision || 0) + 1, ruleConfig: emptyRuleConfig(), auditEvents: [], decisionNotes: {}, projectId: null, projectName: "", projectDirty: true });
   state.aiInstructions = {};
   state.inspectionFiltersOpen = {};
+  resetGuidedReview();
   detectIssues(); enableWorkspace(); render();
+  startAutomaticReview();
   return true;
 }
 function enableWorkspace() { document.querySelectorAll(".nav-link").forEach((button) => { button.disabled = false; }); $("#batchButton").disabled = false; $("#contextAction").classList.remove("hidden"); $("#headerIssues").classList.remove("hidden"); }
 function openCount() { return state.issues.filter((item) => item.status === "open").length; }
-function inferType(header) { return numericColumns().includes(header) ? "Number" : /date/.test(header) ? "Date" : "Text"; }
+function inferType(header) { const role = cleaningProfile().columns.find(profile => profile.column === header)?.role || "text"; return role.charAt(0).toUpperCase() + role.slice(1); }
 function metrics() {
   const original = new Map(state.original.map((row) => [row._row, row]));
   let changedCells = 0, changedRows = 0;
@@ -110,7 +126,8 @@ function render() {
   refreshChrome();
   document.querySelectorAll(".nav-link").forEach((button) => button.classList.toggle("active", button.dataset.screen === state.screen));
   ({ data: renderData, view: renderSpreadsheet, issues: renderIssues, changes: renderChanges, report: renderReport })[state.screen]();
-  if (state.screen === "data") { screen.insertAdjacentHTML?.("beforeend", workspaceTools()); bindWorkspaceTools(); }
+  if (state.screen === "data") { if (state.headers.length) { screen.insertAdjacentHTML?.("beforeend", cleaningOverviewHtml()); bindCleaningOverview(); } screen.insertAdjacentHTML?.("beforeend", workspaceTools()); bindWorkspaceTools(); }
+  if (state.screen === "changes") decorateDecisionHistory();
 }
 function reviewOverview() {
   const open = state.issues.filter((item) => item.status === "open");
@@ -118,7 +135,7 @@ function reviewOverview() {
 }
 function renderData() {
   $("#topEyebrow").textContent = "DATA SOURCE";
-  if (!state.rows.length) {
+  if (!state.headers.length) {
     screen.innerHTML = `<section class="empty-state"><span class="source-icon">▤</span><p class="eyebrow">YOUR DATA. YOUR DECISIONS.</p><h1>From messy CSV to explainable changes.</h1><p>Find quality problems, compare treatments, and approve only what makes sense. Ask the AI copilot for a proposal when you need another approach.</p><div class="source-actions"><button class="primary" id="openCsv">Open CSV</button><button class="secondary" id="sampleCsv">Try a sample dataset</button></div><ol class="workflow-strip"><li><b>1. Inspect</b><span>Checks surface the evidence</span></li><li><b>2. Decide</b><span>You review the proposed impact</span></li><li><b>3. Keep control</b><span>Export or roll back any decision</span></li></ol><p class="ai-status" id="aiStatus" aria-live="polite">Checking AI availability...</p></section>`;
     $("#openCsv").onclick = () => $("#fileInput").click();
     $("#sampleCsv").onclick = () => loadSample();
@@ -141,6 +158,9 @@ function renderData() {
 }
 async function updateAiStatus() { const status = $("#aiStatus"); if (!status) return; try { const response = await fetch("/api/ai/status", { cache: "no-store" }); if (!response.ok) throw new Error("Status request failed."); const result = await response.json(); status.textContent = result.available ? `AI configured: ${result.provider} · ${result.model} (provider health not tested)` : "AI proposals are not configured on this server."; status.classList.toggle("available", Boolean(result.available)); } catch { status.textContent = "AI status check could not reach the server"; } }
 function renderIssues() {
+  return renderGuidedIssues();
+}
+function renderLegacyIssues() {
   $("#topEyebrow").textContent = "ISSUE REVIEW";
   const overview = reviewOverview();
   const groups = overview.open.reduce((all, item) => ((all[item.column] ??= []).push(item), all), Object.create(null));
@@ -205,12 +225,13 @@ function histogramChart(item, action) {
   const afterMin = sim.afterStats.min, afterMax = sim.afterStats.max;
   return `<div class="histogram"><small>OVERLAPPING DISTRIBUTIONS <i class="legend-before"></i> Before <i class="legend-after"></i> Simulated after</small><p class="hist-range-note">Observed 1st–99th percentile · 24 bins · edge buckets share the count scale</p><div class="hist-layout">${edge("below", "<", min)}<div class="hist-center"><div class="hist-bars overlay">${before.counts.map((count, index) => bars(count, after.counts[index], `${format(min + (max - min) * index / 24)} to ${format(min + (max - min) * (index + 1) / 24)}`)).join("")}</div><p class="hist-axis"><span>${format(min)}</span><span>${escapeHtml(item.column)}</span><span>${format(max)}</span></p></div>${edge("above", ">", max)}</div><p class="hist-extrema">True observed min: <b>${format(trueMin)}</b> · max: <b>${format(trueMax)}</b>${afterMin !== trueMin || afterMax !== trueMax ? `<br>True simulated min: <b>${format(afterMin)}</b> · max: <b>${format(afterMax)}</b>` : ""}</p></div>`;
 }
-function issueKey(item) { return item.recommendation === "duplicates" ? "dataset:duplicates" : JSON.stringify([item.column, item.recommendation, item.ruleId || ""]); }
+function issueKey(item) { return item.recommendation === "duplicates" ? "dataset:duplicates" : JSON.stringify([item.column, item.recommendation, item.candidateId || item.ruleId || ""]); }
 function reviewFingerprint(item, rows = item.rows) {
   const columns = item.recommendation === "duplicates" ? state.headers : item.rule ? [...new Set([item.column, item.rule.left, item.rule.right].filter(Boolean))] : item.type === "Cross-column violation" ? [item.column, "impressions"] : [item.column];
   return JSON.stringify([item.rule || item.duplicateDefinition || null, rows.map((row) => [row._row, ...columns.map((column) => row[column])])]);
 }
 function refreshIssues() {
+  invalidateCleaningProfile();
   const previous = state.issues;
   detectIssues();
   const detected = new Map(state.issues.map((item) => [issueKey(item), item]));
@@ -223,6 +244,7 @@ function refreshIssues() {
       fresh = { ...item, rows: profile.rows, outlier: profile, summary: `${profile.rows.length} values match the saved rule. ${profile.note}` };
     }
     const decision = state.changes.find((change) => change.issue.id === item.id);
+    if (fresh) fresh.rows = fresh.rows.filter(row => !state.changes.some(change => change.issue.id === item.id && change.disposition === "valid" && change.reviewedFingerprints?.[row._row] === reviewFingerprint(fresh, [row])));
     if (!fresh || !fresh.rows.length) {
       item.status = decision ? decision.disposition : "resolved";
       item.currentRows = [];
@@ -230,7 +252,7 @@ function refreshIssues() {
       return item;
     }
     const accepted = decision?.disposition === "valid" && decision.fingerprint === reviewFingerprint(fresh);
-    Object.assign(item, { column: fresh.column, rows: fresh.rows, currentRows: fresh.rows, summary: fresh.summary, rule: fresh.rule || item.rule, duplicateProfile: fresh.duplicateProfile, duplicateDefinition: fresh.duplicateDefinition || item.duplicateDefinition, outlier: fresh.outlier || item.outlier, status: accepted ? "valid" : "open" });
+    Object.assign(item, { column: fresh.column, rows: fresh.rows, currentRows: fresh.rows, summary: fresh.summary, rule: fresh.rule || item.rule, candidate: fresh.candidate || item.candidate, duplicateProfile: fresh.duplicateProfile, duplicateDefinition: fresh.duplicateDefinition || item.duplicateDefinition, outlier: fresh.outlier || item.outlier, status: accepted ? "valid" : "open" });
     return item;
   });
   detected.forEach((item) => { item.id = ++nextId; state.issues.push(item); });
@@ -238,6 +260,8 @@ function refreshIssues() {
   state.customProposals = {};
   state.proposalPending = false;
   state.datasetRevision = (state.datasetRevision || 0) + 1;
+  invalidateCleaningProfile();
+  invalidateGuidedReview();
   markProjectDirty();
 }
 function isoDate(value) {
@@ -294,6 +318,7 @@ function openIssue(id) {
   if (!item || item.status !== "open") return notify("This finding is closed. Inspect its decision in Changes, or roll it back to reopen it.");
   const opening = state.screen !== "issues" || state.selectedIssue !== id;
   state.selectedIssue = opening ? id : null;
+  if (opening) state.reviewStep = 1;
   if (opening) state.selectedFix = "";
   state.aiMessage = "";
   go("issues");
@@ -338,7 +363,7 @@ function confirmRollback(id) {
   $("#cancelRollback").onclick = () => $("#confirmDialog").close();
   $("#doRollback").onclick = () => { rollbackChange(id); $("#confirmDialog").close(); render(); };
 }
-function go(name) { if (!state.rows.length && name !== "data") return; state.screen = name; render(); }
+function go(name) { if (!state.headers.length && name !== "data") return; state.screen = name; render(); }
 function loadSample(name) {
   const samples = [
     ["healthcare_patient_visits.csv", "Healthcare patient visits", "Patient visits, clinical measurements, and readmissions"],
@@ -479,7 +504,7 @@ function match(row, filter) {
   return filter.operator === "!=" ? !equal : equal;
 }
 function evaluateOutlier(item, d) {
-  const values = state.rows.map((row) => ({ row, value: Number(row[item.column]), raw: String(row[item.column] ?? "").trim() })).filter((entry) => entry.raw && Number.isFinite(entry.value));
+  const values = observedNumericEntries(item.column);
   const stats = numericStats(values.map((entry) => entry.value));
   let rows = [], note = "", lower, upper, sd;
   const fail = (error) => ({ rows: [], note: error, error, method: d.method, stats });
@@ -539,15 +564,20 @@ function outlierControls(item) {
 
 let turnstileSiteKey = "";
 
-async function requestTurnstileToken() {
+async function requestTurnstileToken(signal) {
   if (!turnstileSiteKey) return "";
   if (!window.turnstile) throw new Error("The security check is still loading. Try again in a moment.");
   return new Promise((resolve, reject) => {
     const container = document.createElement("div");
     container.className = "turnstile-container";
     document.body.append(container);
-    const remove = () => container.remove();
-    const widgetId = window.turnstile.render(container, {
+    let widgetId, timer;
+    const remove = () => { clearTimeout(timer); signal?.removeEventListener("abort", abort); if (widgetId !== undefined) window.turnstile.remove?.(widgetId); container.remove(); };
+    const abort = () => { remove(); reject(new DOMException("Cancelled", "AbortError")); };
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) return abort();
+    timer = setTimeout(() => { remove(); reject(new Error("The security check timed out. Try again.")); }, 30000);
+    widgetId = window.turnstile.render(container, {
       sitekey: turnstileSiteKey,
       size: "invisible",
       callback: (token) => { remove(); resolve(token); },

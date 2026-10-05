@@ -1,7 +1,7 @@
 // Browser-only review features. These classic-script functions use app.js globals.
 function newReviewId() { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 function cloneReview(value) { return JSON.parse(JSON.stringify(value)); }
-function emptyRuleConfig() { return { schema: [], metrics: [], outliers: [], duplicates: null }; }
+function emptyRuleConfig() { return { schema: [], metrics: [], outliers: [], duplicates: null, columns: [], relations: [] }; }
 function downloadArtifact(text, name, type) {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const link = document.createElement("a");
@@ -16,6 +16,9 @@ function recordDecisionEvent(change) {
     title: change.title, disposition: change.disposition, reason: change.reason,
     note: change.note || "", rowIds: change.rows.map((row) => row._row),
     definition: cloneReview(change.issue.rule || change.issue.outlierDefinition || change.issue.duplicateDefinition || null),
+    treatment: cloneReview(change.treatment || null), interpretation: change.interpretation || "",
+    reviewedFingerprints: cloneReview(change.reviewedFingerprints || {}),
+    interpretationValues: cloneReview(change.interpretationValues || []),
     assumptions: change.proposalCaveats?.assumptions || [], warnings: change.proposalCaveats?.warnings || [],
     patches: cloneReview(change.patches), removedRows: cloneReview(change.removedRows || []),
   };
@@ -56,11 +59,11 @@ function qualityReportHtml(report = qualityReportData()) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ClearData quality report — ${esc(report.dataset)}</title><style>body{font:15px system-ui,sans-serif;color:#1d292e;margin:40px auto;padding:0 24px;max-width:1200px;line-height:1.6}h1,h2{line-height:1.2}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #dfe6e3;padding:8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eff5f0}.table-scroll{overflow:auto;margin:16px 0}.summary{padding:16px;background:#eff5f0;border-radius:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f8faf8;padding:16px}@media print{body{margin:0;max-width:none}.table-scroll{overflow:visible}thead{display:table-header-group}tr{break-inside:avoid}}</style></head><body><h1>ClearData quality report</h1><p><strong>${esc(report.dataset)}</strong><br>Generated ${esc(report.generatedAt)}</p><div class="summary">${m.sourceRows} source rows → ${m.rows} working rows · ${m.columns} columns<br>${m.changedRows} modified rows · ${m.changedCells} modified cells · ${m.removedRows} removed rows<br>${m.openFindings} open findings · ${m.decisions} active approved decisions · ${m.approvedNoChange} accepted without changing values</div><p>${esc(report.interpretation)}</p><h2>Completeness</h2><p>Counts use the source and remaining working population, respectively. Row removal can reduce blank counts without filling values.</p>${table(["Column", "Source blanks", "Working blanks"], report.completeness.map((item) => [item.column, item.sourceBlanks, item.workingBlanks]))}<h2>Findings and unresolved concerns</h2>${table(["Finding", "Column", "Priority", "Status", "Current affected row IDs", "Evidence"], report.findings.map((item) => [item.label, item.column, item.severity, item.status, item.rowIds.join(", ") || "None", item.summary]))}<h2>Active decisions</h2>${table(["Approved at", "Treatment", "Column", "Reviewed row IDs", "Modified cells", "Removed row IDs", "Reason", "Analyst note"], report.activeDecisions.map((item) => [item.createdAt, item.title, item.issue.column, item.rowIds.join(", "), item.patches.length, item.removedRows.map((row) => row._row).join(", "), item.reason, item.note]))}<h2>Approval and rollback log</h2>${table(["Event at", "Event", "Decision ID", "Treatment", "Reason / note"], report.auditEvents.map((event) => [event.at, event.kind, event.decision.id, event.decision.title, event.decision.note || event.note || event.decision.reason]))}<h2>Configured review rules</h2><pre>${esc(JSON.stringify(report.rules, null, 2))}</pre><p>Use the JSON decision log for full cell-level before/after values and removed-record snapshots. This self-contained HTML report can be printed to PDF using your browser.</p></body></html>`;
 }
 function decisionLogCsv() {
-  const headers = ["event_at", "event", "decision_id", "treatment", "column", "row_id", "before", "after", "reason", "analyst_note"];
+  const headers = ["event_at", "event", "decision_id", "treatment", "column", "row_id", "before", "after", "reason", "analyst_note", "interpretation", "scope"];
   const rows = [];
   (state.auditEvents || []).forEach((event) => {
     const decision = event.decision;
-    const base = { event_at: event.at, event: event.kind, decision_id: decision.id, treatment: decision.title, column: decision.issue.column, reason: decision.reason, analyst_note: decision.note };
+    const base = { event_at: event.at, event: event.kind, decision_id: decision.id, treatment: decision.title, column: decision.issue.column, reason: decision.reason, analyst_note: decision.note, interpretation: decision.interpretation || "", scope: decision.treatment?.scope ? JSON.stringify(decision.treatment.scope) : "Issue matching set" };
     const effects = event.kind === "rollback" ? event.effects || { patches: [], removedRows: [], restoredRows: [] } : { patches: decision.patches, removedRows: decision.removedRows, restoredRows: [] };
     effects.patches.forEach((patch) => rows.push({ ...base, column: patch.column, row_id: patch.rowId, before: patch.before, after: patch.after }));
     effects.removedRows.forEach((row) => rows.push({ ...base, row_id: row._row, before: JSON.stringify(row), after: "Record removed" }));
@@ -179,8 +182,10 @@ function validIsoDate(text) {
 }
 function schemaProblems(row, rule) {
   const value = String(row[rule.column] ?? "").trim();
-  if (!value) return rule.required ? ["Required value is blank"] : [];
-  const number = Number(value), problems = [];
+  if (!value || CleaningEngine.missing(value, columnPolicy(rule.column))) return rule.required ? ["Required value is blank"] : [];
+  let number;
+  try { number = CleaningEngine.parseNumber(value); } catch { number = NaN; }
+  const problems = [];
   if (["number", "integer"].includes(rule.type) && !Number.isFinite(number)) problems.push("Expected a finite number");
   else if (rule.type === "integer" && !Number.isInteger(number)) problems.push("Expected an integer");
   if (rule.type === "date" && !validIsoDate(value)) problems.push("Expected a valid YYYY-MM-DD calendar date");
@@ -243,7 +248,9 @@ function normalizeRuleConfig(input, headers = state.headers) {
     if (!["exact", "key"].includes(input.duplicates.mode) || !Array.isArray(input.duplicates.columns) || !input.duplicates.columns.length) throw new Error("Invalid duplicate rule.");
     duplicates = { mode: input.duplicates.mode, columns: input.duplicates.mode === "exact" ? [...headers] : [...new Set(input.duplicates.columns.map(known))] };
   }
-  return { schema, metrics, outliers, duplicates };
+  const columns = CleaningEngine.normalizePolicies(input.columns || [], headers);
+  const relations = normalizeRelationRules(input.relations || [], headers);
+  return { schema, metrics, outliers, duplicates, columns, relations };
 }
 function metricFormula(rule) {
   const symbol = { difference: "−", sum: "+", product: "×", ratio: "÷" }[rule.operation];
@@ -251,8 +258,9 @@ function metricFormula(rule) {
 }
 function metricResult(row, rule) {
   const values = [row[rule.left], row[rule.right]];
-  if (!values.every((value) => String(value ?? "").trim() && Number.isFinite(Number(value)))) return { error: "Missing or invalid numerical source" };
-  const [left, right] = values.map(Number);
+  if ([rule.left, rule.right].some(column => CleaningEngine.missing(row[column], columnPolicy(column)) || ["missing", "not_applicable"].includes(cellInterpretation(row, column)))) return { error: "Missing or invalid numerical source" };
+  let left, right;
+  try { [left, right] = values.map(value => CleaningEngine.parseNumber(value)); } catch { return { error: "Missing or invalid numerical source" }; }
   if (rule.operation === "ratio" && right === 0) return { error: "Zero denominator" };
   const result = ({ difference: () => left - right, sum: () => left + right, product: () => left * right, ratio: () => left / right })[rule.operation]() * rule.factor;
   if (!Number.isFinite(result) || Math.abs(result) >= 1e21) return { error: "Result cannot be represented as a finite fixed-decimal value" };
@@ -293,6 +301,7 @@ function applyRuleConfig(config) {
     if (preview.error && preview.error !== "No observed numerical values for this rule.") throw new Error(preview.error);
   });
   state.ruleConfig = normalized;
+  invalidateCleaningProfile();
   state.outlierDrafts = {};
   state.issues.filter((item) => item.recommendation === "outlier").forEach((item) => { item.outlierDefinition = normalized.outliers.find((rule) => rule.column === item.column)?.definition || defaultOutlierDefinition(item); });
   refreshIssues(); state.selectedIssue = null;
@@ -328,13 +337,14 @@ function renderRuleEditor() {
 }
 
 function serializeProject(name = state.projectName || state.fileName) {
-  const serializeIssue = (item) => ({ id: item.id, column: item.column, type: item.type, label: item.label, severity: item.severity, summary: item.summary, recommendation: item.recommendation, status: item.status, rowIds: item.rows.map((row) => row._row), ruleId: item.ruleId || null, rule: item.rule || null, outlierDefinition: item.outlierDefinition || null, duplicateDefinition: item.duplicateDefinition || null });
+  const serializeIssue = (item) => ({ id: item.id, column: item.column, type: item.type, label: item.label, severity: item.severity, summary: item.summary, recommendation: item.recommendation, status: item.status, rowIds: item.rows.map((row) => row._row), ruleId: item.ruleId || null, rule: item.rule || null, candidateId: item.candidateId || null, candidate: item.candidate || null, outlierDefinition: item.outlierDefinition || null, duplicateDefinition: item.duplicateDefinition || null });
   return {
     format: "cleardata-project", version: 1, id: state.projectId || newReviewId(), name: String(name || "Untitled project").slice(0, 200), updatedAt: new Date().toISOString(), fileName: state.fileName,
     headers: [...state.headers], original: cloneReview(state.original), rows: cloneReview(state.rows), rules: exportRuleConfig(),
     issues: state.issues.map(serializeIssue), changes: state.changes.map((change) => ({ ...cloneReview(change.snapshot), issueId: change.issue.id, before: change.before, after: change.after, fingerprint: change.fingerprint })),
     auditEvents: cloneReview(state.auditEvents || []), customProposals: cloneReview(state.customProposals),
     outlierDrafts: cloneReview(state.outlierDrafts), issueFilters: cloneReview(state.issueFilters), decisionNotes: cloneReview(state.decisionNotes || {}),
+    datasetPurpose: state.datasetPurpose || "",
     view: { screen: state.screen, query: state.query, flaggedOnly: state.flaggedOnly, selectedIssue: state.selectedIssue, selectedRecord: state.selectedRecord, selectedFix: state.selectedFix }, revision: state.datasetRevision,
   };
 }
@@ -346,7 +356,7 @@ function validateProject(data) {
   data.rows.forEach((row) => { if (!row || !ids.has(row._row) || workingIds.has(row._row) || data.headers.some((column) => typeof row[column] !== "string")) throw new Error("Invalid working records in project."); workingIds.add(row._row); });
   const rules = normalizeRuleConfig(data.rules, data.headers);
   const issueIds = new Set();
-  const recommendations = ["impute", "keep", "convert", "standardize", "date", "valid", "outlier", "duplicates", "schema", "metric", "metricBlocked"];
+  const recommendations = ["impute", "keep", "convert", "standardize", "date", "valid", "outlier", "duplicates", "schema", "metric", "metricBlocked", "candidate", "relation", "manual"];
   data.issues.forEach((item) => {
     if (!item || !Number.isInteger(item.id) || issueIds.has(item.id) || !data.headers.includes(item.column) || !recommendations.includes(item.recommendation) || !["open", "valid", "finalized", "resolved"].includes(item.status) || !Array.isArray(item.rowIds) || item.rowIds.some((id) => !ids.has(id)) || [item.type, item.label, item.summary, item.severity].some((value) => typeof value !== "string")) throw new Error("Invalid finding reference in project.");
     if (["schema", "metric", "metricBlocked"].includes(item.recommendation)) {
@@ -357,6 +367,8 @@ function validateProject(data) {
       if (item.ruleId !== rule.id || item.column !== (rule.column || rule.target)) throw new Error("Finding rule does not match its target.");
     }
     if (item.outlierDefinition) normalizeRuleConfig({ ...emptyRuleConfig(), outliers: [{ column: item.column, definition: item.outlierDefinition }] }, data.headers);
+    if (item.recommendation === "candidate" && (!item.candidate || typeof item.candidateId !== "string" || item.candidate.column !== item.column || item.candidate.id !== item.candidateId)) throw new Error("Invalid candidate reference.");
+    if (item.recommendation === "relation") normalizeRelationRules([item.rule], data.headers);
     issueIds.add(item.id);
   });
   const changeIds = new Set();
@@ -364,6 +376,7 @@ function validateProject(data) {
     if (!change || typeof change.id !== "string" || !change.issue || !data.headers.includes(change.issue.column) || !Array.isArray(change.rowIds) || change.rowIds.some((id) => !ids.has(id)) || !Array.isArray(change.patches) || !Array.isArray(change.removedRows) || typeof change.title !== "string" || typeof change.reason !== "string" || typeof change.note !== "string" || !["valid", "finalized"].includes(change.disposition)) throw new Error("Invalid decision in project.");
     change.patches.forEach((patch) => { if (!ids.has(patch.rowId) || !data.headers.includes(patch.column) || typeof patch.before !== "string" || typeof patch.after !== "string") throw new Error("Invalid decision patch in project."); });
     change.removedRows.forEach((row) => { if (!ids.has(row._row) || data.headers.some((column) => typeof row[column] !== "string")) throw new Error("Invalid removed record in project."); });
+    if (change.interpretationValues && (!Array.isArray(change.interpretationValues) || change.interpretationValues.some(entry => !ids.has(entry.rowId) || !data.headers.includes(entry.column) || typeof entry.value !== "string" || !["legitimate", "missing", "not_applicable", "format", "error", "resolved"].includes(entry.meaning)))) throw new Error("Invalid cell interpretation in project.");
   };
   data.changes.forEach((change) => { validateSnapshot(change); if (!issueIds.has(change.issueId) || changeIds.has(change.id)) throw new Error("Invalid history reference in project."); changeIds.add(change.id); });
   data.auditEvents.forEach((event) => {
@@ -395,6 +408,8 @@ function restoreProject(input) {
   Object.assign(state, { headers: [...data.headers], original: data.original, allRows: pool, rows: data.rows.map((row) => byId.get(row._row)), fileName: String(data.fileName || "dataset.csv"), issues, changes, ruleConfig: rules, auditEvents: data.auditEvents, customProposals: {}, outlierDrafts: {}, issueFilters: {}, decisionNotes: data.decisionNotes && typeof data.decisionNotes === "object" ? data.decisionNotes : {}, scatter: {}, screen: "data", selectedIssue: null, selectedRecord: null, selectedFix: "", query: "", flaggedOnly: false, locateRow: null, proposalPending: false, aiMessage: "", projectId: typeof data.id === "string" ? data.id : newReviewId(), projectName: String(data.name || data.fileName || "Project"), projectDirty: false });
   state.aiInstructions = {};
   state.inspectionFiltersOpen = {};
+  resetGuidedReview();
+  state.datasetPurpose = typeof data.datasetPurpose === "string" ? data.datasetPurpose.slice(0, 1000) : "";
   refreshIssues();
   if (["data", "view", "issues", "changes", "report"].includes(view.screen)) state.screen = view.screen;
   state.query = typeof view.query === "string" ? view.query : ""; state.flaggedOnly = !!view.flaggedOnly;
@@ -411,6 +426,7 @@ function restoreProject(input) {
   });
   state.projectDirty = false;
   enableWorkspace(); render(); notify("Project restored, including original values and reversible decisions.");
+  startAutomaticReview();
   return true;
 }
 

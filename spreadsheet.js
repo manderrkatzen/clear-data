@@ -8,6 +8,8 @@ const sheetIssueTypes = {
   schema: { symbol: "§", label: "Schema violation", tab: "Schema" },
 };
 function sheetIssueType(item) {
+  if (item.recommendation === "candidate") return ["missing_token", "sentinel"].includes(item.candidate?.kind) ? "missing" : item.candidate?.kind === "category" || item.candidate?.kind === "spacing" ? "category" : "format";
+  if (item.recommendation === "relation") return "schema";
   if (item.recommendation === "duplicates") return "duplicate";
   if (item.recommendation === "schema") return "schema";
   if (/missing/i.test(item.type)) return "missing";
@@ -22,7 +24,15 @@ function sheetInspection(item, row) {
   const format = (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: /_usd$/.test(column) ? 2 : 0, ...(/_usd$/.test(column) ? { style: "currency", currency: "USD" } : {}) });
   const evidence = [["Current value", raw.trim() ? raw : "Empty"]];
   let title, explanation, action = "Review treatments →";
-  if (type === "missing") {
+  if (item.recommendation === "candidate") {
+    title = item.label;
+    explanation = item.summary;
+    evidence.push(["Candidate kind", item.candidate.kind.replaceAll("_", " ")], ["Matching records", item.rows.length.toLocaleString()]);
+    action = "Interpret this candidate →";
+  } else if (item.recommendation === "relation") {
+    title = item.label; explanation = "This record violates an analyst-defined relationship. Review its meaning and choose a scoped correction.";
+    evidence.push(["Rule evidence", relationProblem(row, item.rule)]);
+  } else if (type === "missing") {
     title = `${column.replaceAll("_", " ")} is blank`;
     explanation = "This cell has no recorded value. A blank can be expected; unknown is different from zero or a confirmed category.";
     if (item.recommendation === "impute") {

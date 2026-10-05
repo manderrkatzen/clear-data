@@ -7,6 +7,11 @@
 !styles.css
 !spreadsheet.css
 !workspace.css
+!cleaning-engine.js
+!profile-worker.js
+!review.js
+!review-ui.js
+!review.css
 !healthcare_patient_visits.csv
 !marketing_campaigns.csv
 !sales_orders.csv

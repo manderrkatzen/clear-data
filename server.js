@@ -6,7 +6,7 @@ const ai = require("./src/ai.cjs");
 const root = __dirname;
 const config = { ...process.env, AI_MODE: process.env.AI_MODE || "local" };
 const mimeTypes = { ".css": "text/css", ".csv": "text/csv", ".html": "text/html", ".js": "text/javascript", ".json": "application/json" };
-const assets = new Set(["index.html", "app.js", "spreadsheet.js", "workspace.js", "styles.css", "spreadsheet.css", "workspace.css", "healthcare_patient_visits.csv", "sales_orders.csv", "marketing_campaigns.csv"]);
+const assets = new Set(["index.html", "app.js", "spreadsheet.js", "workspace.js", "cleaning-engine.js", "profile-worker.js", "review.js", "review-ui.js", "review.css", "styles.css", "spreadsheet.css", "workspace.css", "healthcare_patient_visits.csv", "sales_orders.csv", "marketing_campaigns.csv"]);
 
 async function sendWebResponse(response, result) {
   response.writeHead(result.status, Object.fromEntries(result.headers));
@@ -35,12 +35,12 @@ http.createServer(async (request, response) => {
       if (request.method !== "GET") return sendWebResponse(response, new Response("Method not allowed", { status: 405 }));
       return sendWebResponse(response, ai.json({ ...ai.providerConfig(config), mode: config.AI_MODE }));
     }
-    if (url.pathname === "/api/ai/proposals") {
+    if (["/api/ai/proposals", "/api/ai/interpretations"].includes(url.pathname)) {
       if (Number(request.headers["content-length"]) > ai.MAX_BODY_BYTES) return sendWebResponse(response, ai.json({ error: "Request too large." }, 413));
       const body = request.method === "POST" ? await readBody(request) : undefined;
       const headers = new Headers({ "content-type": "application/json", "cf-connecting-ip": request.socket.remoteAddress || "unknown" });
       const webRequest = new Request(url, { method: request.method, headers, body });
-      return sendWebResponse(response, await ai.handleProposal(webRequest, config));
+      return sendWebResponse(response, await (url.pathname === "/api/ai/interpretations" ? ai.handleInterpretations : ai.handleProposal)(webRequest, config));
     }
     if (url.pathname.startsWith("/api/")) return sendWebResponse(response, ai.json({ error: "Not found" }, 404));
     if (!["GET", "HEAD"].includes(request.method)) return sendWebResponse(response, new Response("Method not allowed", { status: 405 }));

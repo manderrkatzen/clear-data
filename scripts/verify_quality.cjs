@@ -14,8 +14,11 @@ function workspace() {
     return nodes.get(selector);
   };
   const context = vm.createContext({ document: { querySelector: node, querySelectorAll: () => [] }, fetch: async () => ({ ok: true, json: async () => ({ available: false }) }), setTimeout() {}, console, URL, Blob });
+  vm.runInContext(fs.readFileSync(path.join(root, "cleaning-engine.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "spreadsheet.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "workspace.js"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(path.join(root, "review.js"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(path.join(root, "review-ui.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "app.js"), "utf8"), context);
   vm.runInContext("render = () => {};", context);
   const run = (code) => vm.runInContext(code, context);
