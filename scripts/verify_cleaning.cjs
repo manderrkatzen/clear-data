@@ -31,6 +31,13 @@ test("candidate discovery preserves NULL/zero/blanks and protects identifiers", 
   assert.equal(profile.columns[1].statistics.count, 4);
   assert.deepEqual(rows, original);
 });
+test("declaring an identifier resolves prior statistical outliers without changing values", () => {
+  const w = workspace("reference,value\n1,10\n2,20\n3,30\n4,40\n5,50\n6,60\n1000,70");
+  assert.ok(w.value('state.issues.some(item => item.column === "reference" && item.recommendation === "outlier")'));
+  w.run('applyRuleConfig({ ...emptyRuleConfig(), columns: [{ ...CleaningEngine.defaultPolicy("reference"), role: "identifier" }] })');
+  assert.ok(!w.value('state.issues.some(item => item.column === "reference" && item.recommendation === "outlier" && item.status === "open")'));
+  assert.equal(w.value("metrics().changedCells"), 0);
+});
 test("number policies reject ambiguous formats and support separators, percent and accounting negatives", () => {
   assert.throws(() => engine.parseNumber("1,234.56"));
   assert.throws(() => engine.parseNumber("0x10"));
@@ -73,6 +80,7 @@ test("partial missing-token normalization keeps unresolved alternatives open and
   assert.equal(w.value("state.rows[2].x"), "0");
   assert.deepEqual(w.value('state.issues.find(item => item.candidate?.kind === "missing_token" && item.status === "open").rows.map(row => row._row)'), [2]);
   assert.equal(w.value("state.changes[0].snapshot.interpretation"), "missing");
+  assert.equal(w.value("state.changes[0].after"), "Blank");
   assert.equal(w.value('state.issues.find(item => item.recommendation === "impute").rows.length'), 2);
   w.run("rollbackChange(state.changes[0].id)");
   assert.equal(w.value("state.rows[0].x"), "NULL");
@@ -153,6 +161,12 @@ test("scoped category mappings leave excluded labels untouched", () => {
   w.run('globalThis.item = state.issues.find(item => item.candidate?.kind === "category"); Object.assign(reviewDraft(item), { operation: "map", interpretation: "format", mapping: { Active: "Active", active: "Active", ACTIVE: "Active" }, scope: { mode: "selected", rowIds: [2] } }); approve(item);');
   assert.deepEqual(w.value("state.rows.map(row => row.label)"), ["Active", "Active", "ACTIVE"]);
   assert.equal(w.value("state.changes[0].patches.length"), 1);
+});
+test("guided percentage scaling matches approved rounded values without changing decimal-scale records", () => {
+  const w = workspace("id,click_through_rate\nA,2.34567\nB,0.3\nC,4\nD,0.1");
+  w.run('globalThis.item = state.issues.find(item => item.recommendation === "convert"); Object.assign(reviewDraft(item), { operation: "scale", interpretation: "format" }); globalThis.preview = guidedPreview(item); approve(item);');
+  assert.deepEqual(w.value("state.rows.map(row => row.click_through_rate)"), ["0.0235", "0.3", "0.0400", "0.1"]);
+  assert.deepEqual(w.value("state.changes[0].patches"), w.value("preview.patches"));
 });
 test("removing all working records preserves a navigable source-backed project and rollback", () => {
   const w = workspace("id,label\nA,NULL\nB,N/A");

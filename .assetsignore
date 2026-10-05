@@ -12,6 +12,10 @@
 !review.js
 !review-ui.js
 !review.css
+!design-system.css
+!fonts/
+!fonts/source-sans-3-latin.woff2
+!fonts/OFL.txt
 !healthcare_patient_visits.csv
 !marketing_campaigns.csv
 !sales_orders.csv

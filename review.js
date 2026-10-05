@@ -57,6 +57,12 @@ function invalidateGuidedReview() {
   state.analysisStatus = "stale";
   state.analysisMessage = "Data or rules changed. Previous AI suggestions were invalidated; refresh analysis for the working data.";
 }
+function invalidateFindingInterpretation(item) {
+  cancelAutomaticReview(false);
+  delete state.interpretations?.[analysisCandidateId(item)];
+  state.analysisStatus = "stale";
+  state.analysisMessage = "The displayed finding definition changed. Refresh AI analysis for its current evidence.";
+}
 function appendCleaningCandidates(issues) {
   let id = Math.max(0, ...issues.map(item => item.id));
   const byId = new Map(state.rows.map(row => [row._row, row]));
@@ -93,7 +99,7 @@ function relationProblem(row, rule) {
 function reviewRows(item) { return item.recommendation === "outlier" ? activeRows(item) : item.rows.filter(row => state.rows.some(current => current._row === row._row)); }
 function reviewDraft(item) {
   state.reviewDrafts ||= {};
-  return state.reviewDrafts[item.id] ||= { operation: "retain", interpretation: "unresolved", value: "", decimals: columnPolicy(item.column).decimals, scope: { mode: "all", rowIds: [], column: state.headers[0], operator: "=", value: "" }, mapping: {}, groupColumn: state.headers.find(column => column !== item.column) || item.column, numberFormat: columnPolicy(item.column).numberFormat, dateFormat: columnPolicy(item.column).dateFormat, currency: columnPolicy(item.column).currency, percentage: columnPolicy(item.column).percentage, lower: "", upper: "", survivor: "first", survivorIds: [], acknowledgeConflicts: false, note: "", acknowledgeConstraints: false, skipBlocked: false };
+  return state.reviewDrafts[item.id] ||= { operation: "retain", interpretation: "unresolved", value: "", factor: item.recommendation === "convert" ? "0.01" : "1", decimals: item.recommendation === "convert" ? 4 : columnPolicy(item.column).decimals, scope: { mode: "all", rowIds: [], column: state.headers[0], operator: "=", value: "" }, mapping: {}, groupColumn: state.headers.find(column => column !== item.column) || item.column, numberFormat: columnPolicy(item.column).numberFormat, dateFormat: columnPolicy(item.column).dateFormat, currency: columnPolicy(item.column).currency, percentage: columnPolicy(item.column).percentage, lower: "", upper: "", survivor: "first", survivorIds: [], acknowledgeConflicts: false, note: "", acknowledgeConstraints: false, skipBlocked: false };
 }
 function guidedFingerprint(item, draft) { const { previewFingerprint, ...parameters } = draft; return JSON.stringify([state.datasetRevision, reviewFingerprint(item, reviewRows(item)), item.recommendation === "outlier" ? outlierDraft(item) : null, state.ruleConfig, parameters]); }
 function guidedPreview(item, draft = reviewDraft(item)) {
@@ -152,7 +158,8 @@ function approveGuidedDecision(item) {
     const removedIds = new Set(preview.removedRows.map(row => row._row));
     state.rows = state.rows.filter(row => !removedIds.has(row._row));
     const interpretationValues = reviewedRows.map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: ["retain", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" }));
-    const change = { id: newReviewId(), createdAt: new Date().toISOString(), issue: item, title: treatmentLabel(draft.operation), disposition: draft.operation === "retain" ? "valid" : "finalized", rows: reviewedRows, before: preview.patches.slice(0, 3).map(patch => patch.before).join(", ") || "Values retained", after: preview.patches.slice(0, 3).map(patch => patch.after).join(", ") || (removedIds.size ? `${removedIds.size} records removed` : "Values retained"), reason: item.summary, note: draft.note || "", interpretation: draft.interpretation, interpretationValues, treatment: { ...preview.treatment, previewFingerprint: undefined }, originals: [], patches: preview.patches, removedRows: preview.removedRows, reviewedFingerprints: fingerprints, fingerprint: reviewFingerprint(item, reviewedRows) };
+    const sample = (patches, key) => patches.slice(0, 3).map(patch => String(patch[key]).trim() ? patch[key] : "Blank").join(", ");
+    const change = { id: newReviewId(), createdAt: new Date().toISOString(), issue: item, title: treatmentLabel(draft.operation), disposition: draft.operation === "retain" ? "valid" : "finalized", rows: reviewedRows, before: preview.patches.length ? sample(preview.patches, "before") : "Values retained", after: preview.patches.length ? sample(preview.patches, "after") : removedIds.size ? `${removedIds.size} records removed` : "Values retained", reason: item.summary, note: draft.note || "", interpretation: draft.interpretation, interpretationValues, treatment: { ...preview.treatment, previewFingerprint: undefined }, originals: [], patches: preview.patches, removedRows: preview.removedRows, reviewedFingerprints: fingerprints, fingerprint: reviewFingerprint(item, reviewedRows) };
     state.changes.unshift(change);
     recordDecisionEvent(change);
     refreshIssues();
@@ -163,12 +170,15 @@ function approveGuidedDecision(item) {
   } catch (error) { notify(error.message); }
 }
 function treatmentLabel(operation) {
+  if (operation === "scale") return "Multiply by a reviewed factor";
   return ({ retain: "Retain reviewed values", missing: "Normalize to missing", constant: "Reviewed replacement", median: "Fill with reference median", mean: "Fill with reference mean", groupMedian: "Fill with group median", trim: "Normalize whitespace", lowercase: "Normalize to lowercase", uppercase: "Normalize to uppercase", map: "Map reviewed labels", parseNumber: "Parse numerical format", parseDate: "Convert interpreted dates", cap: "Cap to business bounds", remove: "Remove scoped records", recalculate: "Recalculate metric", deduplicate: "Keep selected duplicate survivor", mergeDuplicates: "Merge complementary duplicate values" })[operation] || operation;
 }
 function reviewOperations(item) {
   const base = ["retain", "constant", "missing", "remove"];
-  if (item.recommendation === "manual") return ["retain", "constant", "missing", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "median", "mean", "groupMedian", "cap", "remove"];
-  if (["impute", "keep"].includes(item.recommendation) || ["missing_token", "sentinel"].includes(item.candidate?.kind)) base.splice(2, 0, "median", "mean", "groupMedian");
+  if (item.recommendation === "manual") return ["retain", "constant", "missing", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "median", "mean", "groupMedian", "cap", "remove"];
+  const numerical = ["number", "integer"].includes(cleaningProfile().columns.find(profile => profile.column === item.column)?.role);
+  if (numerical && (["impute", "keep"].includes(item.recommendation) || ["missing_token", "sentinel"].includes(item.candidate?.kind))) base.splice(2, 0, "median", "mean", "groupMedian");
+  if (numerical || item.recommendation === "convert") base.splice(2, 0, "scale");
   if (["standardize"].includes(item.recommendation) || ["spacing", "category"].includes(item.candidate?.kind)) base.splice(2, 0, "trim", "lowercase", "uppercase", "map");
   if (item.candidate?.kind === "number_format" || item.recommendation === "convert" || item.recommendation === "schema") base.splice(2, 0, "parseNumber");
   if (item.candidate?.kind === "date_format" || item.recommendation === "date" || item.recommendation === "schema") base.splice(2, 0, "parseDate");
@@ -223,7 +233,7 @@ async function startAutomaticReview(onlyIssue = null, question = "") {
     const config = await configResponse.json();
     turnstileSiteKey = config.turnstileSiteKey || "";
     const candidates = buildAnalysisCandidates().filter(candidate => !onlyIssue || candidate.id === `finding:${onlyIssue}`);
-    if (question) candidates.forEach(candidate => { candidate.meaning = `${candidate.meaning} Analyst question: ${question}`.slice(0, 300); });
+    if (question) candidates.forEach(candidate => { candidate.meaning = `Analyst question: ${question}. Column context: ${candidate.meaning}`.slice(0, 300); });
     state.analysisTotal = candidates.length;
     state.analysisStatus = "running"; state.analysisMessage = "AI is ranking possible interpretations. Source values stay unchanged."; refreshReviewScreen();
     const batchSize = 6;
@@ -265,8 +275,10 @@ function buildAnalysisCandidates() {
     rows.forEach(row => { const value = String(row[item.column] ?? ""); counts.set(value, (counts.get(value) || 0) + 1); });
     const groups = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([value, count], index) => ({ id: `value:${index}`, value: value.slice(0, 160), count }));
     const profile = cleaningProfile().columns.find(profile => profile.column === item.column);
-    return { id: analysisCandidateId(item), column: item.column.slice(0, 200), kind: item.candidate?.kind || item.recommendation, total: state.rows.length, affected: rows.length, role: profile?.role || "text", meaning: columnPolicy(item.column).meaning, evidence: item.summary.slice(0, 600), groups, statistics: profile?.statistics || {}, allowedOperations: reviewOperations(item), rule: JSON.stringify({ rule: item.rule || null, columnPolicy: columnPolicy(item.column) }).slice(0, 600) };
-  });
+    const outlier = item.recommendation === "outlier" ? outlierDraft(item) : null;
+    const evidence = outlier ? previewOutlier(item).note : item.summary;
+    return { id: analysisCandidateId(item), column: item.column.slice(0, 200), kind: item.candidate?.kind || item.recommendation, total: state.rows.length, affected: rows.length, role: profile?.role || "text", meaning: columnPolicy(item.column).meaning, evidence: evidence.slice(0, 600), groups, statistics: profile?.statistics || {}, allowedOperations: reviewOperations(item), rule: JSON.stringify({ rule: item.rule || null, outlier, columnPolicy: columnPolicy(item.column) }).slice(0, 600) };
+  }).filter(candidate => candidate.affected > 0);
 }
 function validateBrowserInterpretations(results, candidates) {
   if (!Array.isArray(results) || results.length !== candidates.length || new Set(results.map(entry => entry?.id)).size !== results.length) throw new Error("AI interpretations did not match the requested candidate batch.");

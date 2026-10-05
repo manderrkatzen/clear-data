@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-05T00:00:00Z",
+  "title": "Design System: ClearData",
+  "extensions": {
+    "colorMeta": {
+      "ink": { "role": "neutral", "displayName": "Analytical ink", "tonalRamp": ["oklch(15% .03 255)", "oklch(26% .03 255)", "oklch(38% .03 255)", "oklch(49% .03 255)", "oklch(61% .03 255)", "oklch(72% .03 255)", "oklch(84% .03 255)", "oklch(95% .03 255)"] },
+      "muted": { "role": "neutral", "displayName": "Muted ink", "tonalRamp": ["oklch(15% .03 255)", "oklch(26% .03 255)", "oklch(38% .03 255)", "oklch(49% .03 255)", "oklch(61% .03 255)", "oklch(72% .03 255)", "oklch(84% .03 255)", "oklch(95% .03 255)"] },
+      "panel": { "role": "neutral", "displayName": "White task surface", "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(49% 0 0)", "oklch(61% 0 0)", "oklch(72% 0 0)", "oklch(84% 0 0)", "oklch(95% 0 0)"] },
+      "line": { "role": "neutral", "displayName": "Hairline", "tonalRamp": ["oklch(15% .015 255)", "oklch(26% .015 255)", "oklch(38% .015 255)", "oklch(49% .015 255)", "oklch(61% .015 255)", "oklch(72% .015 255)", "oklch(84% .015 255)", "oklch(95% .015 255)"] },
+      "blue-soft": { "role": "primary", "displayName": "Soft action blue", "tonalRamp": ["oklch(15% .02 263)", "oklch(26% .02 263)", "oklch(38% .02 263)", "oklch(49% .02 263)", "oklch(61% .02 263)", "oklch(72% .02 263)", "oklch(84% .02 263)", "oklch(95% .02 263)"] },
+      "mint": { "displayName": "Mint semantic surface", "tonalRamp": ["oklch(15% .015 162)", "oklch(26% .015 162)", "oklch(38% .015 162)", "oklch(49% .015 162)", "oklch(61% .015 162)", "oklch(72% .015 162)", "oklch(84% .015 162)", "oklch(95% .015 162)"] },
+      "coral": { "displayName": "Workspace error", "tonalRamp": ["oklch(15% .1 27)", "oklch(26% .1 27)", "oklch(38% .1 27)", "oklch(49% .1 27)", "oklch(61% .1 27)", "oklch(72% .1 27)", "oklch(84% .1 27)", "oklch(95% .1 27)"] },
+      "amber-bg": { "displayName": "Warning surface", "tonalRamp": ["oklch(15% .03 80)", "oklch(26% .03 80)", "oklch(38% .03 80)", "oklch(49% .03 80)", "oklch(61% .03 80)", "oklch(72% .03 80)", "oklch(84% .03 80)", "oklch(95% .03 80)"] },
+      "red-bg": { "displayName": "Error surface", "tonalRamp": ["oklch(15% .02 27)", "oklch(26% .02 27)", "oklch(38% .02 27)", "oklch(49% .02 27)", "oklch(61% .02 27)", "oklch(72% .02 27)", "oklch(84% .02 27)", "oklch(95% .02 27)"] },
+      "focus": { "displayName": "Keyboard focus blue", "tonalRamp": ["oklch(15% .08 263)", "oklch(26% .08 263)", "oklch(38% .08 263)", "oklch(49% .08 263)", "oklch(61% .08 263)", "oklch(72% .08 263)", "oklch(84% .08 263)", "oklch(95% .08 263)"] },
+      "blue-hover": { "role": "primary", "displayName": "Action blue hover", "tonalRamp": ["oklch(15% .12 263)", "oklch(26% .12 263)", "oklch(38% .12 263)", "oklch(49% .12 263)", "oklch(61% .12 263)", "oklch(72% .12 263)", "oklch(84% .12 263)", "oklch(95% .12 263)"] },
+      "green-hover": { "displayName": "Approval hover", "tonalRamp": ["oklch(15% .06 162)", "oklch(26% .06 162)", "oklch(38% .06 162)", "oklch(49% .06 162)", "oklch(61% .06 162)", "oklch(72% .06 162)", "oklch(84% .06 162)", "oklch(95% .06 162)"] },
+      "nav-text": { "role": "neutral", "displayName": "Rail label", "tonalRamp": ["oklch(15% .025 257)", "oklch(26% .025 257)", "oklch(38% .025 257)", "oklch(49% .025 257)", "oklch(61% .025 257)", "oklch(72% .025 257)", "oklch(84% .025 257)", "oklch(95% .025 257)"] },
+      "nav-hover": { "role": "neutral", "displayName": "Rail hover", "tonalRamp": ["oklch(15% .04 257)", "oklch(26% .04 257)", "oklch(38% .04 257)", "oklch(49% .04 257)", "oklch(61% .04 257)", "oklch(72% .04 257)", "oklch(84% .04 257)", "oklch(95% .04 257)"] },
+      "nav-active": { "role": "neutral", "displayName": "Rail active", "tonalRamp": ["oklch(15% .06 257)", "oklch(26% .06 257)", "oklch(38% .06 257)", "oklch(49% .06 257)", "oklch(61% .06 257)", "oklch(72% .06 257)", "oklch(84% .06 257)", "oklch(95% .06 257)"] },
+      "nav-disabled": { "role": "neutral", "displayName": "Rail disabled label", "tonalRamp": ["oklch(15% .03 257)", "oklch(26% .03 257)", "oklch(38% .03 257)", "oklch(49% .03 257)", "oklch(61% .03 257)", "oklch(72% .03 257)", "oklch(84% .03 257)", "oklch(95% .03 257)"] },
+      "secondary-text": { "role": "neutral", "displayName": "Supporting action text", "tonalRamp": ["oklch(15% .04 257)", "oklch(26% .04 257)", "oklch(38% .04 257)", "oklch(49% .04 257)", "oklch(61% .04 257)", "oklch(72% .04 257)", "oklch(84% .04 257)", "oklch(95% .04 257)"] },
+      "secondary-line": { "role": "neutral", "displayName": "Supporting action border", "tonalRamp": ["oklch(15% .02 255)", "oklch(26% .02 255)", "oklch(38% .02 255)", "oklch(49% .02 255)", "oklch(61% .02 255)", "oklch(72% .02 255)", "oklch(84% .02 255)", "oklch(95% .02 255)"] },
+      "secondary-hover": { "role": "neutral", "displayName": "Supporting action hover", "tonalRamp": ["oklch(15% .015 263)", "oklch(26% .015 263)", "oklch(38% .015 263)", "oklch(49% .015 263)", "oklch(61% .015 263)", "oklch(72% .015 263)", "oklch(84% .015 263)", "oklch(95% .015 263)"] },
+      "secondary-hover-line": { "role": "neutral", "displayName": "Supporting action hover border", "tonalRamp": ["oklch(15% .04 255)", "oklch(26% .04 255)", "oklch(38% .04 255)", "oklch(49% .04 255)", "oklch(61% .04 255)", "oklch(72% .04 255)", "oklch(84% .04 255)", "oklch(95% .04 255)"] },
+      "ghost-hover": { "role": "neutral", "displayName": "Ghost hover surface", "tonalRamp": ["oklch(15% .015 255)", "oklch(26% .015 255)", "oklch(38% .015 255)", "oklch(49% .015 255)", "oklch(61% .015 255)", "oklch(72% .015 255)", "oklch(84% .015 255)", "oklch(95% .015 255)"] },
+      "status-bg": { "role": "neutral", "displayName": "Neutral status surface", "tonalRamp": ["oklch(15% .015 255)", "oklch(26% .015 255)", "oklch(38% .015 255)", "oklch(49% .015 255)", "oklch(61% .015 255)", "oklch(72% .015 255)", "oklch(84% .015 255)", "oklch(95% .015 255)"] },
+      "status-text": { "role": "neutral", "displayName": "Neutral status label", "tonalRamp": ["oklch(15% .03 255)", "oklch(26% .03 255)", "oklch(38% .03 255)", "oklch(49% .03 255)", "oklch(61% .03 255)", "oklch(72% .03 255)", "oklch(84% .03 255)", "oklch(95% .03 255)"] },
+      "warning-text": { "displayName": "Warning label", "tonalRamp": ["oklch(15% .07 70)", "oklch(26% .07 70)", "oklch(38% .07 70)", "oklch(49% .07 70)", "oklch(61% .07 70)", "oklch(72% .07 70)", "oklch(84% .07 70)", "oklch(95% .07 70)"] },
+      "success-bg": { "displayName": "Success status surface", "tonalRamp": ["oklch(15% .02 162)", "oklch(26% .02 162)", "oklch(38% .02 162)", "oklch(49% .02 162)", "oklch(61% .02 162)", "oklch(72% .02 162)", "oklch(84% .02 162)", "oklch(95% .02 162)"] },
+      "success-text": { "displayName": "Success status label", "tonalRamp": ["oklch(15% .07 162)", "oklch(26% .07 162)", "oklch(38% .07 162)", "oklch(49% .07 162)", "oklch(61% .07 162)", "oklch(72% .07 162)", "oklch(84% .07 162)", "oklch(95% .07 162)"] },
+      "field-line": { "role": "neutral", "displayName": "Field border", "tonalRamp": ["oklch(15% .02 255)", "oklch(26% .02 255)", "oklch(38% .02 255)", "oklch(49% .02 255)", "oklch(61% .02 255)", "oklch(72% .02 255)", "oklch(84% .02 255)", "oklch(95% .02 255)"] },
+      "field-focus": { "displayName": "Field focus border", "tonalRamp": ["oklch(15% .06 263)", "oklch(26% .06 263)", "oklch(38% .06 263)", "oklch(49% .06 263)", "oklch(61% .06 263)", "oklch(72% .06 263)", "oklch(84% .06 263)", "oklch(95% .06 263)"] },
+      "queue-bg": { "role": "neutral", "displayName": "Findings queue", "tonalRamp": ["oklch(15% .008 255)", "oklch(26% .008 255)", "oklch(38% .008 255)", "oklch(49% .008 255)", "oklch(61% .008 255)", "oklch(72% .008 255)", "oklch(84% .008 255)", "oklch(95% .008 255)"] },
+      "queue-active": { "displayName": "Active finding surface", "tonalRamp": ["oklch(15% .03 263)", "oklch(26% .03 263)", "oklch(38% .03 263)", "oklch(49% .03 263)", "oklch(61% .03 263)", "oklch(72% .03 263)", "oklch(84% .03 263)", "oklch(95% .03 263)"] },
+      "queue-active-text": { "displayName": "Active finding title", "tonalRamp": ["oklch(15% .08 263)", "oklch(26% .08 263)", "oklch(38% .08 263)", "oklch(49% .08 263)", "oklch(61% .08 263)", "oklch(72% .08 263)", "oklch(84% .08 263)", "oklch(95% .08 263)"] },
+      "guided-line": { "role": "neutral", "displayName": "Task surface border", "tonalRamp": ["oklch(15% .02 255)", "oklch(26% .02 255)", "oklch(38% .02 255)", "oklch(49% .02 255)", "oklch(61% .02 255)", "oklch(72% .02 255)", "oklch(84% .02 255)", "oklch(95% .02 255)"] },
+      "source-series": { "role": "neutral", "displayName": "Original distribution", "tonalRamp": ["oklch(15% .03 255)", "oklch(26% .03 255)", "oklch(38% .03 255)", "oklch(49% .03 255)", "oklch(61% .03 255)", "oklch(72% .03 255)", "oklch(84% .03 255)", "oklch(95% .03 255)"] },
+      "proposed-series": { "displayName": "Proposed distribution", "tonalRamp": ["oklch(15% .1 162)", "oklch(26% .1 162)", "oklch(38% .1 162)", "oklch(49% .1 162)", "oklch(61% .1 162)", "oklch(72% .1 162)", "oklch(84% .1 162)", "oklch(95% .1 162)"] },
+      "finding-missing": { "displayName": "Missing finding", "tonalRamp": ["oklch(15% .1 27)", "oklch(26% .1 27)", "oklch(38% .1 27)", "oklch(49% .1 27)", "oklch(61% .1 27)", "oklch(72% .1 27)", "oklch(84% .1 27)", "oklch(95% .1 27)"] },
+      "finding-missing-bg": { "displayName": "Missing finding surface", "tonalRamp": ["oklch(15% .02 27)", "oklch(26% .02 27)", "oklch(38% .02 27)", "oklch(49% .02 27)", "oklch(61% .02 27)", "oklch(72% .02 27)", "oklch(84% .02 27)", "oklch(95% .02 27)"] },
+      "finding-outlier": { "displayName": "Potential outlier", "tonalRamp": ["oklch(15% .1 305)", "oklch(26% .1 305)", "oklch(38% .1 305)", "oklch(49% .1 305)", "oklch(61% .1 305)", "oklch(72% .1 305)", "oklch(84% .1 305)", "oklch(95% .1 305)"] },
+      "finding-outlier-bg": { "displayName": "Outlier finding surface", "tonalRamp": ["oklch(15% .02 305)", "oklch(26% .02 305)", "oklch(38% .02 305)", "oklch(49% .02 305)", "oklch(61% .02 305)", "oklch(72% .02 305)", "oklch(84% .02 305)", "oklch(95% .02 305)"] },
+      "finding-category": { "displayName": "Category finding", "tonalRamp": ["oklch(15% .08 75)", "oklch(26% .08 75)", "oklch(38% .08 75)", "oklch(49% .08 75)", "oklch(61% .08 75)", "oklch(72% .08 75)", "oklch(84% .08 75)", "oklch(95% .08 75)"] },
+      "finding-category-bg": { "displayName": "Category finding surface", "tonalRamp": ["oklch(15% .03 85)", "oklch(26% .03 85)", "oklch(38% .03 85)", "oklch(49% .03 85)", "oklch(61% .03 85)", "oklch(72% .03 85)", "oklch(84% .03 85)", "oklch(95% .03 85)"] },
+      "finding-format": { "displayName": "Format finding", "tonalRamp": ["oklch(15% .08 245)", "oklch(26% .08 245)", "oklch(38% .08 245)", "oklch(49% .08 245)", "oklch(61% .08 245)", "oklch(72% .08 245)", "oklch(84% .08 245)", "oklch(95% .08 245)"] },
+      "finding-format-bg": { "displayName": "Format finding surface", "tonalRamp": ["oklch(15% .02 245)", "oklch(26% .02 245)", "oklch(38% .02 245)", "oklch(49% .02 245)", "oklch(61% .02 245)", "oklch(72% .02 245)", "oklch(84% .02 245)", "oklch(95% .02 245)"] },
+      "finding-conflict": { "displayName": "Cross-column conflict", "tonalRamp": ["oklch(15% .1 50)", "oklch(26% .1 50)", "oklch(38% .1 50)", "oklch(49% .1 50)", "oklch(61% .1 50)", "oklch(72% .1 50)", "oklch(84% .1 50)", "oklch(95% .1 50)"] },
+      "finding-conflict-bg": { "displayName": "Conflict finding surface", "tonalRamp": ["oklch(15% .03 65)", "oklch(26% .03 65)", "oklch(38% .03 65)", "oklch(49% .03 65)", "oklch(61% .03 65)", "oklch(72% .03 65)", "oklch(84% .03 65)", "oklch(95% .03 65)"] },
+      "finding-duplicate": { "displayName": "Duplicate finding", "tonalRamp": ["oklch(15% .04 200)", "oklch(26% .04 200)", "oklch(38% .04 200)", "oklch(49% .04 200)", "oklch(61% .04 200)", "oklch(72% .04 200)", "oklch(84% .04 200)", "oklch(95% .04 200)"] },
+      "finding-duplicate-bg": { "displayName": "Duplicate finding surface", "tonalRamp": ["oklch(15% .015 190)", "oklch(26% .015 190)", "oklch(38% .015 190)", "oklch(49% .015 190)", "oklch(61% .015 190)", "oklch(72% .015 190)", "oklch(84% .015 190)", "oklch(95% .015 190)"] },
+      "finding-schema": { "displayName": "Schema finding", "tonalRamp": ["oklch(15% .06 5)", "oklch(26% .06 5)", "oklch(38% .06 5)", "oklch(49% .06 5)", "oklch(61% .06 5)", "oklch(72% .06 5)", "oklch(84% .06 5)", "oklch(95% .06 5)"] },
+      "finding-schema-bg": { "displayName": "Schema finding surface", "tonalRamp": ["oklch(15% .015 5)", "oklch(26% .015 5)", "oklch(38% .015 5)", "oklch(49% .015 5)", "oklch(61% .015 5)", "oklch(72% .015 5)", "oklch(84% .015 5)", "oklch(95% .015 5)"] },
+      "blue": { "role": "primary", "displayName": "Action blue", "tonalRamp": ["oklch(15% 0.12 263)", "oklch(26% 0.12 263)", "oklch(38% 0.12 263)", "oklch(49% 0.12 263)", "oklch(61% 0.12 263)", "oklch(72% 0.12 263)", "oklch(84% 0.12 263)", "oklch(95% 0.12 263)"] },
+      "rail": { "role": "neutral", "displayName": "Navy rail", "tonalRamp": ["oklch(15% 0.04 257)", "oklch(26% 0.04 257)", "oklch(38% 0.04 257)", "oklch(49% 0.04 257)", "oklch(61% 0.04 257)", "oklch(72% 0.04 257)", "oklch(84% 0.04 257)", "oklch(95% 0.04 257)"] },
+      "paper": { "role": "neutral", "displayName": "Cool paper", "tonalRamp": ["oklch(15% 0.008 255)", "oklch(26% 0.008 255)", "oklch(38% 0.008 255)", "oklch(49% 0.008 255)", "oklch(61% 0.008 255)", "oklch(72% 0.008 255)", "oklch(84% 0.008 255)", "oklch(95% 0.008 255)"] },
+      "green": { "displayName": "Approval green", "tonalRamp": ["oklch(15% 0.07 162)", "oklch(26% 0.07 162)", "oklch(38% 0.07 162)", "oklch(49% 0.07 162)", "oklch(61% 0.07 162)", "oklch(72% 0.07 162)", "oklch(84% 0.07 162)", "oklch(95% 0.07 162)"] },
+      "amber": { "displayName": "Contextual amber", "tonalRamp": ["oklch(15% 0.08 70)", "oklch(26% 0.08 70)", "oklch(38% 0.08 70)", "oklch(49% 0.08 70)", "oklch(61% 0.08 70)", "oklch(72% 0.08 70)", "oklch(84% 0.08 70)", "oklch(95% 0.08 70)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Import heading", "purpose": "Empty-state heading; 29px at max-width 560px." },
+      "headline": { "displayName": "Page heading", "purpose": "Screen heading; 26px at max-width 560px." },
+      "finding-title": { "displayName": "Finding heading", "purpose": "Active guided finding; 21px at max-width 560px." },
+      "title": { "displayName": "Stage heading", "purpose": "Guided review stage; 20px at max-width 560px." },
+      "body": { "displayName": "UI body", "purpose": "Global Source Sans 3 text, self-hosted at fonts/source-sans-3-latin.woff2." },
+      "review-body": { "displayName": "Review explanation", "purpose": "Guided-stage paragraphs, with direct paragraphs limited to 72ch." },
+      "label": { "displayName": "Compact label", "purpose": "Status badges and analytical labels." },
+      "value": { "displayName": "Source value", "purpose": "Grouped raw values; monospace is confined to data representations." }
+    },
+    "shadows": [
+      { "name": "dialog", "value": "0 16px 36px #142c4d26", "purpose": "Native dialog elevation; backdrop is #142c4d66." },
+      { "name": "active-step", "value": "inset 0 -2px #245bc5", "purpose": "Current-step indicator, not raised surface elevation." }
+    ],
+    "motion": [
+      { "name": "button-state", "value": "background-color 150ms ease, border-color 150ms ease", "purpose": "Primary, secondary, and ghost hover transitions." },
+      { "name": "reduced-motion", "value": "@media (prefers-reduced-motion: reduce)", "purpose": "Buttons transition:none; toast transition:opacity 0s and transform:none. Other legacy animation coverage is not asserted." }
+    ],
+    "breakpoints": [
+      { "name": "compact-desktop-max", "value": "1200px" },
+      { "name": "compatibility-panels-max", "value": "1100px" },
+      { "name": "stacked-review-max", "value": "1000px" },
+      { "name": "horizontal-navigation-max", "value": "800px" },
+      { "name": "compact-spreadsheet-max", "value": "700px" },
+      { "name": "inherited-review-stack-max", "value": "620px" },
+      { "name": "narrow-max", "value": "560px" },
+      { "name": "compatibility-smallest-max", "value": "400px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Blue progression action; contextual guided actions retain a 44px minimum instead of the general 40px minimum.",
+      "html": "<button class=\"ds-primary\">Continue →</button>",
+      "css": ".ds-primary{font:600 14px var(--font-ui,\"Source Sans 3\",sans-serif);min-height:40px;padding:9px 15px;border:1px solid var(--blue,#245bc5);border-radius:var(--radius,6px);background:var(--blue,#245bc5);color:white;box-shadow:none;cursor:pointer;transition:background-color 150ms ease,border-color 150ms ease}.ds-primary:hover:not(:disabled){background:#1b49a4;border-color:#1b49a4}.ds-primary:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}.ds-primary:disabled{opacity:.5;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
+    },
+    {
+      "name": "Approval Button",
+      "kind": "button",
+      "refersTo": "button-approval",
+      "description": "Final guided approval; source selector #approveGuided overrides blue primary colors.",
+      "html": "<button class=\"ds-approval\">Approve this decision</button>",
+      "css": ".ds-approval{font:600 14px var(--font-ui,\"Source Sans 3\",sans-serif);min-height:44px;padding:9px 15px;border:1px solid var(--green,#176146);border-radius:var(--radius,6px);background:var(--green,#176146);color:white;box-shadow:none;cursor:pointer;transition:background-color 150ms ease,border-color 150ms ease}.ds-approval:hover{background:#104b35}.ds-approval:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}.ds-approval:disabled{opacity:.5;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-approval{transition:none}}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "White bordered supporting action.",
+      "html": "<button class=\"ds-secondary\">Column definitions</button>",
+      "css": ".ds-secondary{font:600 14px var(--font-ui,\"Source Sans 3\",sans-serif);min-height:40px;padding:9px 15px;border:1px solid #becbdc;border-radius:var(--radius,6px);background:white;color:#274469;box-shadow:none;cursor:pointer;transition:background-color 150ms ease,border-color 150ms ease}.ds-secondary:hover:not(:disabled){background:#f0f4fc;border-color:#809abd}.ds-secondary:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}.ds-secondary:disabled{opacity:.5;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-secondary{transition:none}}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-emphasis supporting action such as leaving a finding open.",
+      "html": "<button class=\"ds-ghost\">Leave open</button>",
+      "css": ".ds-ghost{font:600 14px var(--font-ui,\"Source Sans 3\",sans-serif);min-height:40px;padding:9px 15px;border:0;border-radius:var(--radius,6px);background:transparent;color:var(--muted,#52647a);box-shadow:none;cursor:pointer;transition:background-color 150ms ease,border-color 150ms ease}.ds-ghost:hover:not(:disabled){background:#edf2f8;color:var(--ink,#182b43)}.ds-ghost:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}.ds-ghost:disabled{opacity:.5;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-ghost{transition:none}}"
+    },
+    {
+      "name": "Review Field",
+      "kind": "input",
+      "refersTo": "input-review",
+      "description": "Native review input; retains the inherited review-specific placeholder and green caret as observed drift.",
+      "html": "<label class=\"ds-field-label\">Replacement value<input class=\"ds-field\" placeholder=\"Replacement value\"></label>",
+      "css": ".ds-field-label{display:grid;gap:6px;font:14px/1.6 var(--font-ui,\"Source Sans 3\",sans-serif);color:#354e70}.ds-field{min-width:0;max-width:100%;border:1px solid #bac9dc;border-radius:var(--radius,6px);padding:10px 12px;font:14px var(--font-ui,\"Source Sans 3\",sans-serif);color:var(--ink,#182b43);background:white;caret-color:#216646}.ds-field::placeholder{color:#60746a;opacity:1}.ds-field:focus{border-color:#7395d3}.ds-field:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}"
+    },
+    {
+      "name": "Rail Navigation",
+      "kind": "nav",
+      "refersTo": "navigation-item",
+      "description": "Native navigation button with SVG; active state shown. Compact horizontal layout begins at 800px in the application shell.",
+      "html": "<nav class=\"ds-rail\" aria-label=\"Primary navigation\"><button class=\"ds-nav ds-nav-active\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 9h18M3 14h18M9 4v16\"/></svg>Explore</button><button class=\"ds-nav\">Review</button><button class=\"ds-nav\" disabled>Report</button></nav>",
+      "css": ".ds-rail{display:grid;gap:5px;background:var(--rail,#172d4b);padding:16px}.ds-nav{display:flex;align-items:center;gap:12px;width:100%;min-height:46px;padding:11px 12px;border:0;border-radius:var(--radius,6px);background:transparent;text-align:left;color:#c1d0e5;font:600 15px var(--font-ui,\"Source Sans 3\",sans-serif);cursor:pointer}.ds-nav svg{width:18px;height:18px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.ds-nav:hover{background:#233c5d;color:white}.ds-nav.ds-nav-active{background:#2b4c79;color:white}.ds-nav:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}.ds-nav:disabled{color:#a8bad4;opacity:1;cursor:not-allowed}"
+    },
+    {
+      "name": "Status Badges",
+      "kind": "chip",
+      "refersTo": "status-neutral",
+      "description": "Noninteractive neutral, warning, and success visual variants; text defines the actual application meaning.",
+      "html": "<div class=\"ds-badges\"><span class=\"ds-badge\">Original</span><span class=\"ds-badge ds-warning\">Unresolved</span><span class=\"ds-badge ds-success\">Approved</span></div>",
+      "css": ".ds-badges{display:flex;flex-wrap:wrap;gap:8px}.ds-badge{border-radius:4px;font:600 12px var(--font-ui,\"Source Sans 3\",sans-serif);padding:4px 8px;background:#edf1f7;color:#4b5f7b}.ds-warning{color:#765019;background:var(--amber-bg,#fff4df)}.ds-success{color:#1f6448;background:#e8f6ee}"
+    },
+    {
+      "name": "Workspace Card",
+      "kind": "card",
+      "refersTo": "workspace-card",
+      "description": "Flat white native section for contextual analytical content.",
+      "html": "<section class=\"ds-card\"><h2>Give the copilot context</h2><p>Describe what the data measures to improve subsequent suggestions.</p></section>",
+      "css": ".ds-card{margin:22px 0;padding:20px;border:1px solid var(--line,#d9e1eb);border-radius:8px;background:var(--panel,#ffffff);color:var(--ink,#182b43);font:15px/1.5 var(--font-ui,\"Source Sans 3\",sans-serif)}.ds-card h2{margin:0 0 8px;font-size:19px;font-weight:600}.ds-card p{color:var(--muted,#52647a);font-size:14px;line-height:1.6}@media(max-width:560px){.ds-card{padding:18px}}"
+    },
+    {
+      "name": "SVG Finding Marker",
+      "kind": "custom",
+      "description": "Potential-outlier category marker; exact SVG path data from sheetSvgIcon. Category encoding is not a severity verdict.",
+      "html": "<button class=\"ds-finding\" aria-label=\"Potential outlier, 3 flagged cells\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"6\" cy=\"16\" r=\"2\"/><circle cx=\"11\" cy=\"13\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"3\"/></svg><small>3</small></button>",
+      "css": ".ds-finding{display:inline-flex;align-items:center;justify-content:center;gap:2px;min-width:24px;height:26px;padding:2px 4px;border:1px solid #7544a7;border-radius:6px;background:#f3edfa;color:#7544a7;font:700 14px var(--font-ui,\"Source Sans 3\",sans-serif);cursor:pointer}.ds-finding svg{width:16px;height:16px;flex-shrink:0;vertical-align:middle}.ds-finding small{margin-left:2px;font-size:10px}.ds-finding:focus-visible{outline:2px solid #7544a7;outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Analytical Review Desk",
+    "overview": "ClearData is a precise, daylight analytical workspace. An ink-navy navigation rail frames white task surfaces on cool paper; blue identifies actions and selection, green marks final approval, and amber calls attention to exceptions. The character is restrained and information-led: readable data, aligned labels, compact controls, and meaningful hairline divisions.\n\nThe system uses native browser controls, inline SVG icons, and a self-hosted typeface. Dataset evidence remains visually distinct from interpretation and approval. Review content stays in document flow, including its static, unobstructed action footer.",
+    "keyCharacteristics": [
+      "Navy navigation, white task surfaces, and cool-paper surroundings.",
+      "Source Sans 3 with tabular numerals for analytical comparisons.",
+      "Blue progression, green final approval, and amber contextual warnings.",
+      "Restrained corners, hairline divisions, and SVG finding icons.",
+      "Native controls and a static review footer."
+    ],
+    "rules": [
+      { "name": "The Meaning Before Color Rule", "body": "Pair semantic color with visible labels, icons, counts, or evidence; a flagged value is a finding for review, not proof that it is invalid.", "section": "colors" },
+      { "name": "The Flow First Rule", "body": "Keep the guided action footer static and unobstructed; scrolling evidence and exceptions must not be covered by approval controls.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use Source Sans 3 and tabular numerals for analytical data.",
+      "Do use blue for progression and selection, green for final guided approval, and amber for contextual exceptions.",
+      "Do pair finding colors with SVG icons and textual descriptions.",
+      "Do preserve common bins and scales in original/working/proposed comparisons.",
+      "Do keep the review footer static, after the evidence and exceptions.",
+      "Do account for inherited responsive rules when extending the final visual layer."
+    ],
+    "donts": [
+      "Don't infer a dark theme from the navy navigation rail.",
+      "Don't equate a finding color with invalid data or automatic treatment.",
+      "Don't replace SVG finding icons with glyph icons or raster images.",
+      "Don't promote residual legacy fonts, kickers, or green-selection styling into new system rules.",
+      "Don't treat documentation completion as the pending finish-review verdict or as Playwright verification."
+    ]
+  }
+}

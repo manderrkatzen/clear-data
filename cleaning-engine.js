@@ -1,7 +1,7 @@
 // Pure, deterministic profiling and treatment functions shared by the browser,
 // profiling worker, and Node regressions. No function mutates source records.
 var CleaningEngine = (() => {
-  const operations = ["retain", "missing", "constant", "median", "mean", "groupMedian", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "cap", "remove", "recalculate", "deduplicate", "mergeDuplicates"];
+  const operations = ["retain", "missing", "constant", "median", "mean", "groupMedian", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "cap", "remove", "recalculate", "deduplicate", "mergeDuplicates"];
   const missingPattern = /^(null|n\/?a|none|nil|unknown|not available|not applicable|missing|undefined|--?|\?)$/i;
   const decimalPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
   const text = value => String(value ?? "");
@@ -203,6 +203,7 @@ var CleaningEngine = (() => {
         }
         if (draft.operation === "map") after = Object.hasOwn(mapping, before) ? mapping[before] : before;
         if (draft.operation === "parseNumber") after = fixed(parseNumber(before, { ...policy, ...draft }), Number(decimals));
+        if (draft.operation === "scale") after = fixed(parseNumber(before) * parseNumber(draft.factor), Number(decimals));
         if (draft.operation === "parseDate") after = parseDate(before, draft.dateFormat || policy.dateFormat);
         if (draft.operation === "cap") after = fixed(Math.max(text(draft.lower).trim() ? parseNumber(draft.lower) : -Infinity, Math.min(text(draft.upper).trim() ? parseNumber(draft.upper) : Infinity, parseNumber(before))), Number(decimals));
         if (draft.operation === "recalculate") {

@@ -1,5 +1,8 @@
 # ClearData product review
 
+> Historical assessment preceding the guided-cleaning release. Current coverage
+> and remaining gaps are recorded in [CLEANING_ROADMAP.md](CLEANING_ROADMAP.md).
+
 Review date: 2026-10-05. Based on the repository implementation and local browser testing. This is a personal portfolio project, so the priorities favor a coherent, credible cleaning experience over infrastructure breadth.
 
 ## Overall assessment

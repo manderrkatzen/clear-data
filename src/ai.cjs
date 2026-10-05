@@ -121,7 +121,7 @@ async function handleProposal(request, env) {
   }
 }
 
-const interpretationOperations = ["retain", "missing", "constant", "median", "mean", "groupMedian", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "cap", "remove", "recalculate", "deduplicate", "mergeDuplicates"];
+const interpretationOperations = ["retain", "missing", "constant", "median", "mean", "groupMedian", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "cap", "remove", "recalculate", "deduplicate", "mergeDuplicates"];
 function validateInterpretationRequest(payload) {
   if (!payload || typeof payload.purpose !== "string" || payload.purpose.length > 1000 || !Array.isArray(payload.candidates) || payload.candidates.length < 1 || payload.candidates.length > 6) throw apiError("Provide bounded dataset context and one to six candidate groups.");
   const ids = new Set();

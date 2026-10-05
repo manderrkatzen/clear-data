@@ -126,6 +126,7 @@ function render() {
   refreshChrome();
   document.querySelectorAll(".nav-link").forEach((button) => button.classList.toggle("active", button.dataset.screen === state.screen));
   ({ data: renderData, view: renderSpreadsheet, issues: renderIssues, changes: renderChanges, report: renderReport })[state.screen]();
+  if (state.screen === "data") enhanceDatasetScreen();
   if (state.screen === "data") { if (state.headers.length) { screen.insertAdjacentHTML?.("beforeend", cleaningOverviewHtml()); bindCleaningOverview(); } screen.insertAdjacentHTML?.("beforeend", workspaceTools()); bindWorkspaceTools(); }
   if (state.screen === "changes") decorateDecisionHistory();
 }
@@ -390,6 +391,7 @@ $("#navigation").onclick = (event) => {
   const button = event.target.closest("[data-screen]");
   if (button && !button.disabled) go(button.dataset.screen);
 };
+document.querySelector(".brand")?.addEventListener("click", event => { event.preventDefault(); go("data"); });
 $("#fileInput").onchange = (event) => {
   const file = event.target.files[0];
   if (file) {
@@ -414,9 +416,12 @@ render();
 function scatterData(item) {
   const columns = numericColumns();
   const selected = state.scatter[item.id] ||= { x: item.column, y: columns.find((column) => column !== item.column) || item.column };
-  selected.x = columns.includes(selected.x) ? selected.x : item.column;
+  selected.x = columns.includes(selected.x) ? selected.x : columns[0] || item.column;
   selected.y = columns.includes(selected.y) ? selected.y : columns.find((column) => column !== selected.x) || selected.x;
-  const points = state.rows.map((row) => ({ row, rawX: String(row[selected.x] ?? "").trim(), rawY: String(row[selected.y] ?? "").trim(), x: Number(row[selected.x]), y: Number(row[selected.y]) })).filter((point) => point.rawX && point.rawY && Number.isFinite(point.x) && Number.isFinite(point.y));
+  const points = state.rows.flatMap(row => {
+    if ([selected.x, selected.y].some(column => ["missing", "not_applicable"].includes(cellInterpretation(row, column)) || CleaningEngine.missing(row[column], columnPolicy(column)))) return [];
+    try { return [{ row, rawX: String(row[selected.x]).trim(), rawY: String(row[selected.y]).trim(), x: CleaningEngine.parseNumber(row[selected.x]), y: CleaningEngine.parseNumber(row[selected.y]) }]; } catch { return []; }
+  });
   const range = (key) => points.length ? [Math.min(...points.map((point) => point[key])), Math.max(...points.map((point) => point[key]))] : [0, 1];
   const [minX, maxX] = range("x"), [minY, maxY] = range("y");
   return { columns, selected, points, minX, maxX, minY, maxY };
@@ -504,6 +509,7 @@ function match(row, filter) {
   return filter.operator === "!=" ? !equal : equal;
 }
 function evaluateOutlier(item, d) {
+  if (d.method !== "custom" && columnPolicy(item.column).role === "identifier") return { rows: [], note: "Identifier columns are not numerical measurements. Use a custom condition or change the declared role.", error: "Identifier columns are not numerical measurements.", method: d.method, stats: numericStats([]) };
   const values = observedNumericEntries(item.column);
   const stats = numericStats(values.map((entry) => entry.value));
   let rows = [], note = "", lower, upper, sd;

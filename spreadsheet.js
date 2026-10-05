@@ -1,12 +1,24 @@
 const sheetIssueTypes = {
-  missing: { symbol: "?", label: "Missing value", tab: "Missing" },
-  outlier: { symbol: "◇", label: "Potential outlier", tab: "Outlier" },
-  category: { symbol: "≠", label: "Inconsistent category", tab: "Category" },
-  format: { symbol: "↔", label: "Date/number format", tab: "Format" },
-  conflict: { symbol: "!", label: "Cross-column conflict", tab: "Conflict" },
-  duplicate: { symbol: "⧉", label: "Duplicate record", tab: "Duplicate" },
-  schema: { symbol: "§", label: "Schema violation", tab: "Schema" },
+  missing: { symbol: sheetSvgIcon("missing"), label: "Missing value", tab: "Missing" },
+  outlier: { symbol: sheetSvgIcon("outlier"), label: "Potential outlier", tab: "Outlier" },
+  category: { symbol: sheetSvgIcon("category"), label: "Inconsistent category", tab: "Category" },
+  format: { symbol: sheetSvgIcon("format"), label: "Date/number format", tab: "Format" },
+  conflict: { symbol: sheetSvgIcon("conflict"), label: "Cross-column conflict", tab: "Conflict" },
+  duplicate: { symbol: sheetSvgIcon("duplicate"), label: "Duplicate record", tab: "Duplicate" },
+  schema: { symbol: sheetSvgIcon("schema"), label: "Schema violation", tab: "Schema" },
 };
+function sheetSvgIcon(type) {
+  const paths = {
+    missing: '<circle cx="12" cy="12" r="8"/><path d="M8 12h8"/>',
+    outlier: '<circle cx="6" cy="16" r="2"/><circle cx="11" cy="13" r="2"/><circle cx="18" cy="6" r="3"/>',
+    category: '<path d="M5 8h14M5 16h14M15 4 9 20"/>',
+    format: '<path d="M4 8h16m-4-4 4 4-4 4M20 16H4m4-4-4 4 4 4"/>',
+    conflict: '<path d="m12 3 10 18H2zM12 9v5M12 17v1"/>',
+    duplicate: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M15 8V4H4v11h4"/>',
+    schema: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m7 9 2 2 3-4M14 9h3M7 16h10"/>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths[type]}</svg>`;
+}
 function sheetIssueType(item) {
   if (item.recommendation === "candidate") return ["missing_token", "sentinel"].includes(item.candidate?.kind) ? "missing" : item.candidate?.kind === "category" || item.candidate?.kind === "spacing" ? "category" : "format";
   if (item.recommendation === "relation") return "schema";
@@ -128,7 +140,7 @@ function renderSpreadsheet() {
       <header class="sheet-card-heading"><span class="sheet-type">${meta.symbol}</span><b>${meta.label}</b><span>Row ${rowId} · <code>${escapeHtml(item.column)}</code></span><small>${escapeHtml(item.severity)} priority</small></header>
       <h3>${escapeHtml(inspection.title)}</h3><p>${escapeHtml(inspection.explanation)}</p>
       <dl class="sheet-evidence">${inspection.evidence.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>
-      <footer class="sheet-card-action"><button class="primary" id="sheetReview">${inspection.action}</button><span>Reviews all ${item.rows.length.toLocaleString()} ${type === "missing" ? "missing cells" : "flagged cells"} in <code>${escapeHtml(item.column)}</code>.<small>Compare treatments before approving a column-wide decision.</small></span></footer>`;
+      <footer class="sheet-card-action"><button class="primary" id="sheetReview">${inspection.action}</button><span>Open a guided review of ${item.rows.length.toLocaleString()} matching records in <code>${escapeHtml(item.column)}</code>.<small>Choose the treatment and exact scope before approving.</small></span></footer>`;
     details.querySelectorAll("[data-finding]").forEach((button) => button.onclick = () => showDetails(rowId, Number(button.dataset.finding)));
     $("#sheetReview").onclick = () => { state.selectedIssue = null; openIssue(item.id); };
     updateMarkers();

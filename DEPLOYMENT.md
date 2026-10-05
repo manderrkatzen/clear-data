@@ -1,6 +1,8 @@
 # AI Deployment
 
-The browser calls only `POST /api/ai/proposals`. It never receives an AI provider key or selects the provider mode.
+The browser calls same-origin `POST /api/ai/interpretations` for automatic, batched
+candidate interpretation and `POST /api/ai/proposals` for bounded treatment proposals.
+It never receives a provider key or selects provider mode.
 
 ## Local development
 
@@ -17,9 +19,18 @@ OPENAI_MODEL=gpt-4.1-mini
 AI_MAX_REQUESTS_PER_HOUR=10
 ```
 
-All proposal runtimes share `src/ai.cjs`: a 64 KiB UTF-8 request cap, a 300-character instruction limit, a 45-second provider timeout, operation/column/category-source validation, and JSON response extraction. A process/isolate-local per-IP hourly limiter defaults to 10 structurally valid proposal attempts and reads `AI_MAX_REQUESTS_PER_HOUR`. Its state resets on process restart or isolate replacement and is not a durable distributed quota.
+All AI runtimes share `src/ai.cjs`: a 64 KiB UTF-8 request cap, 45-second timeout,
+validation, and response extraction. Proposals retain the 300-character instruction
+limit. Interpretations allow a 1,000-character purpose and six candidates with ten
+capped value groups each; output IDs, meanings, scores, and operations are validated.
+The process/isolate-local hourly limiter defaults to 10 valid attempts across both
+endpoints and reads `AI_MAX_REQUESTS_PER_HOUR`. It is not a distributed quota.
+Quota errors retain local/manual review and already received interpretations.
 
-`GET /api/ai/status` reports provider configuration and `healthChecked: false`; it does not call the provider. `GET /api/ai/proposals` supplies the optional Turnstile site key. Local Node defaults to Ollama; Workers and Pages use OpenAI. The local server serves only the explicit browser asset set.
+`GET /api/ai/status` reports configuration and `healthChecked: false`; it does not
+call the provider. Both AI configuration GET routes supply optional Turnstile keys.
+Node defaults to Ollama; Workers and Pages use OpenAI. Browser assets include the
+profiling worker and self-hosted font through the explicit asset allowlist.
 
 ## Cloudflare Workers
 
@@ -39,7 +50,9 @@ TURNSTILE_SITE_KEY=public widget site key
 TURNSTILE_SECRET_KEY=encrypted widget secret
 ```
 
-When `TURNSTILE_SECRET_KEY` is set, the AI endpoint rejects requests that do not include a valid Turnstile token. The widget is only requested when a user asks AI for an alternative fix.
+When `TURNSTILE_SECRET_KEY` is set, both AI endpoints require a valid token.
+Automatic import analysis and explicit follow-ups obtain tokens; checks support
+cancellation and timeout and do not gate local cleaning.
 
 ## Browser-local projects and review rules
 
@@ -61,7 +74,7 @@ To deploy the latest release from the feature branch to the original URL:
 
 ```bash
 git switch feature/analytics-review-workspace
-node --test scripts/verify_quality.cjs
+node --test scripts/verify_quality.cjs scripts/verify_cleaning.cjs
 npx wrangler deploy --keep-vars
 ```
 

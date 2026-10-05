@@ -10,6 +10,9 @@ ClearData is an AI-assisted CSV data-quality workspace. Its workflow is **Data â
 - `app.js`: shared browser state, CSV import/export, issue detection, treatment previews, AI requests, history, and screen rendering.
 - `spreadsheet.js`: spreadsheet view, issue rail, and cell inspection; shares globals with `app.js`. It loads before `app.js` as a classic script.
 - `workspace.js` and `workspace.css`: downloadable review artifacts, duplicates, schema/metric rules, and browser-local projects/rule libraries. `workspace.js` loads before `app.js` and uses its globals when invoked.
+- `cleaning-engine.js` and `profile-worker.js`: pure profiling/parsing/scoped treatments and background profiling; the engine is also required by Node tests.
+- `review.js`, `review-ui.js`, and `review.css`: candidate integration, validated automatic AI interpretation, scoped preview/approval, and the five-step review. Classic scripts load before `app.js`.
+- `design-system.css`: final-loaded visual authority, with local typography in `fonts/`. Read `PRODUCT.md` and `DESIGN.md` before visual changes.
 - `styles.css` and `spreadsheet.css`: application and spreadsheet styling.
 - `server.js`: dependency-free Node HTTP server and local AI API, defaulting to Ollama.
 - `src/worker.js`: deployed Cloudflare Worker API and static asset routing, using OpenAI and optional Turnstile verification.
@@ -22,7 +25,7 @@ ClearData is an AI-assisted CSV data-quality workspace. Its workflow is **Data â
 
 ## Development and Verification
 
-There is no package manifest or application build pipeline. Use a current Node.js runtime with built-in `fetch` and `AbortSignal.timeout` support. Run `node --test scripts/verify_quality.cjs` for data-treatment and shared API regressions; provider calls in these checks are mocked.
+There is no package manifest or application build pipeline. Use a current Node.js runtime with built-in `fetch` and `AbortSignal.timeout`. Run `node --test scripts/verify_quality.cjs scripts/verify_cleaning.cjs` for mocked data-treatment/API regressions. `scripts/verify_ui.cjs` is an optional Playwright runner; see README for external tooling setup.
 
 ```bash
 node server.js
@@ -60,6 +63,8 @@ For UI or data-treatment changes, manually exercise the affected flow with a bun
 - Project JSON must validate/reconcile before replacing state. IndexedDB persistence is explicit and origin-local; rule reuse must not apply treatments automatically.
 - Treat blanks and outliers as findings requiring contextual review. Do not automatically equate them with invalid data.
 - AI returns bounded, validated proposals; applying changes requires explicit user confirmation. Keep operation, column, and category-source validation intact.
+- Interpretation starts automatically on import in bounded batches. Preserve candidate/evidence ID validation, stale-response guards, cancellation, and non-calibrated ranking wording. Advice never executes treatments.
+- Guided approval requires an unchanged preview fingerprint and explicit scope. Blocked records stay open unless a valid subset is expressly chosen. Semantic classification is replayed from decision metadata and must survive restore/rollback.
 - Keep provider credentials server-side. Respect `.gitignore`; do not commit `.env`, `.dev.vars`, credential files, or generated `.wrangler` state.
 - Update `.assetsignore` when adding browser assets that must be deployed.
 - Inspect existing working-tree changes and preserve user work. Keep changes focused on the requested task.

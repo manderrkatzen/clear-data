@@ -7,3 +7,14 @@ node_modules/
 .wrangler/
 *.pem
 *.key
+
+# Impeccable's downloaded engine and temporary review artifacts are local tooling.
+.opencode/skills/impeccable/scripts/bin/
+**/.impeccable/config.local.json
+**/.impeccable/*.png
+**/.impeccable/review/
+**/.impeccable/questions/
+**/.impeccable/live/server.json
+**/.impeccable/live/sessions/
+**/.impeccable/live/previews/
+**/.impeccable/live/cache/

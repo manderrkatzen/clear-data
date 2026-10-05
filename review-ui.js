@@ -41,18 +41,21 @@ function reviewDistribution(column, afterRows, classification = null) {
     const preview = guidedPreview(selected);
     classification = preview.classification;
   }
-  const source = interpretedNumericValues(state.original, column, null, true), working = interpretedNumericValues(state.rows, column), after = interpretedNumericValues(afterRows, column, classification);
+  const isIdentifier = cleaningProfile().columns.find(profile => profile.column === column)?.role === "identifier";
+  const source = isIdentifier ? [] : interpretedNumericValues(state.original, column, null, true), working = isIdentifier ? [] : interpretedNumericValues(state.rows, column), after = isIdentifier ? [] : interpretedNumericValues(afterRows, column, classification);
   const countBlanks = rows => rows.filter(row => !String(row[column] ?? "").trim()).length;
+  const series = [{ name: "Original", legend: "Original source", className: "source", values: source, rows: state.original }, { name: "Working", legend: "Cumulative working", className: "working", values: working, rows: state.rows }];
+  if (afterRows !== state.rows) series.push({ name: "Preview", legend: "Proposed preview", className: "proposed", values: after, rows: afterRows });
   if (!source.length && !working.length && !after.length) {
     const distinct = rows => new Set(rows.map(row => row[column]).filter(value => String(value ?? "").trim())).size;
-    return `<div class="comparison-metrics"><div><span>Original</span><b>${distinct(state.original)} labels</b><small>${countBlanks(state.original)} blanks</small></div><div><span>Working</span><b>${distinct(state.rows)} labels</b><small>${countBlanks(state.rows)} blanks</small></div><div><span>Preview</span><b>${distinct(afterRows)} labels</b><small>${countBlanks(afterRows)} blanks</small></div></div>`;
+    return `<div class="comparison-metrics">${series.map(entry => `<div><span>${entry.name}</span><b>${distinct(entry.rows)} labels</b><small>${countBlanks(entry.rows)} blanks</small></div>`).join("")}</div>`;
   }
-  const range = CleaningEngine.stats([...source, ...working, ...after]), min = range.min, max = range.max;
+  const range = CleaningEngine.stats(series.flatMap(entry => entry.values)), min = range.min, max = range.max;
   const bins = values => { const counts = Array(18).fill(0); values.forEach(value => counts[Math.min(17, Math.floor((value - min) / (max - min || 1) * 18))]++); return counts; };
-  const sets = [bins(source), bins(working), bins(after)], scale = Math.max(1, ...sets.flat());
+  const sets = series.map(entry => bins(entry.values)), scale = Math.max(1, ...sets.flat());
   const format = value => value === null ? "—" : value.toLocaleString(undefined, { maximumSignificantDigits: 6 });
-  const metrics = [source, working, after].map((values, index) => { const stats = CleaningEngine.stats(values); return `<div><span>${["Original", "Working", "Preview"][index]}</span><b>Median ${format(stats.median)}</b><small>Mean ${format(stats.mean)} · ${values.length} parsed values</small></div>`; }).join("");
-  return `<div class="review-distribution"><div class="chart-legend"><span class="source">Original source</span><span class="working">Cumulative working</span><span class="proposed">Proposed preview</span></div><div class="distribution-bars" role="img" aria-label="Original, working and proposed distributions of ${escapeHtml(column)}">${sets[0].map((_, index) => `<div>${sets.map((counts, series) => `<i class="${["source", "working", "proposed"][series]}" style="height:${counts[index] / scale * 100}%" title="${["Original", "Working", "Preview"][series]}: ${counts[index]} values"></i>`).join("")}</div>`).join("")}</div><div class="distribution-axis"><span>${format(min)}</span><span>${escapeHtml(column)}</span><span>${format(max)}</span></div><div class="comparison-metrics">${metrics}</div><p class="review-scope">Common bins and count scale. Unparsed text is not treated as zero. Blank counts: original ${countBlanks(state.original)}, working ${countBlanks(state.rows)}, preview ${countBlanks(afterRows)}.</p></div>`;
+  const metrics = series.map(entry => { const stats = CleaningEngine.stats(entry.values); return `<div><span>${entry.name}</span><b>Median ${format(stats.median)}</b><small>Mean ${format(stats.mean)} · ${entry.values.length} parsed values</small></div>`; }).join("");
+  return `<div class="review-distribution"><div class="chart-legend">${series.map(entry => `<span class="${entry.className}">${entry.legend}</span>`).join("")}</div><div class="distribution-bars" role="img" aria-label="${series.map(entry => entry.name).join(", ")} distributions of ${escapeHtml(column)}">${sets[0].map((_, index) => `<div>${sets.map((counts, seriesIndex) => `<i class="${series[seriesIndex].className}" style="height:${counts[index] / scale * 100}%" title="${series[seriesIndex].name}: ${counts[index]} values"></i>`).join("")}</div>`).join("")}</div><div class="distribution-axis"><span>${format(min)}</span><span>${escapeHtml(column)}</span><span>${format(max)}</span></div><div class="comparison-metrics">${metrics}</div><p class="review-scope">Common bins and count scale. Unparsed text is not zero. Blanks: ${series.map(entry => `${entry.name.toLowerCase()} ${countBlanks(entry.rows)}`).join(", ")}.</p></div>`;
 }
 function renderGuidedIssues() {
   $("#topEyebrow").textContent = "GUIDED CLEANING REVIEW";
@@ -72,6 +75,17 @@ function renderGuidedIssues() {
   screen.querySelector?.(".page-head .eyebrow")?.remove();
   const title = screen.querySelector?.(".page-head h1");
   if (title) title.textContent = "Review findings";
+  const findingTitle = screen.querySelector?.(".guided-heading h2"), metadata = screen.querySelector?.(".guided-column");
+  if (findingTitle && metadata) findingTitle.after(metadata);
+  const interpretationTitle = screen.querySelector?.(".interpretation-top h3"), attribution = screen.querySelector?.(".interpretation-top .ai-label");
+  if (interpretationTitle && attribution) interpretationTitle.after(attribution);
+  if (selected?.recommendation === "outlier" && state.reviewStep === 1) {
+    const stage = screen.querySelector(".guided-stage"), records = stage.querySelector(".evidence-records");
+    const details = document.createElement("details"), summary = document.createElement("summary"), plot = document.createElement("div");
+    details.className = "evidence-records"; summary.textContent = "Inspect numerical relationships";
+    plot.innerHTML = scatterChart(selected); details.append(summary, plot);
+    if (records) records.before(details); else stage.append(details);
+  }
   bindGuidedUI(selected);
 }
 function guidedWorkspaceHtml(item) {
@@ -109,7 +123,8 @@ function guidedTreatmentHtml(item) {
   const draft = reviewDraft(item), fieldOptions = state.headers.map(column => [column, column]);
   let fields = "";
   if (draft.operation === "constant") fields += `<label>Replacement value<input id="reviewValue" value="${escapeHtml(draft.value)}" placeholder="Exact replacement; blank is allowed"></label>`;
-  if (["mean", "median", "groupMedian", "parseNumber", "cap"].includes(draft.operation)) fields += `<label>Decimal places<input id="reviewDecimals" type="number" min="0" max="12" value="${draft.decimals}"></label>`;
+  if (["mean", "median", "groupMedian", "parseNumber", "scale", "cap"].includes(draft.operation)) fields += `<label>Decimal places<input id="reviewDecimals" type="number" min="0" max="12" value="${draft.decimals}"></label>`;
+  if (draft.operation === "scale") fields += `<label>Conversion factor<input id="reviewFactor" value="${escapeHtml(draft.factor)}" placeholder="0.01 for whole percentages → decimals"><small>Every scoped value is multiplied by this explicit factor. Source units are not guessed.</small></label>`;
   if (draft.operation === "groupMedian") fields += selectHtml("reviewGroupColumn", "Group by", fieldOptions.filter(([column]) => column !== item.column), draft.groupColumn);
   if (draft.operation === "parseNumber") fields += `${selectHtml("reviewNumberFormat", "Number format", [["plain", "Plain decimal / exponent"], ["decimalPoint", "1,234.56 (decimal point)"], ["decimalComma", "1.234,56 (decimal comma)"]], draft.numberFormat)}<label class="check"><input id="reviewCurrency" type="checkbox" ${draft.currency ? "checked" : ""}> Allow a leading currency symbol</label><label class="check"><input id="reviewPercentage" type="checkbox" ${draft.percentage ? "checked" : ""}> Convert explicit % values to decimals</label>`;
   if (draft.operation === "parseDate") fields += selectHtml("reviewDateFormat", "Interpret source dates as", [["iso", "YYYY-MM-DD"], ["mdy", "Month / day / year"], ["dmy", "Day / month / year"], ["excel", "Excel 1900 date serial"]], draft.dateFormat);
@@ -168,7 +183,7 @@ function bindGuidedUI(item) {
   });
   $("#approveGuided")?.addEventListener("click", () => approveGuidedDecision(item));
   document.querySelectorAll("input[name=reviewInterpretation]").forEach(input => input.onchange = () => update(() => { draft.interpretation = input.value; }));
-  const scalar = { reviewOperation: "operation", reviewValue: "value", reviewDecimals: "decimals", reviewGroupColumn: "groupColumn", reviewNumberFormat: "numberFormat", reviewDateFormat: "dateFormat", reviewLower: "lower", reviewUpper: "upper", reviewSurvivor: "survivor" };
+  const scalar = { reviewOperation: "operation", reviewValue: "value", reviewFactor: "factor", reviewDecimals: "decimals", reviewGroupColumn: "groupColumn", reviewNumberFormat: "numberFormat", reviewDateFormat: "dateFormat", reviewLower: "lower", reviewUpper: "upper", reviewSurvivor: "survivor" };
   Object.entries(scalar).forEach(([id, key]) => {
     const input = document.querySelector(`#${id}`); if (!input) return;
     const change = () => update(() => { draft[key] = key === "decimals" ? Number(input.value) : input.value; if (key === "operation" && input.value === "map") draft.mapping = Object.fromEntries(currentValueGroups(item).slice(0, 200).map(([value]) => [value, value])); }, input.tagName === "SELECT");
@@ -185,9 +200,12 @@ function bindGuidedUI(item) {
   document.querySelectorAll("[data-review-map]").forEach(input => input.oninput = () => update(() => { const source = currentValueGroups(item)[Number(input.dataset.reviewMap)]?.[0]; if (source !== undefined) draft.mapping[source] = input.value; }, false));
   document.querySelectorAll("[data-value-group]").forEach(button => button.onclick = () => update(() => { draft.scope.mode = "selected"; draft.scope.rowIds = currentValueGroups(item)[Number(button.dataset.valueGroup)][1]; state.reviewStep = 2; }));
   document.querySelectorAll("[data-guided-locate]").forEach(button => button.onclick = () => locateRecord(Number(button.dataset.guidedLocate)));
+  document.querySelectorAll("[data-scatter-axis]").forEach(select => select.onchange = () => { const current = scatterData(item).selected; current[select.dataset.scatterAxis] = select.value; delete current.viewport; render(); });
+  document.querySelectorAll("[data-scatter-reset]").forEach(button => button.onclick = () => { delete scatterData(item).selected.viewport; renderScatterPlot(item); });
+  document.querySelectorAll("[data-scatter-plot]").forEach(() => { renderScatterPlot(item); bindScatterNavigation(item); });
   $("#askReviewQuestion")?.addEventListener("click", () => startAutomaticReview(item.id, $("#reviewQuestion").value));
-  document.querySelectorAll("[data-outlier-method]").forEach(input => input.onchange = () => { outlierDraft(item).method = input.value; delete draft.previewFingerprint; render(); });
-  document.querySelectorAll("[data-outlier-input]").forEach(input => input.onchange = () => { outlierDraft(item)[input.dataset.outlierInput.split(":")[1]] = input.value; delete draft.previewFingerprint; render(); });
+  document.querySelectorAll("[data-outlier-method]").forEach(input => input.onchange = () => { outlierDraft(item).method = input.value; delete draft.previewFingerprint; invalidateFindingInterpretation(item); render(); });
+  document.querySelectorAll("[data-outlier-input]").forEach(input => input.onchange = () => { outlierDraft(item)[input.dataset.outlierInput.split(":")[1]] = input.value; delete draft.previewFingerprint; invalidateFindingInterpretation(item); render(); });
   document.querySelectorAll("[data-save-outlier]").forEach(button => button.onclick = () => { saveOutlierRule(item); render(); });
   const changeDuplicateKeys = definition => { state.ruleConfig.duplicates = definition; refreshIssues(); state.selectedIssue = item.id; render(); };
   $("#guidedDuplicateMode")?.addEventListener("change", event => changeDuplicateKeys({ mode: event.target.value, columns: event.target.value === "exact" ? [...state.headers] : [state.headers[0]] }));
@@ -244,4 +262,18 @@ function decorateDecisionHistory() {
     if (!change?.interpretation || !card.insertAdjacentHTML) return;
     card.insertAdjacentHTML("beforeend", `<p class="decision-interpretation"><b>Analyst interpretation:</b> ${escapeHtml(change.interpretation.replaceAll("_", " "))} · <b>Scope:</b> ${change.rows.length} reviewed source records. ${change.treatment?.scope?.mode === "condition" ? `Condition: ${escapeHtml(change.treatment.scope.column)} ${escapeHtml(change.treatment.scope.operator)} ${escapeHtml(change.treatment.scope.value)}.` : ""}</p>`);
   });
+}
+function enhanceDatasetScreen() {
+  screen.querySelectorAll?.(".profile-table tbody tr").forEach((row, index) => {
+    const column = state.headers[index], metadata = row.cells[1]?.querySelector("small");
+    const declared = columnPolicy(column).role !== "auto" || state.ruleConfig.schema.some(rule => rule.column === column && rule.type !== "any");
+    if (metadata) metadata.textContent = declared ? "declared" : "inferred";
+  });
+  const empty = screen.querySelector?.(".empty-state:not(.sample-picker)");
+  if (!empty) return;
+  const heading = empty.querySelector("h1"), description = empty.querySelector("p:not(.eyebrow):not(.ai-status)");
+  if (heading) heading.textContent = "Start with your dataset";
+  if (description) description.textContent = "Import a CSV to find suspicious values, compare AI interpretations, and approve exact corrections. Your source stays intact.";
+  const icon = empty.querySelector(".source-icon");
+  if (icon) icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h10l4 4v14H5zM14 3v5h5M8 12h8M8 16h8"/></svg>';
 }

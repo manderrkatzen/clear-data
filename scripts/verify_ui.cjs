@@ -21,11 +21,13 @@ const fixture = "id,amount,region,visit_date,status\n001,10,North,2025-01-01,Act
       try { await route.fulfill({ json: { results, provider: "openai", model: "mock-model", calibrated: false } }); } catch { /* cancellation intentionally aborts a request */ }
     });
     await page.goto(baseUrl);
+    await page.evaluate(() => document.fonts.ready);
+    assert.ok(await page.evaluate(() => [...document.fonts].some(face => face.family === "Source Sans 3" && face.status === "loaded")), "Self-hosted interface font loads");
     const load = async (csv = fixture) => {
       await page.evaluate(csv => loadData(csv, "exceptions.csv"), csv);
       await page.waitForFunction(() => state.analysisStatus === "complete");
     };
-    const choose = async expression => page.evaluate(expression => { const item = state.issues.find(new Function("item", `return ${expression}`)); openIssue(item.id); }, expression);
+    const choose = async expression => page.evaluate(expression => { const item = state.issues.find(new Function("item", `return ${expression}`)); state.selectedIssue = null; openIssue(item.id); }, expression);
     const toTreatment = async meaning => {
       await page.locator("#reviewNext").click();
       assert.equal(await page.locator("[data-current-step]").getAttribute("data-current-step"), "2");
@@ -66,12 +68,17 @@ const fixture = "id,amount,region,visit_date,status\n001,10,North,2025-01-01,Act
       await page.locator("input[name=reviewInterpretation][value=missing]").check();
       await page.locator("#reviewNext").click();
       await page.locator("#reviewOperation").selectOption("missing");
+      if (width === 1440) {
+        await page.locator("#reviewOperation").focus();
+        await page.locator("#reviewOperation").press("Tab");
+        assert.equal(await page.evaluate(() => document.activeElement.id), "reviewScopeMode");
+      }
       await page.locator("#reviewScopeMode").selectOption("selected");
       await page.locator("#reviewRowIds").fill("2");
       await layout(`${width} treatment`);
       await page.locator("#reviewNext").click(); await layout(`${width} preview`);
       assert.equal(await page.evaluate(() => state.rows[1].amount), "NULL");
-      if (process.env.ARTIFACT_DIR && [1440, 390].includes(width)) await page.screenshot({ path: `${process.env.ARTIFACT_DIR}/guided-preview-${width}.png`, fullPage: true });
+      if (process.env.ARTIFACT_DIR && [1440, 390].includes(width)) { await page.evaluate(() => scrollTo(0, 0)); await page.screenshot({ path: `${process.env.ARTIFACT_DIR}/guided-preview-${width}.png`, fullPage: true }); }
       await page.locator("#reviewNext").click(); await layout(`${width} approval`);
       await page.locator("#approveGuided").click();
       assert.equal(await page.evaluate(() => state.rows[1].amount), "");
@@ -123,6 +130,20 @@ const fixture = "id,amount,region,visit_date,status\n001,10,North,2025-01-01,Act
       await page.locator("[data-screen=report]").click();
       const download = page.waitForEvent("download"); await page.locator("#downloadCsv").click();
       assert.ok((await download).suggestedFilename().startsWith("cleaned-"));
+    }
+    await page.evaluate(async () => loadData(await (await fetch("marketing_campaigns.csv")).text(), "marketing_campaigns.csv"));
+    await page.waitForFunction(() => state.analysisStatus === "complete");
+    for (const width of [1440, 1280, 1024, 768, 390, 360]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await choose('item.recommendation === "outlier"');
+      for (const method of ["iqr", "zscore", "percentile", "threshold", "custom"]) {
+        await page.locator("[data-outlier-method]").selectOption(method);
+        await layout(`${width} outlier ${method}`);
+      }
+      await page.locator("[data-outlier-method]").selectOption("percentile");
+      await page.locator("details").filter({ has: page.locator("[data-scatter-plot]") }).locator("summary").click();
+      assert.ok(await page.locator("[data-scatter-plot] circle").count() > 0);
+      await layout(`${width} relationship plot`);
     }
     delayAI = true;
     await page.evaluate(csv => loadData(csv.replace("NULL", "N/A"), "cancel.csv"), fixture);
