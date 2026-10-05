@@ -25,12 +25,20 @@ The analyst remains in control: detected issues can be finalized, marked valid, 
 
 ### Try a bundled sample
 
-Choose **Use sample CSV** and select **Healthcare patient visits**, **Sales orders**,
+Choose **Try a sample dataset** and select **Healthcare patient visits**, **Sales orders**,
 or **Marketing campaigns**. Each sample contains 1,000 records. In View, select a
 type-specific rail marker or highlighted cell to inspect its value and evidence.
 Off-screen findings are counted separately by issue type at each edge of the rail.
 For missing numerical values, review mean, median, or leaving the value missing in
 the treatment preview before approving a column-wide decision.
+
+The Data overview now profiles completeness, distinct nonblank values, and numeric
+ranges with direct links into the review queue. Review separates evidence,
+treatment, and impact; additional checks, record filters, and rationale expand when
+needed. Numerical fills show exact proposed values at record level. IQR findings
+are detected independently across inferred numerical columns. Automatic findings
+are rule-based; the AI copilot calls the configured provider only when you request
+a proposal.
 
 Blank cells are review findings, not automatic errors: fields such as an open
 opportunity's actual close date can legitimately be empty.
@@ -101,3 +109,6 @@ AI does not silently modify data. It receives only bounded issue context and ret
 ## Portfolio Context
 
 ClearData demonstrates business analysis, data-quality reasoning, product workflow design, structured AI integration, and secure deployment practices. See [PROJECT_WRITEUP.md](PROJECT_WRITEUP.md) for the full project narrative.
+
+See [PRODUCT_REVIEW.md](PRODUCT_REVIEW.md) for the implementation-based usability
+assessment, cleaning-coverage gaps, and prioritized portfolio roadmap.

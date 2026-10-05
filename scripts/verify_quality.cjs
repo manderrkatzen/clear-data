@@ -62,6 +62,39 @@ test("mean/median and AI fill previews match applied rounded values exactly", ()
   }
 });
 
+test("arbitrary numerical columns each receive an independent reversible outlier review", () => {
+  const w = workspace();
+  w.load("record,temperature,pressure\nA,1,2\nB,2,3\nC,3,4\nD,4,5\nE,5,6\nF,6,7\nG,100,200");
+  assert.deepEqual(w.value('state.issues.filter(item => item.recommendation === "outlier").map(item => item.column)'), ["temperature", "pressure"]);
+  const original = w.value("state.rows");
+  w.run('globalThis.item = state.issues.find(item => item.column === "pressure"); Object.assign(outlierDraft(item), { method: "percentile", low: 10, high: 90 }); applyFix(item, "valid");');
+  assert.deepEqual(w.value("state.rows"), original);
+  assert.equal(w.value('state.issues.find(item => item.column === "temperature").status'), "open");
+  assert.equal(w.value("state.changes[0].snapshot.definition.method"), "percentile");
+  w.run("rollbackChange(state.changes[0].id)");
+  assert.equal(w.value('state.issues.filter(item => item.recommendation === "outlier" && item.status === "open").length'), 2);
+});
+
+test("record-level numerical previews exactly match approved values and keep source identifiers", () => {
+  for (const action of ["imputeMean", "imputeMedian", "keep", "custom:preview"]) {
+    const w = workspace();
+    w.load("order_id,amount\nA,1.234\nB,2.348\nC,3.459\nD,8.762\nE,\nF,");
+    w.context.action = action;
+    w.run('globalThis.item = state.issues.find(item => item.recommendation === "impute"); state.customProposals[item.id] = [{ id: "preview", revision: state.datasetRevision, operation: "fill", value: 1.237, interpretation: "test" }]; state.selectedFix = action;');
+    assert.ok(w.value("affectedColumnConfig(item, issueFilter(item))").some(column => column.key === "order_id"));
+    const proposed = w.value('item.rows.map(row => affectedValue(item, row, "_proposedNumber"))');
+    const ids = w.value("item.rows.map(row => row._row)");
+    w.run("applyFix(item, action)");
+    assert.deepEqual(w.value(`state.rows.filter(row => ${JSON.stringify(ids)}.includes(row._row)).map(row => row.amount)`), proposed);
+  }
+  const w = workspace();
+  w.load("id,click_through_rate\nA,2.34567\nB,0.3\nC,4\nD,0.1");
+  w.run('globalThis.item = state.issues.find(item => item.recommendation === "convert"); state.selectedFix = "convert";');
+  const proposed = w.value('item.rows.map(row => affectedValue(item, row, "_proposedNumber"))');
+  w.run('applyFix(item, "convert")');
+  assert.deepEqual(w.value('state.changes[0].patches.map(patch => patch.after)'), proposed);
+});
+
 test("no-change approvals remain decisions rather than modified cells", () => {
   const w = workspace();
   w.load("id,amount\nA,1\nB,2\nC,3\nD,4\nE,");
