@@ -2,6 +2,10 @@
 
 The browser calls same-origin `POST /api/ai/interpretations` for automatic, batched
 candidate interpretation and `POST /api/ai/proposals` for bounded treatment proposals.
+`POST /api/ai/pattern` explains browser-computed aggregate missingness comparisons
+and returns a validated, confirmation-required optional fill proposal. Its GET
+configuration route supplies the same optional Turnstile key. Node, Worker, and
+Pages share the handler; no raw source rows or neighbour IDs enter its prompt.
 It never receives a provider key or selects provider mode.
 
 ## Local development

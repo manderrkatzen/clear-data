@@ -116,7 +116,9 @@ function guidedPreview(item, draft = reviewDraft(item)) {
     treatment.keys = definition.columns; treatment.keyMode = definition.mode === "key";
   }
   if (draft.operation === "recalculate") treatment.rule = item.rule;
-  const preview = CleaningEngine.treatment(state.headers, state.rows, reviewRows(item).map(row => row._row), item.column, treatment, policy, effectiveClassifications());
+  const options = typeof analyticalTreatmentOptions === "function" ? analyticalTreatmentOptions(item, draft) : {};
+  const preview = CleaningEngine.treatment(state.headers, state.rows, reviewRows(item).map(row => row._row), item.column, treatment, policy, effectiveClassifications(), options);
+  if (preview.fillMetadata) treatment.fillMetadata = preview.fillMetadata;
   const proposed = state.rows.map(row => ({ ...row })), byId = new Map(proposed.map(row => [row._row, row]));
   preview.patches.forEach(patch => { byId.get(patch.rowId)[patch.column] = patch.after; });
   const removed = new Set(preview.removedRows.map(row => row._row));
@@ -170,6 +172,8 @@ function approveGuidedDecision(item) {
   } catch (error) { notify(error.message); }
 }
 function treatmentLabel(operation) {
+  if (operation === "groupwise") return "Fill from similar groups";
+  if (operation === "knn") return "Fill from nearest neighbours";
   if (operation === "scale") return "Multiply by a reviewed factor";
   return ({ retain: "Retain reviewed values", missing: "Normalize to missing", constant: "Reviewed replacement", median: "Fill with reference median", mean: "Fill with reference mean", groupMedian: "Fill with group median", trim: "Normalize whitespace", lowercase: "Normalize to lowercase", uppercase: "Normalize to uppercase", map: "Map reviewed labels", parseNumber: "Parse numerical format", parseDate: "Convert interpreted dates", cap: "Cap to business bounds", remove: "Remove scoped records", recalculate: "Recalculate metric", deduplicate: "Keep selected duplicate survivor", mergeDuplicates: "Merge complementary duplicate values" })[operation] || operation;
 }
@@ -177,7 +181,7 @@ function reviewOperations(item) {
   const base = ["retain", "constant", "missing", "remove"];
   if (item.recommendation === "manual") return ["retain", "constant", "missing", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "median", "mean", "groupMedian", "cap", "remove"];
   const numerical = ["number", "integer"].includes(cleaningProfile().columns.find(profile => profile.column === item.column)?.role);
-  if (numerical && (["impute", "keep"].includes(item.recommendation) || ["missing_token", "sentinel"].includes(item.candidate?.kind))) base.splice(2, 0, "median", "mean", "groupMedian");
+  if (numerical && (["impute", "keep"].includes(item.recommendation) || ["missing_token", "sentinel"].includes(item.candidate?.kind))) base.splice(2, 0, "median", "mean", "groupMedian", "groupwise", "knn");
   if (numerical || item.recommendation === "convert") base.splice(2, 0, "scale");
   if (["standardize"].includes(item.recommendation) || ["spacing", "category"].includes(item.candidate?.kind)) base.splice(2, 0, "trim", "lowercase", "uppercase", "map");
   if (item.candidate?.kind === "number_format" || item.recommendation === "convert" || item.recommendation === "schema") base.splice(2, 0, "parseNumber");

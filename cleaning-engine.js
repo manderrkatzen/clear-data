@@ -1,7 +1,7 @@
 // Pure, deterministic profiling and treatment functions shared by the browser,
 // profiling worker, and Node regressions. No function mutates source records.
 var CleaningEngine = (() => {
-  const operations = ["retain", "missing", "constant", "median", "mean", "groupMedian", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "cap", "remove", "recalculate", "deduplicate", "mergeDuplicates"];
+  const operations = ["retain", "missing", "constant", "median", "mean", "groupMedian", "groupwise", "knn", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "cap", "remove", "recalculate", "deduplicate", "mergeDuplicates"];
   const missingPattern = /^(null|n\/?a|none|nil|unknown|not available|not applicable|missing|undefined|--?|\?)$/i;
   const decimalPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
   const text = value => String(value ?? "");
@@ -143,7 +143,7 @@ var CleaningEngine = (() => {
     if (!Number.isFinite(value) || Math.abs(value) >= 1e21) throw new Error("Result cannot be represented at the selected precision.");
     return value.toFixed(decimals);
   }
-  function treatment(headers, rows, eligibleIds, column, draft, policy = defaultPolicy(column), classifications = []) {
+  function treatment(headers, rows, eligibleIds, column, draft, policy = defaultPolicy(column), classifications = [], options = {}) {
     if (!headers.includes(column) || !operations.includes(draft.operation)) throw new Error("Choose a supported column and treatment.");
     const selected = scopeRows(rows, eligibleIds, draft.scope);
     const patches = [], blocked = [], removedRows = [];
@@ -154,6 +154,25 @@ var CleaningEngine = (() => {
     const reference = rows.filter(row => { const entry = classified.get(`${row._row}:${column}`); return !selectedIds.has(row._row) && !missing(row[column], policy) && !(entry?.value === row[column] && ["missing", "not_applicable"].includes(entry.meaning)); });
     const referenceValues = reference.flatMap(row => { try { return [parseNumber(row[column])]; } catch { return []; } });
     const referenceStats = stats(referenceValues);
+    if (["groupwise", "knn"].includes(draft.operation)) {
+      const analysis = typeof AnalysisEngine !== "undefined" ? AnalysisEngine : require("./analysis-engine.js");
+      const result = options.similarResult || analysis.fillSimilar(headers, rows, column, { ...draft.similar, method: draft.operation, rowIds: selected.map(row => row._row) }, { ...options, policies: options.policies || [policy], classifications });
+      const fillById = new Map(result.fills.map(fill => [fill.row, fill]));
+      const actualFills = [];
+      for (const row of selected) {
+        const fill = fillById.get(row._row);
+        if (!fill) { blocked.push({ rowId: row._row, reason: result.blocked.find(entry => entry.rowId === row._row)?.reason || "Only missing numerical values can be filled from similar rows." }); continue; }
+        try {
+          const after = fixed(fill.value, Number(decimals));
+          patches.push({ rowId: row._row, column, before: row[column], after });
+          actualFills.push({ ...fill, value: Number(after) });
+        } catch (error) { blocked.push({ rowId: row._row, reason: error.message }); }
+      }
+      const target = analysis.prepare(headers, rows, { ...options, policies: options.policies || [policy], classifications }).columns.get(column);
+      const beforeValues = target.numbers.filter((value, index) => !target.blanks[index] && Number.isFinite(value));
+      const distributions = analysis.histogram([beforeValues, beforeValues.concat(actualFills.map(fill => fill.value))]);
+      return { selectedIds: selected.map(row => row._row), patches, blocked, removedRows, referenceStats, fillMetadata: { method: result.method, params: result.params, fills: actualFills, fallbackCount: actualFills.filter(fill => ["widened", "global"].includes(fill.source)).length, beforeStats: analysis.statistics(beforeValues), afterStats: analysis.statistics(beforeValues.concat(actualFills.map(fill => fill.value))), histogramBefore: { ...distributions, sets: [distributions.sets[0]] }, histogramAfter: { ...distributions, sets: [distributions.sets[1]] } } };
+    }
     const mapping = draft.mapping || {};
     if (draft.operation === "map" && (!mapping || typeof mapping !== "object" || Array.isArray(mapping) || !Object.keys(mapping).length || Object.entries(mapping).some(([source, target]) => !selected.some(row => row[column] === source) || typeof target !== "string"))) throw new Error("Mapping sources must belong to the reviewed scope and targets must be text.");
     if (draft.operation === "groupMedian" && (!headers.includes(draft.groupColumn) || draft.groupColumn === column)) throw new Error("Choose a different grouping column.");

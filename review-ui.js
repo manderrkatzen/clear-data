@@ -83,6 +83,7 @@ function renderGuidedIssues() {
     plot.innerHTML = scatterChart(selected); details.append(summary, plot);
     if (records) records.before(details); else stage.append(details);
   }
+  if (typeof enhanceAnalyticalReview === "function") enhanceAnalyticalReview(selected);
   bindGuidedUI(selected);
 }
 function guidedWorkspaceHtml(item) {
@@ -162,13 +163,16 @@ function bindGuidedUI(item) {
   const update = (action, rerender = true) => { action(); delete draft.previewFingerprint; if (rerender) renderPreservingReviewFocus(); };
   $("#guidedDefer").onclick = () => { state.selectedIssue = null; state.reviewStep = 1; render(); };
   $("#reviewBack").onclick = () => { state.reviewStep = Math.max(1, state.reviewStep - 1); render(); };
-  const navigate = target => {
+  const navigate = async target => {
     try {
       if (target >= 3 && draft.interpretation === "unresolved") {
         state.reviewStep = 2; render();
         throw new Error("Choose your interpretation, or leave this finding open.");
       }
       if (target >= 4) {
+        const fingerprint = guidedFingerprint(item, draft), selectedIssue = state.selectedIssue;
+        if (typeof prepareAnalyticalPreview === "function") await prepareAnalyticalPreview(item, draft);
+        if (fingerprint !== guidedFingerprint(item, draft) || state.selectedIssue !== selectedIssue) throw new Error("The review changed. Generate a new preview.");
         const preview = guidedPreview(item);
         if (!preview.selectedIds.length) throw new Error("The scope contains no matching records.");
         if (target === 5) {
@@ -184,8 +188,8 @@ function bindGuidedUI(item) {
       state.reviewStep = target; render();
     } catch (error) { notify(error.message); }
   };
-  document.querySelectorAll("[data-review-step]").forEach(button => button.onclick = () => {
-    navigate(Number(button.dataset.reviewStep));
+  document.querySelectorAll("[data-review-step]").forEach(button => button.onclick = async () => {
+    await navigate(Number(button.dataset.reviewStep));
     document.querySelector('[data-review-step][aria-current="step"]')?.focus({ preventScroll: true });
   });
   $("#reviewNext")?.addEventListener("click", () => navigate(state.reviewStep + 1));
@@ -269,6 +273,7 @@ function decorateDecisionHistory() {
     const change = state.changes[index];
     if (!change?.interpretation || !card.insertAdjacentHTML) return;
     card.insertAdjacentHTML("beforeend", `<p class="decision-interpretation"><b>Analyst interpretation:</b> ${escapeHtml(change.interpretation.replaceAll("_", " "))} · <b>Scope:</b> ${change.rows.length} reviewed source records. ${change.treatment?.scope?.mode === "condition" ? `Condition: ${escapeHtml(change.treatment.scope.column)} ${escapeHtml(change.treatment.scope.operator)} ${escapeHtml(change.treatment.scope.value)}.` : ""}</p>`);
+    if (typeof analyticalFillMetadataHtml === "function" && change.treatment?.fillMetadata) card.insertAdjacentHTML("beforeend", analyticalFillMetadataHtml(change.treatment.fillMetadata, true));
   });
 }
 function enhanceDatasetScreen() {

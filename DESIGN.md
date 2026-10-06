@@ -315,7 +315,27 @@ Neutral, warning, and success badges are the implemented visual variants; labels
 
 ### Task surfaces and findings queue
 
-White guided cards use a guided-line border and surface corners. Workspace cards use the shared line and card inset. The queue uses queue-bg, separated rows, and a blue active-row backing with dark blue title text. Candidate rows have padding (14px 17px). Active step buttons use `aria-current="step"`, a pale-blue backing (`#eaf1ff`), a blue numbered circle, and an inset blue bottom rule. Future step buttons are disabled by the existing workflow.
+White guided cards use a guided-line border and surface corners. Workspace cards use the shared line and card inset. The queue uses queue-bg, separated rows, and a blue active-row backing with dark blue title text. Candidate rows have padding (14px 17px). Active step buttons use `aria-current="step"`, a pale-blue backing (`#eaf1ff`), a blue numbered circle, and an inset blue bottom rule. All step labels are clickable and keyboard-accessible; forward navigation shares interpretation, scope, exception, and preview guards with Continue. Computing a similar-row preview temporarily disables progression and shows a busy label.
+
+### Missingness analysis
+
+Understand adds a plain, divided analytical section after source value groups,
+before the original/working distribution. Ranked comparison tables use the
+existing profile-table typography and blue selection. Tables scroll locally
+inside a bounded 360px region; 520px minimum table width preserves readable data
+on mobile. Missing/present histograms reuse source/working series colors with
+visible legends, a shared percentile range, and explicit tail counts. Held
+comparisons use an inline disclosure with native selectors and number fields;
+numeric-band fields disappear for categorical holds. AI explanations follow the
+computed evidence and identify summary-only transmission beside the request.
+
+Similar-row treatment uses a native checkbox fieldset for hold/similarity columns,
+existing review fields, and explicit fallback guidance. Fill provenance appears
+as an open disclosure after preview counts and in decision history, with bounded
+scrolling and visible method, fallback count, band labels, or donor row IDs.
+At 620px, analytical headings stack and similarity columns become one column.
+These additions reuse the current palette and typography; no new visual world
+or decorative copy is introduced.
 
 ### Signature comparison
 

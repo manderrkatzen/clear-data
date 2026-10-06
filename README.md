@@ -115,6 +115,8 @@ Run the data-treatment and API regression checks with:
 
 ```bash
 node --test scripts/verify_quality.cjs scripts/verify_cleaning.cjs
+node --test scripts/verify_pattern.cjs
+node --test scripts/verify_analysis.cjs
 ```
 
 CSV import supports quoted multiline fields and rejects invalid headers or malformed quoting without replacing the current workspace. Numerical previews use the same rounded values as approval. Report counts distinguish approved decisions from actual modified rows and cells. Rollback preserves later approved values and refreshes findings.
@@ -133,12 +135,54 @@ install Chromium/dependencies, run the local server, and point the runner at it:
 npm install --prefix /tmp/cleardata-tools playwright
 /tmp/cleardata-tools/node_modules/.bin/playwright install --with-deps chromium
 PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_ui.cjs
+PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_analytics_ui.cjs
 ```
 
 `BASE_URL` selects another server. `ARTIFACT_DIR` selects an existing screenshot
 directory. The runner mocks AI and checks six widths, five steps, keyboard navigation,
 local fonts, normalization, legitimate zero, blocked dates, manual correction,
 history/rollback/project restore, three samples, export, and cancellation.
+
+The analytical runner also checks desktop/mobile missingness comparisons, held
+comparisons, summary-only AI proposals, group-wise/KNN source traces, scoped
+approval/restore/rollback/export, and a responsive 50,000-row background worker.
+
+### Missingness analysis and similar-row fills
+
+Open a missing-value finding in **Review → Understand → Missing vs present** and
+select **Compare columns**. The ranked results show numeric distributions and
+pooled-SD effect sizes, category missing rates, or monthly missing rates. Select
+a comparison column to inspect its statistics. **Hold similar** compares within
+categorical groups or numeric quantile, fixed-width, or custom-edge bands.
+An explicit no-pattern note appears only when at least three usable comparisons
+are all weak or absent. Fewer than five missing/present records is insufficient.
+
+In **Treat & scope**, select **Fill from similar groups** or **Fill from nearest
+neighbours**. Group-wise fills support multiple hold columns, median/mean, numeric
+bands, and a minimum reference count. KNN uses scaled numerical distances and
+exact categorical matches, defaults to seven neighbours, and resolves ties by
+source order. Sparse groups widen where possible, then fall back to the global
+observed median. Optional NULL/N/A/NA/- handling is explicit; blanks are never zero.
+
+The preview lists each proposed value's actual source and KNN donor row IDs.
+Approved values, parameters, fallback counts, and the complete source trace are
+stored in decision history, project backups, and decision-log JSON. Rollback
+restores source values. Computations run in a reusable background worker;
+per-column parsed values, missing masks, sorted values, and repeated estimates
+are cached until data or rules change.
+
+**Explain top pattern with AI** sends at most three aggregate comparison summaries
+and existing held verdicts to `/api/ai/pattern`. Server validation bounds text,
+columns, operations, and parameters, and requires qualified language for partial
+or insufficient verdicts. **Review proposed treatment** configures a draft;
+the normal scoped preview and explicit approval are still required.
+
+Fixture note: the current sales sample confirms delivery-days/channel rates,
+quantity medians 9 vs 2 (12 vs 12 within Distributor), and channel-based fills
+4.3/4.5. The tenure example in `new_capabilities.md` does not match this CSV:
+unit-price SMD ≈ .256 and quantity SMD ≈ .234 are moderate under the specified .2
+threshold. Tests preserve those measured results rather than force no-pattern;
+a balanced deterministic fixture separately checks the no-pattern rule.
 
 Impeccable is installed in `.opencode/skills/impeccable`. Restart OpenCode to discover
 `/impeccable`. [PRODUCT.md](PRODUCT.md) records product truth and [DESIGN.md](DESIGN.md)

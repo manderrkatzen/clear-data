@@ -7,6 +7,7 @@ const root = __dirname;
 const config = { ...process.env, AI_MODE: process.env.AI_MODE || "local" };
 const mimeTypes = { ".css": "text/css", ".csv": "text/csv", ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".woff2": "font/woff2", ".txt": "text/plain" };
 const assets = new Set(["index.html", "app.js", "spreadsheet.js", "workspace.js", "cleaning-engine.js", "profile-worker.js", "review.js", "review-ui.js", "review.css", "design-system.css", "fonts/source-sans-3-latin.woff2", "fonts/OFL.txt", "styles.css", "spreadsheet.css", "workspace.css", "healthcare_patient_visits.csv", "sales_orders.csv", "marketing_campaigns.csv"]);
+for (const asset of ["analysis-engine.js", "analysis-worker.js", "analytics.js"]) assets.add(asset);
 
 async function sendWebResponse(response, result) {
   response.writeHead(result.status, Object.fromEntries(result.headers));
@@ -35,12 +36,13 @@ http.createServer(async (request, response) => {
       if (request.method !== "GET") return sendWebResponse(response, new Response("Method not allowed", { status: 405 }));
       return sendWebResponse(response, ai.json({ ...ai.providerConfig(config), mode: config.AI_MODE }));
     }
-    if (["/api/ai/proposals", "/api/ai/interpretations"].includes(url.pathname)) {
+    if (["/api/ai/proposals", "/api/ai/interpretations", "/api/ai/pattern"].includes(url.pathname)) {
       if (Number(request.headers["content-length"]) > ai.MAX_BODY_BYTES) return sendWebResponse(response, ai.json({ error: "Request too large." }, 413));
       const body = request.method === "POST" ? await readBody(request) : undefined;
       const headers = new Headers({ "content-type": "application/json", "cf-connecting-ip": request.socket.remoteAddress || "unknown" });
       const webRequest = new Request(url, { method: request.method, headers, body });
-      return sendWebResponse(response, await (url.pathname === "/api/ai/interpretations" ? ai.handleInterpretations : ai.handleProposal)(webRequest, config));
+      const handler = url.pathname === "/api/ai/pattern" ? ai.handlePattern : url.pathname === "/api/ai/interpretations" ? ai.handleInterpretations : ai.handleProposal;
+      return sendWebResponse(response, await handler(webRequest, config));
     }
     if (url.pathname.startsWith("/api/")) return sendWebResponse(response, ai.json({ error: "Not found" }, 404));
     if (!["GET", "HEAD"].includes(request.method)) return sendWebResponse(response, new Response("Method not allowed", { status: 405 }));

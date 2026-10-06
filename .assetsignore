@@ -8,6 +8,9 @@
 !spreadsheet.css
 !workspace.css
 !cleaning-engine.js
+!analysis-engine.js
+!analysis-worker.js
+!analytics.js
 !profile-worker.js
 !review.js
 !review-ui.js

@@ -11,6 +11,7 @@ ClearData is an AI-assisted CSV data-quality workspace. Its workflow is **Data â
 - `spreadsheet.js`: spreadsheet view, issue rail, and cell inspection; shares globals with `app.js`. It loads before `app.js` as a classic script.
 - `workspace.js` and `workspace.css`: downloadable review artifacts, duplicates, schema/metric rules, and browser-local projects/rule libraries. `workspace.js` loads before `app.js` and uses its globals when invoked.
 - `cleaning-engine.js` and `profile-worker.js`: pure profiling/parsing/scoped treatments and background profiling; the engine is also required by Node tests.
+- `analysis-engine.js`, `analysis-worker.js`, and `analytics.js`: deterministic missingness/held comparisons, cached background computation, traceable group-wise/KNN fills, and summary-only AI explanations integrated into review stages. Keep per-cell fill provenance in approved history and project validation.
 - `review.js`, `review-ui.js`, and `review.css`: candidate integration, validated automatic AI interpretation, scoped preview/approval, and the five-step review. Classic scripts load before `app.js`.
 - `design-system.css`: final-loaded visual authority, with local typography in `fonts/`. Read `PRODUCT.md` and `DESIGN.md` before visual changes.
 - `styles.css` and `spreadsheet.css`: application and spreadsheet styling.
@@ -26,6 +27,8 @@ ClearData is an AI-assisted CSV data-quality workspace. Its workflow is **Data â
 ## Development and Verification
 
 There is no package manifest or application build pipeline. Use a current Node.js runtime with built-in `fetch` and `AbortSignal.timeout`. Run `node --test scripts/verify_quality.cjs scripts/verify_cleaning.cjs` for mocked data-treatment/API regressions. `scripts/verify_ui.cjs` is an optional Playwright runner; see README for external tooling setup.
+
+For analytical changes, also run `node --test scripts/verify_pattern.cjs` and `node --test scripts/verify_analysis.cjs` (separately for the timing budget), plus `scripts/verify_analytics_ui.cjs` with the same Playwright setup. Check new classic scripts with `node --check` and Pages modules with `node --input-type=module --check`.
 
 ```bash
 node server.js

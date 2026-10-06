@@ -14,7 +14,7 @@ function workspace(csv) {
     return nodes.get(selector);
   };
   const context = vm.createContext({ document: { querySelector: node, querySelectorAll: () => [] }, fetch: async () => ({ ok: true, json: async () => ({ available: false }) }), console, setTimeout() {}, URL, Blob });
-  for (const file of ["cleaning-engine.js", "spreadsheet.js", "workspace.js", "review.js", "review-ui.js", "app.js"]) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
+  for (const file of ["cleaning-engine.js", "analysis-engine.js", "spreadsheet.js", "workspace.js", "review.js", "review-ui.js", "app.js"]) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
   const run = code => vm.runInContext(code, context);
   run("render = () => {}; globalThis.approve = item => { state.reviewStep = 5; const draft = reviewDraft(item); draft.previewFingerprint = guidedFingerprint(item, draft); approveGuidedDecision(item); };");
   context.csv = csv; run('loadData(csv, "exceptions.csv")');
@@ -211,4 +211,18 @@ test("Worker and Pages interpretations use bounded mocked provider calls and nev
     }
     assert.equal(calls, 2);
   } finally { global.fetch = originalFetch; }
+});
+test("similar-row approvals retain per-cell provenance through restore and rollback", () => {
+  const w = workspace("id,amount,group\n1,,A\n2,10,A\n3,20,A\n4,30,B\n5,,B\n6,50,B");
+  w.run('globalThis.item = state.issues.find(item => item.column === "amount" && item.recommendation === "impute"); const draft = reviewDraft(item); draft.interpretation = "missing"; draft.operation = "knn"; draft.similar = { columns: ["group"], k: 2 }; approve(item);');
+  assert.equal(w.value("state.rows[0].amount"), "15.00");
+  assert.deepEqual(w.value("state.changes[0].treatment.fillMetadata.fills[0].neighbourRows"), [2, 3]);
+  w.run("globalThis.backup = serializeProject(); restoreProject(backup)");
+  assert.equal(w.value("state.changes[0].treatment.fillMetadata.method"), "knn");
+  w.run("rollbackChange(state.changes[0].id)");
+  assert.deepEqual(w.value("state.rows"), w.value("state.original"));
+  w.run("restoreProject(serializeProject())");
+  assert.deepEqual(w.value("state.rows"), w.value("state.original"));
+  w.run("backup.changes[0].treatment.fillMetadata.fills[0].neighbourRows = [999999]");
+  assert.throws(() => w.run("restoreProject(backup)"));
 });

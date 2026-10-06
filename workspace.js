@@ -372,18 +372,32 @@ function validateProject(data) {
     issueIds.add(item.id);
   });
   const changeIds = new Set();
-  const validateSnapshot = (change) => {
+  const validateSnapshot = (change, validateProvenance = true) => {
     if (!change || typeof change.id !== "string" || !change.issue || !data.headers.includes(change.issue.column) || !Array.isArray(change.rowIds) || change.rowIds.some((id) => !ids.has(id)) || !Array.isArray(change.patches) || !Array.isArray(change.removedRows) || typeof change.title !== "string" || typeof change.reason !== "string" || typeof change.note !== "string" || !["valid", "finalized"].includes(change.disposition)) throw new Error("Invalid decision in project.");
     change.patches.forEach((patch) => { if (!ids.has(patch.rowId) || !data.headers.includes(patch.column) || typeof patch.before !== "string" || typeof patch.after !== "string") throw new Error("Invalid decision patch in project."); });
     change.removedRows.forEach((row) => { if (!ids.has(row._row) || data.headers.some((column) => typeof row[column] !== "string")) throw new Error("Invalid removed record in project."); });
     if (change.interpretationValues && (!Array.isArray(change.interpretationValues) || change.interpretationValues.some(entry => !ids.has(entry.rowId) || !data.headers.includes(entry.column) || typeof entry.value !== "string" || !["legitimate", "missing", "not_applicable", "format", "error", "resolved"].includes(entry.meaning)))) throw new Error("Invalid cell interpretation in project.");
+    const metadata = change.treatment?.fillMetadata;
+    if (validateProvenance && ["groupwise", "knn"].includes(change.treatment?.operation) && !metadata) throw new Error("Similar-row fills require a source trace.");
+    if (metadata && validateProvenance) {
+      if (!["groupwise", "knn"].includes(metadata.method) || change.treatment.operation !== metadata.method || !metadata.params || !Array.isArray(metadata.params.columns) || !metadata.params.columns.length || new Set(metadata.params.columns).size !== metadata.params.columns.length || metadata.params.columns.some(column => column === change.issue.column || !data.headers.includes(column)) || !Number.isInteger(metadata.params.k) || metadata.params.k < 1 || metadata.params.k > 50 || !Number.isInteger(metadata.params.minObserved) || metadata.params.minObserved < 1 || metadata.params.minObserved > 1000 || !["median", "mean"].includes(metadata.params.statistic) || !Array.isArray(metadata.fills) || metadata.fills.length !== change.patches.filter(patch => patch.column === change.issue.column).length || !Number.isInteger(metadata.fallbackCount) || metadata.fallbackCount < 0 || metadata.fallbackCount > metadata.fills.length) throw new Error("Invalid similar-fill decision metadata.");
+      const filled = new Set();
+      for (const fill of metadata.fills) {
+        if (!ids.has(fill.row) || !change.rowIds.includes(fill.row) || filled.has(fill.row) || !Number.isFinite(fill.value) || !["band", "widened", "knn", "global"].includes(fill.source) || (fill.bandLabel !== undefined && typeof fill.bandLabel !== "string") || (metadata.method === "knn" && (!Array.isArray(fill.neighbourRows) || new Set(fill.neighbourRows).size !== fill.neighbourRows.length || fill.neighbourRows.length > metadata.params.k || fill.neighbourRows.some(id => !ids.has(id) || id === fill.row) || (fill.source === "knn" && !fill.neighbourRows.length)))) throw new Error("Invalid per-cell fill provenance.");
+        filled.add(fill.row);
+        if (!change.patches.some(patch => patch.rowId === fill.row && patch.column === change.issue.column && Number(patch.after) === fill.value)) throw new Error("Fill provenance does not match its approved value.");
+      }
+      if (metadata.fallbackCount !== metadata.fills.filter(fill => ["widened", "global"].includes(fill.source)).length) throw new Error("Invalid fill fallback count.");
+    }
   };
   data.changes.forEach((change) => { validateSnapshot(change); if (!issueIds.has(change.issueId) || changeIds.has(change.id)) throw new Error("Invalid history reference in project."); changeIds.add(change.id); });
   data.auditEvents.forEach((event) => {
     if (!event || !["approval", "rollback"].includes(event.kind) || typeof event.at !== "string") throw new Error("Invalid audit event.");
     validateSnapshot(event.decision);
     if (event.effects) {
-      validateSnapshot({ ...event.decision, patches: event.effects.patches, removedRows: event.effects.removedRows });
+      // Effect patches describe the rollback, not the original fill values.
+      // The source trace was already validated on event.decision above.
+      validateSnapshot({ ...event.decision, patches: event.effects.patches, removedRows: event.effects.removedRows }, false);
       if (!Array.isArray(event.effects.restoredRows) || event.effects.restoredRows.some((row) => !ids.has(row?._row) || data.headers.some((column) => typeof row[column] !== "string"))) throw new Error("Invalid rollback effects in project.");
     }
   });
