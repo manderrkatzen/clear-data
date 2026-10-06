@@ -171,7 +171,10 @@ function validateValueAssessments(input, groups) {
   if (!Array.isArray(input) || input.length > groups.length) throw apiError("Invalid per-value assessments.");
   const seen = new Set();
   return input.map(entry => {
-    if (!entry || !groups.some(group => group.id === entry.evidenceId) || seen.has(entry.evidenceId) || !Number.isFinite(entry.missingScore) || entry.missingScore < 0 || entry.missingScore > 1 || !["missing", "legitimate", "not_applicable", "unresolved"].includes(entry.meaning) || typeof entry.explanation !== "string" || !entry.explanation.trim() || entry.explanation.length > 600) throw apiError("AI value assessments contain unsupported evidence, meanings, or confidence scores.");
+    if (!entry || !groups.some(group => group.id === entry.evidenceId) || seen.has(entry.evidenceId)) throw apiError("AI assessments must reference unique, supplied value evidence IDs.");
+    if (!Number.isFinite(entry.missingScore) || entry.missingScore < 0 || entry.missingScore > 1) throw apiError("AI missingness confidence must be a number between 0 and 1.");
+    if (!["missing", "legitimate", "not_applicable", "unresolved", "error", "format"].includes(entry.meaning)) throw apiError("The AI returned an unsupported per-value meaning.");
+    if (typeof entry.explanation !== "string" || !entry.explanation.trim() || entry.explanation.length > 600) throw apiError("Each AI value assessment needs a bounded explanation.");
     seen.add(entry.evidenceId);
     return { evidenceId: entry.evidenceId, missingScore: entry.missingScore, meaning: entry.meaning, explanation: entry.explanation };
   });

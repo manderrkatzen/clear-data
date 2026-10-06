@@ -259,6 +259,7 @@ test("AI per-value assessments require exact evidence IDs, bounded scores, and c
   const candidate = ai.validateInterpretationRequest(evidence()).candidates[0];
   const result = { id: candidate.id, interpretations: [{ meaning: "legitimate", score: .9, explanation: "Zero can be a valid count.", evidenceIds: ["value:0"], operation: "retain", assumptions: [] }], valueAssessments: [{ evidenceId: "value:0", missingScore: .02, meaning: "legitimate", explanation: "Zero children means no children; it is a valid count." }] };
   assert.equal(ai.validateInterpretations({ results: [result] }, [candidate], true)[0].valueAssessments[0].missingScore, .02);
+  assert.equal(ai.validateInterpretations({ results: [{ ...result, valueAssessments: [{ ...result.valueAssessments[0], meaning: "error", explanation: "An invalid count requires correction, not an automatic missing-value classification." }] }] }, [candidate], true)[0].valueAssessments[0].meaning, "error");
   for (const patch of [{ evidenceId: "invented" }, { missingScore: 2 }, { meaning: "always_missing" }]) assert.throws(() => ai.validateInterpretations({ results: [{ ...result, valueAssessments: [{ ...result.valueAssessments[0], ...patch }] }] }, [candidate], true));
   assert.throws(() => ai.validateInterpretations({ results: [{ ...result, valueAssessments: [] }] }, [candidate], true));
   assert.throws(() => ai.validateInterpretations({ results: [{ ...result, valueAssessments: [result.valueAssessments[0], result.valueAssessments[0]] }] }, [candidate], true));

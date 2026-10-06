@@ -307,7 +307,7 @@ function validateBrowserInterpretations(results, candidates) {
     }).sort((a, b) => b.score - a.score);
     const seen = new Set();
     const valueAssessments = (entry.valueAssessments || []).map(assessment => {
-      if (!candidate.groups.some(group => group.id === assessment.evidenceId) || seen.has(assessment.evidenceId) || !Number.isFinite(assessment.missingScore) || assessment.missingScore < 0 || assessment.missingScore > 1 || !["missing", "legitimate", "not_applicable", "unresolved"].includes(assessment.meaning) || typeof assessment.explanation !== "string" || !assessment.explanation.trim() || assessment.explanation.length > 600) throw new Error("Invalid per-representation AI assessment.");
+      if (!candidate.groups.some(group => group.id === assessment.evidenceId) || seen.has(assessment.evidenceId) || !Number.isFinite(assessment.missingScore) || assessment.missingScore < 0 || assessment.missingScore > 1 || !["missing", "legitimate", "not_applicable", "unresolved", "error", "format"].includes(assessment.meaning) || typeof assessment.explanation !== "string" || !assessment.explanation.trim() || assessment.explanation.length > 600) throw new Error("Invalid per-representation AI assessment.");
       seen.add(assessment.evidenceId); return { ...assessment };
     });
     if (entry.valueAssessments !== undefined && ["missing_token", "sentinel", "impute", "keep"].includes(candidate.kind) && valueAssessments.length !== candidate.groups.length) throw new Error("AI assessments did not cover every supplied representation.");
