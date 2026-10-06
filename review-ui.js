@@ -1,12 +1,14 @@
 // A focused, five-step workspace rather than an expanding wall of controls.
 function renderPreservingReviewFocus() {
   const active = document.activeElement;
-  const id = active?.id, start = active?.selectionStart, end = active?.selectionEnd;
+  const id = active?.id, meaning = active?.name === "reviewInterpretation" ? active.value : null, start = active?.selectionStart, end = active?.selectionEnd;
   render();
   if (id) {
     const replacement = document.getElementById?.(id);
     replacement?.focus({ preventScroll: true });
     if (typeof start === "number" && replacement?.setSelectionRange && ["text", "search", "textarea"].includes(replacement.type)) replacement.setSelectionRange(start, end);
+  } else if (meaning) {
+    [...document.querySelectorAll("input[name=reviewInterpretation]")].find(input => input.value === meaning)?.focus({ preventScroll: true });
   }
 }
 function analysisBanner() {
@@ -85,6 +87,7 @@ function renderGuidedIssues() {
   }
   if (typeof enhanceAnalyticalReview === "function") enhanceAnalyticalReview(selected);
   bindGuidedUI(selected);
+  if (typeof enhanceValueReview === "function") enhanceValueReview(selected);
 }
 function guidedWorkspaceHtml(item) {
   const step = state.reviewStep || 1;

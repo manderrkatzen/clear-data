@@ -13,6 +13,7 @@ ClearData is an AI-assisted CSV data-quality workspace. Its workflow is **Data â
 - `cleaning-engine.js` and `profile-worker.js`: pure profiling/parsing/scoped treatments and background profiling; the engine is also required by Node tests.
 - `analysis-engine.js`, `analysis-worker.js`, and `analytics.js`: deterministic missingness/held comparisons, cached background computation, traceable group-wise/KNN fills, and summary-only AI explanations integrated into review stages. Keep per-cell fill provenance in approved history and project validation.
 - `review.js`, `review-ui.js`, and `review.css`: candidate integration, validated automatic AI interpretation, scoped preview/approval, and the five-step review. Classic scripts load before `app.js`.
+- `value-review.js`: per-representation contextual missingness assessments and source-preserving, reversible one-by-one meaning decisions. Do not replace these with blanket token/zero missingness switches. Verify this flow with `scripts/verify_value_review_ui.cjs`.
 - `design-system.css`: final-loaded visual authority, with local typography in `fonts/`. Read `PRODUCT.md` and `DESIGN.md` before visual changes.
 - `styles.css` and `spreadsheet.css`: application and spreadsheet styling.
 - `server.js`: dependency-free Node HTTP server and local AI API, defaulting to Ollama.

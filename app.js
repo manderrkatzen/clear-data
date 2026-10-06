@@ -54,7 +54,8 @@ function quantile(sorted, p) { const position = (sorted.length - 1) * p; const l
 function numericStats(values) { const sorted = values.filter(Number.isFinite).sort((a, b) => a - b); const mean = sorted.reduce((sum, value) => sum + value, 0) / (sorted.length || 1); return { mean, median: quantile(sorted, .5) || 0, min: sorted[0] || 0, max: sorted[sorted.length - 1] || 0, q1: quantile(sorted, .25) || 0, q3: quantile(sorted, .75) || 0 }; }
 function observedNumericEntries(column) {
   return state.rows.flatMap(row => {
-    if (["missing", "not_applicable"].includes(cellInterpretation(row, column)) || CleaningEngine.missing(row[column], columnPolicy(column))) return [];
+    const meaning = cellInterpretation(row, column);
+    if (["missing", "not_applicable"].includes(meaning) || meaning !== "legitimate" && CleaningEngine.missing(row[column], columnPolicy(column))) return [];
     try { return [{ row, raw: String(row[column]).trim(), value: CleaningEngine.parseNumber(row[column]) }]; } catch { return []; }
   });
 }
@@ -71,10 +72,13 @@ function detectIssues() {
   const rows = state.rows; const issues = []; let id = 1;
   const numeric = new Set(numericColumns());
   state.headers.forEach((column) => {
-    const missing = rows.filter((row) => !String(row[column] ?? "").trim() && cellInterpretation(row, column) !== "not_applicable");
+    const missing = rows.filter(row => {
+      const meaning = cellInterpretation(row, column);
+      return meaning === "missing" || CleaningEngine.missing(row[column], columnPolicy(column)) && !["legitimate", "not_applicable"].includes(meaning);
+    });
     if (!missing.length) return;
     const isNumeric = numeric.has(column);
-    issues.push(issue(id++, column, isNumeric ? "Missing numerical values" : "Missing values", `Missing ${column}`, missing, "high", `${missing.length} blank cells in ${column}. Review whether these are expected before filling; a blank is not necessarily an error.`, isNumeric ? "impute" : "keep"));
+    issues.push(issue(id++, column, isNumeric ? "Missing numerical values" : "Missing values", `Missing ${column}`, missing, "high", `${missing.length} blank or analyst-confirmed missing cells in ${column}. Review their context before filling.`, isNumeric ? "impute" : "keep"));
   });
   const ctr = rows.filter((row) => Number(row.click_through_rate) > 1); if (ctr.length) issues.push(issue(id++, "click_through_rate", "Mixed percentage scale", "Whole percentages mixed with decimals", ctr, "high", `${ctr.length} rate values are above 1 while comparable rates use decimals.`, "convert"));
   const channels = rows.filter((row) => /^(paid[_ -]social)$/i.test(row.channel) && row.channel !== "Paid Social"); if (channels.length) issues.push(issue(id++, "channel", "Nonstandard categories", "Paid Social label variants", channels, "medium", `${channels.length} labels use formatting variants of Paid Social.`, "standardize"));

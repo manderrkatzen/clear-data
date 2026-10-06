@@ -14,7 +14,7 @@ function workspace(csv) {
     return nodes.get(selector);
   };
   const context = vm.createContext({ document: { querySelector: node, querySelectorAll: () => [] }, fetch: async () => ({ ok: true, json: async () => ({ available: false }) }), console, setTimeout() {}, URL, Blob });
-  for (const file of ["cleaning-engine.js", "analysis-engine.js", "spreadsheet.js", "workspace.js", "review.js", "review-ui.js", "app.js"]) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
+  for (const file of ["cleaning-engine.js", "analysis-engine.js", "spreadsheet.js", "workspace.js", "review.js", "review-ui.js", "value-review.js", "app.js"]) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
   const run = code => vm.runInContext(code, context);
   run("render = () => {}; globalThis.approve = item => { state.reviewStep = 5; const draft = reviewDraft(item); draft.previewFingerprint = guidedFingerprint(item, draft); approveGuidedDecision(item); };");
   context.csv = csv; run('loadData(csv, "exceptions.csv")');
@@ -196,7 +196,7 @@ test("Worker and Pages interpretations use bounded mocked provider calls and nev
   global.fetch = async (url, options) => {
     assert.equal(url, "https://api.openai.com/v1/responses"); calls++;
     assert.ok(JSON.parse(options.body).max_output_tokens > 300);
-    return Response.json({ output_text: JSON.stringify({ results: [{ id: "finding:1", interpretations: [{ meaning: "legitimate", score: .7, explanation: "Zero may be valid; ask the analyst.", evidenceIds: ["value:0"], operation: "retain", assumptions: [] }] }] }) });
+    return Response.json({ output_text: JSON.stringify({ results: [{ id: "finding:1", interpretations: [{ meaning: "legitimate", score: .7, explanation: "Zero may be valid; ask the analyst.", evidenceIds: ["value:0"], operation: "retain", assumptions: [] }], valueAssessments: [{ evidenceId: "value:0", missingScore: .1, meaning: "legitimate", explanation: "Zero could be a valid measurement; use the column context." }] }] }) });
   };
   try {
     const env = { OPENAI_API_KEY: "mock-key", AI_MAX_REQUESTS_PER_HOUR: 100 };
@@ -225,4 +225,41 @@ test("similar-row approvals retain per-cell provenance through restore and rollb
   assert.deepEqual(w.value("state.rows"), w.value("state.original"));
   w.run("backup.changes[0].treatment.fillMetadata.fills[0].neighbourRows = [999999]");
   assert.throws(() => w.run("restoreProject(backup)"));
+});
+test("per-representation decisions classify NULL and N/A individually and preserve legitimate zero", () => {
+  const w = workspace("id,number_of_children\n1,NULL\n2,N/A\n3,0\n4,-23\n5,-5\n6,-20\n7,2\n8,3\n9,4");
+  w.run('globalThis.tokens = state.issues.find(item => item.candidate?.kind === "missing_token"); reviewDraft(tokens).interpretation = "missing"; confirmRepresentation(tokens)');
+  assert.equal(w.value("state.rows[0].number_of_children"), "NULL");
+  assert.equal(w.value('cellInterpretation(state.rows[0], "number_of_children")'), "missing");
+  assert.equal(w.value('cellInterpretation(state.rows[1], "number_of_children")'), null);
+  assert.equal(w.value('state.issues.find(item => item.column === "number_of_children" && item.recommendation === "impute").rows.length'), 1);
+  w.run('reviewDraft(tokens).interpretation = "missing"; confirmRepresentation(tokens)');
+  assert.equal(w.value("state.rows[1].number_of_children"), "N/A");
+  assert.equal(w.value('cellInterpretation(state.rows[1], "number_of_children")'), "missing");
+  w.run('globalThis.sentinels = state.issues.find(item => item.candidate?.kind === "sentinel"); valueReviewState("number_of_children").selectedValue = "0"; reviewDraft(sentinels).interpretation = "legitimate"; confirmRepresentation(sentinels)');
+  assert.equal(w.value("state.rows[2].number_of_children"), "0");
+  assert.equal(w.value('cellInterpretation(state.rows[2], "number_of_children")'), "legitimate");
+  assert.equal(w.value('state.issues.find(item => item.column === "number_of_children" && item.recommendation === "impute").rows.length'), 2);
+  assert.equal(w.value("metrics().changedCells"), 0);
+  w.run("restoreProject(serializeProject())");
+  assert.equal(w.value('cellInterpretation(state.rows[2], "number_of_children")'), "legitimate");
+  w.run("rollbackChange(state.changes.at(-1).id)");
+  assert.equal(w.value('cellInterpretation(state.rows[0], "number_of_children")'), null);
+  assert.equal(w.value('cellInterpretation(state.rows[1], "number_of_children")'), "missing");
+});
+test("all-nonpositive columns still receive individual screening and bounded summary batches", () => {
+  const w = workspace("measurement\nNULL\n-23\n0\n-5\nN/A\n-20");
+  assert.deepEqual(w.value('state.issues.find(item => item.candidate?.kind === "sentinel").rows.map(row => row.measurement)'), ["-23", "0", "-5", "-20"]);
+  assert.equal(w.value("metrics().changedCells"), 0);
+  const many = workspace(`temperature_c\n${Array.from({ length: 25 }, (_, index) => -(index + 1)).join("\n")}`);
+  assert.ok(many.value('buildAnalysisCandidates().filter(candidate => candidate.kind === "sentinel").every(candidate => candidate.groups.length <= 10)'));
+  assert.equal(many.value('buildAnalysisCandidates().filter(candidate => candidate.kind === "sentinel").reduce((sum, candidate) => sum + candidate.groups.length, 0)'), 25);
+});
+test("AI per-value assessments require exact evidence IDs, bounded scores, and complete coverage", () => {
+  const candidate = ai.validateInterpretationRequest(evidence()).candidates[0];
+  const result = { id: candidate.id, interpretations: [{ meaning: "legitimate", score: .9, explanation: "Zero can be a valid count.", evidenceIds: ["value:0"], operation: "retain", assumptions: [] }], valueAssessments: [{ evidenceId: "value:0", missingScore: .02, meaning: "legitimate", explanation: "Zero children means no children; it is a valid count." }] };
+  assert.equal(ai.validateInterpretations({ results: [result] }, [candidate], true)[0].valueAssessments[0].missingScore, .02);
+  for (const patch of [{ evidenceId: "invented" }, { missingScore: 2 }, { meaning: "always_missing" }]) assert.throws(() => ai.validateInterpretations({ results: [{ ...result, valueAssessments: [{ ...result.valueAssessments[0], ...patch }] }] }, [candidate], true));
+  assert.throws(() => ai.validateInterpretations({ results: [{ ...result, valueAssessments: [] }] }, [candidate], true));
+  assert.throws(() => ai.validateInterpretations({ results: [{ ...result, valueAssessments: [result.valueAssessments[0], result.valueAssessments[0]] }] }, [candidate], true));
 });

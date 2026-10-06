@@ -136,6 +136,7 @@ npm install --prefix /tmp/cleardata-tools playwright
 /tmp/cleardata-tools/node_modules/.bin/playwright install --with-deps chromium
 PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_ui.cjs
 PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_analytics_ui.cjs
+PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_value_review_ui.cjs
 ```
 
 `BASE_URL` selects another server. `ARTIFACT_DIR` selects an existing screenshot
@@ -162,7 +163,33 @@ neighbours**. Group-wise fills support multiple hold columns, median/mean, numer
 bands, and a minimum reference count. KNN uses scaled numerical distances and
 exact categorical matches, defaults to seven neighbours, and resolves ties by
 source order. Sparse groups widen where possible, then fall back to the global
-observed median. Optional NULL/N/A/NA/- handling is explicit; blanks are never zero.
+observed median. Token and sentinel meanings come from individual analyst
+decisions; no checkbox treats NULL/N/A/NA/- or zero as missing in bulk.
+
+### Review value meanings one representation at a time
+
+On import, deterministic column summaries send exact value counts, column name,
+declared meaning/units, distribution statistics, and dataset purpose to the AI.
+The interpretation response includes an independent missingness confidence and
+explanation for each representation. Zero children, negative temperatures,
+unknown tokens, and invalid values require different contextual judgments.
+Scores are model-assessed, not calibrated probabilities; advice never classifies.
+
+Open a token or zero/negative finding to see the column's representation strip.
+Pick NULL, N/A, zero, or a negative value, choose **Missing observation**, **Keep
+as a valid value**, or **Not applicable**, then **Confirm & next value**. **Skip
+for now** leaves the representation unresolved. Each confirmation records the
+exact scope and meaning in reversible history without rewriting stored values.
+Confirmed missing representations join the missing-value finding for comparison
+and the usual treatment preview/approval. Legitimate zero remains observed.
+
+All representations are covered by bounded batches (at most ten groups per
+candidate and six candidates per request), with stable evidence IDs. Assessments
+appear as batches complete. **Assess this value with AI** can request only the
+currently selected representation. Server and browser validation reject unknown
+IDs, duplicated evidence, missing coverage, and scores outside 0–1. The dedicated
+Playwright runner checks incremental delivery, contextual scores, individual
+decisions, legitimate zero, skipped negatives, treatment, and restore/rollback.
 
 The preview lists each proposed value's actual source and KNN donor row IDs.
 Approved values, parameters, fallback counts, and the complete source trace are

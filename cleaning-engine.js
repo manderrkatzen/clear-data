@@ -1,7 +1,7 @@
 // Pure, deterministic profiling and treatment functions shared by the browser,
 // profiling worker, and Node regressions. No function mutates source records.
 var CleaningEngine = (() => {
-  const operations = ["retain", "missing", "constant", "median", "mean", "groupMedian", "groupwise", "knn", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "cap", "remove", "recalculate", "deduplicate", "mergeDuplicates"];
+  const operations = ["retain", "classify", "missing", "constant", "median", "mean", "groupMedian", "groupwise", "knn", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "cap", "remove", "recalculate", "deduplicate", "mergeDuplicates"];
   const missingPattern = /^(null|n\/?a|none|nil|unknown|not available|not applicable|missing|undefined|--?|\?)$/i;
   const decimalPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
   const text = value => String(value ?? "");
@@ -83,6 +83,7 @@ var CleaningEngine = (() => {
       const policy = policies.find(entry => entry.column === column) || defaultPolicy(column);
       const entries = rows.map(row => ({ rowId: row._row, value: text(row[column]) }));
       const excluded = entry => { const decision = classified.get(`${entry.rowId}:${column}`); return decision?.value === entry.value && ["missing", "not_applicable"].includes(decision.meaning); };
+      const meaningReviewed = entry => { const decision = classified.get(`${entry.rowId}:${column}`); return decision?.value === entry.value && ["missing", "not_applicable", "legitimate"].includes(decision.meaning); };
       const observed = entries.filter(entry => entry.value.trim());
       const numeric = observed.filter(entry => { try { parseNumber(entry.value); return true; } catch { return false; } });
       const typedObserved = observed.filter(entry => !missingPattern.test(entry.value.trim()) && !missing(entry.value, policy));
@@ -92,7 +93,7 @@ var CleaningEngine = (() => {
       const role = policy.role !== "auto" ? policy.role : schemaRole && schemaRole !== "any" ? schemaRole : isIdentifier(column) || hasLeadingZero ? "identifier" : typedObserved.length && typedObserved.filter(entry => numericIds.has(entry.rowId)).length / typedObserved.length >= .6 ? "number" : /date|timestamp/i.test(column) ? "date" : "text";
       const counts = new Map();
       entries.forEach(entry => { if (!counts.has(entry.value)) counts.set(entry.value, []); counts.get(entry.value).push(entry.rowId); });
-      const numericalStats = stats(numeric.filter(entry => !missing(entry.value, policy) && !excluded(entry)).map(entry => parseNumber(entry.value)));
+      const numericalStats = stats(numeric.filter(entry => (!missing(entry.value, policy) || classified.get(`${entry.rowId}:${column}`)?.meaning === "legitimate" && classified.get(`${entry.rowId}:${column}`)?.value === entry.value) && !excluded(entry)).map(entry => parseNumber(entry.value)));
       const columnProfile = { column, role, policy, total: rows.length, blanks: entries.length - observed.length, declaredMissing: entries.filter(entry => missing(entry.value, policy)).length, distinct: new Set(observed.map(entry => entry.value)).size, statistics: numericalStats, numericObserved: numeric.length };
       columns.push(columnProfile);
       const add = (kind, label, selected, evidence, score) => {
@@ -101,10 +102,9 @@ var CleaningEngine = (() => {
         const groups = [...counts].map(([value, rowIds]) => ({ value, rowIds: rowIds.filter(id => selectedIds.has(id)) })).filter(group => group.rowIds.length);
         candidates.push({ id: `${encodeURIComponent(column)}:${kind}`, column, kind, label, rowIds: [...selectedIds], groups, evidence, score, role, statistics: numericalStats, total: rows.length });
       };
-      add("missing_token", "Possible missing-value representations", observed.filter(entry => missingPattern.test(entry.value.trim()) || missing(entry.value, policy)), "These tokens may mean unknown, not applicable, or a legitimate category. Confirm each representation.", .8);
+      add("missing_token", "Review possible missing-value tokens", observed.filter(entry => !meaningReviewed(entry) && (missingPattern.test(entry.value.trim()) || missing(entry.value, policy))), "AI assesses each exact representation using the column name, dataset purpose, declared meaning, counts, and distribution. Review its meaning individually.", .8);
       if (["number", "integer"].includes(role)) {
-        const positive = numeric.filter(entry => parseNumber(entry.value) > 0);
-        if (positive.length >= 3 && positive.length / Math.max(1, numeric.length) >= .7) add("sentinel", "Possible numerical missing sentinels", numeric.filter(entry => !missing(entry.value, policy) && [0, -1, 9999, 99999, -999].includes(parseNumber(entry.value))), "Potential sentinels in a predominantly positive numerical column. Zero is retained until you explicitly decide otherwise.", .45);
+        add("sentinel", "Review zero and negative value meanings", numeric.filter(entry => !meaningReviewed(entry) && !missing(entry.value, policy) && (parseNumber(entry.value) <= 0 || [9999, 99999].includes(parseNumber(entry.value)))), "Zero and negatives are screening candidates, not confirmed missing values. Their meaning depends on the column; for example, zero children is a legitimate count.", .45);
         add("number_format", "Numbers needing explicit parsing", observed.filter(entry => !missing(entry.value, policy) && !missingPattern.test(entry.value.trim()) && !numericIds.has(entry.rowId)), "Nonblank values were not parsed as ordinary decimal numbers. Choose separators, currency, or percentage semantics before conversion.", .85);
       } else if (role !== "identifier" && observed.some(entry => /^(?:[$€£¥]|\(\d)|\d+[,.]\d|\d+%$/.test(entry.value.trim()))) {
         add("number_format", "Possible formatted numerical values", observed.filter(entry => /[$€£¥%]|\d[,.]\d|^\(\d/.test(entry.value)), "Formatted values may be numerical; declaration and parsing are separate from inference.", .6);
@@ -151,7 +151,7 @@ var CleaningEngine = (() => {
     const decimals = draft.decimals ?? policy.decimals;
     if (!Number.isInteger(Number(decimals)) || Number(decimals) < 0 || Number(decimals) > 12) throw new Error("Precision must be between 0 and 12.");
     const classified = new Map(classifications.map(entry => [`${entry.rowId}:${entry.column}`, entry]));
-    const reference = rows.filter(row => { const entry = classified.get(`${row._row}:${column}`); return !selectedIds.has(row._row) && !missing(row[column], policy) && !(entry?.value === row[column] && ["missing", "not_applicable"].includes(entry.meaning)); });
+    const reference = rows.filter(row => { const entry = classified.get(`${row._row}:${column}`), meaning = entry?.value === row[column] ? entry.meaning : null; return !selectedIds.has(row._row) && (meaning === "legitimate" || !missing(row[column], policy)) && !["missing", "not_applicable"].includes(meaning); });
     const referenceValues = reference.flatMap(row => { try { return [parseNumber(row[column])]; } catch { return []; } });
     const referenceStats = stats(referenceValues);
     if (["groupwise", "knn"].includes(draft.operation)) {

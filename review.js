@@ -30,7 +30,7 @@ function cellInterpretation(row, column) {
 function interpretedNumericValues(rows, column, classification = null, original = false) {
   return rows.flatMap(row => {
     const meaning = classification?.rowIds.includes(row._row) ? classification.meaning : cellInterpretation(row, column);
-    if (!original && (["missing", "not_applicable"].includes(meaning) || CleaningEngine.missing(row[column], columnPolicy(column)))) return [];
+    if (!original && (["missing", "not_applicable"].includes(meaning) || meaning !== "legitimate" && CleaningEngine.missing(row[column], columnPolicy(column)))) return [];
     try { return [CleaningEngine.parseNumber(row[column])]; } catch { return []; }
   });
 }
@@ -38,6 +38,7 @@ function resetGuidedReview() {
   cancelAutomaticReview(false);
   invalidateCleaningProfile();
   state.reviewDrafts = {};
+  state.valueReview = {};
   state.reviewStep = 1;
   state.reviewSearch = "";
   state.reviewKind = "all";
@@ -137,7 +138,7 @@ function guidedPreview(item, draft = reviewDraft(item)) {
       if (problem && problem !== relationProblem(original, rule)) constraints.push({ rowId: row._row, column: rule.column, reason: problem });
     }
   }
-  const classification = { rowIds: preview.selectedIds.filter(id => !preview.blocked.some(entry => entry.rowId === id)), meaning: ["retain", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" };
+  const classification = { rowIds: preview.selectedIds.filter(id => !preview.blocked.some(entry => entry.rowId === id)), meaning: ["retain", "classify", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" };
   return { ...preview, after, constraints, classification, beforeStats: CleaningEngine.stats(interpretedNumericValues(state.rows, item.column)), afterStats: CleaningEngine.stats(interpretedNumericValues(after, item.column, classification)), fingerprint: guidedFingerprint(item, draft), treatment };
 }
 function approveGuidedDecision(item) {
@@ -145,6 +146,7 @@ function approveGuidedDecision(item) {
     const draft = reviewDraft(item);
     if (item.status !== "open" || state.reviewStep !== 5 || !draft.previewFingerprint || draft.previewFingerprint !== guidedFingerprint(item, { ...draft, previewFingerprint: undefined })) throw new Error("The data or treatment changed. Review the preview again before approval.");
     if (draft.interpretation === "unresolved") throw new Error("Choose an interpretation before approving; unresolved findings can be left open.");
+    if (draft.operation === "classify" && !["missing", "legitimate", "not_applicable"].includes(draft.interpretation)) throw new Error("Choose missing, legitimate, or not applicable for this representation.");
     if (draft.operation === "retain" && draft.interpretation === "missing") throw new Error("Retaining values is not a missing-value normalization. Choose normalize to missing, or an appropriate retention interpretation.");
     const preview = guidedPreview(item);
     if (!preview.selectedIds.length) throw new Error("Choose at least one matching record.");
@@ -159,7 +161,7 @@ function approveGuidedDecision(item) {
     preview.patches.forEach(patch => { rowById.get(patch.rowId)[patch.column] = patch.after; });
     const removedIds = new Set(preview.removedRows.map(row => row._row));
     state.rows = state.rows.filter(row => !removedIds.has(row._row));
-    const interpretationValues = reviewedRows.map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: ["retain", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" }));
+    const interpretationValues = reviewedRows.map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: ["retain", "classify", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" }));
     const sample = (patches, key) => patches.slice(0, 3).map(patch => String(patch[key]).trim() ? patch[key] : "Blank").join(", ");
     const change = { id: newReviewId(), createdAt: new Date().toISOString(), issue: item, title: treatmentLabel(draft.operation), disposition: draft.operation === "retain" ? "valid" : "finalized", rows: reviewedRows, before: preview.patches.length ? sample(preview.patches, "before") : "Values retained", after: preview.patches.length ? sample(preview.patches, "after") : removedIds.size ? `${removedIds.size} records removed` : "Values retained", reason: item.summary, note: draft.note || "", interpretation: draft.interpretation, interpretationValues, treatment: { ...preview.treatment, previewFingerprint: undefined }, originals: [], patches: preview.patches, removedRows: preview.removedRows, reviewedFingerprints: fingerprints, fingerprint: reviewFingerprint(item, reviewedRows) };
     state.changes.unshift(change);
@@ -172,6 +174,7 @@ function approveGuidedDecision(item) {
   } catch (error) { notify(error.message); }
 }
 function treatmentLabel(operation) {
+  if (operation === "classify") return "Record reviewed value meaning";
   if (operation === "groupwise") return "Fill from similar groups";
   if (operation === "knn") return "Fill from nearest neighbours";
   if (operation === "scale") return "Multiply by a reviewed factor";
@@ -216,7 +219,7 @@ async function profileInBackground(revision, signal) {
     worker.postMessage({ revision, headers: state.headers, rows: state.rows, policies: state.ruleConfig.columns, schema: state.ruleConfig.schema, classifications: effectiveClassifications() });
   });
 }
-async function startAutomaticReview(onlyIssue = null, question = "") {
+async function startAutomaticReview(onlyIssue = null, question = "", representationValue = undefined) {
   if (typeof window === "undefined" || !state.headers.length) return;
   cancelAutomaticReview(false);
   const run = automaticReviewRun, revision = state.datasetRevision;
@@ -236,7 +239,7 @@ async function startAutomaticReview(onlyIssue = null, question = "") {
     if (!configResponse.ok) throw new Error("The interpretation API is unavailable on this server.");
     const config = await configResponse.json();
     turnstileSiteKey = config.turnstileSiteKey || "";
-    const candidates = buildAnalysisCandidates().filter(candidate => !onlyIssue || candidate.id === `finding:${onlyIssue}`);
+    const candidates = buildAnalysisCandidates(onlyIssue, representationValue);
     if (question) candidates.forEach(candidate => { candidate.meaning = `Analyst question: ${question}. Column context: ${candidate.meaning}`.slice(0, 300); });
     state.analysisTotal = candidates.length;
     state.analysisStatus = "running"; state.analysisMessage = "AI is ranking possible interpretations. Source values stay unchanged."; refreshReviewScreen();
@@ -273,15 +276,22 @@ async function startAutomaticReview(onlyIssue = null, question = "") {
     if (current()) { state.analysisStatus = "unavailable"; state.analysisMessage = error.message; refreshReviewScreen(); }
   } finally { if (reviewController === controller) reviewController = null; }
 }
-function buildAnalysisCandidates() {
-  return state.issues.filter(item => item.status === "open").map(item => {
+function evidenceValueId(column, value) {
+  const original = state.original.find(row => String(row[column] ?? "") === value);
+  return original ? `value:${original._row}` : `working:${state.rows.find(row => String(row[column] ?? "") === value)?._row}`;
+}
+function buildAnalysisCandidates(onlyIssue = null, representationValue = undefined) {
+  return state.issues.filter(item => item.status === "open" && (!onlyIssue || item.id === onlyIssue)).flatMap(item => {
     const rows = reviewRows(item), counts = new Map();
     rows.forEach(row => { const value = String(row[item.column] ?? ""); counts.set(value, (counts.get(value) || 0) + 1); });
-    const groups = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([value, count], index) => ({ id: `value:${index}`, value: value.slice(0, 160), count }));
+    const representations = [...counts].sort((a, b) => b[1] - a[1]).filter(([value]) => representationValue === undefined || value === representationValue).map(([value, count]) => ({ id: evidenceValueId(item.column, value), value: value.slice(0, 160), count }));
+    const grouped = ["missing_token", "sentinel", "impute", "keep"].includes(item.candidate?.kind || item.recommendation) ? representations : representations.slice(0, 10);
     const profile = cleaningProfile().columns.find(profile => profile.column === item.column);
     const outlier = item.recommendation === "outlier" ? outlierDraft(item) : null;
     const evidence = outlier ? previewOutlier(item).note : item.summary;
-    return { id: analysisCandidateId(item), column: item.column.slice(0, 200), kind: item.candidate?.kind || item.recommendation, total: state.rows.length, affected: rows.length, role: profile?.role || "text", meaning: columnPolicy(item.column).meaning, evidence: evidence.slice(0, 600), groups, statistics: profile?.statistics || {}, allowedOperations: reviewOperations(item), rule: JSON.stringify({ rule: item.rule || null, outlier, columnPolicy: columnPolicy(item.column) }).slice(0, 600) };
+    const batches = [];
+    for (let offset = 0; offset < grouped.length; offset += 10) batches.push({ id: `${analysisCandidateId(item)}${offset ? `:values:${offset}` : ""}`, column: item.column.slice(0, 200), kind: item.candidate?.kind || item.recommendation, total: state.rows.length, affected: rows.length, role: profile?.role || "text", meaning: columnPolicy(item.column).meaning, evidence: evidence.slice(0, 600), groups: grouped.slice(offset, offset + 10), statistics: profile?.statistics || {}, allowedOperations: reviewOperations(item), rule: JSON.stringify({ rule: item.rule || null, outlier, columnPolicy: columnPolicy(item.column) }).slice(0, 600) });
+    return batches;
   }).filter(candidate => candidate.affected > 0);
 }
 function validateBrowserInterpretations(results, candidates) {
@@ -295,6 +305,12 @@ function validateBrowserInterpretations(results, candidates) {
       meanings.add(suggestion.meaning);
       return { meaning: suggestion.meaning, score: suggestion.score, confidence: suggestion.score >= .75 ? "high" : suggestion.score >= .45 ? "moderate" : "low", explanation: suggestion.explanation.slice(0, 1000), evidenceIds: suggestion.evidenceIds, operation: suggestion.operation || "retain", assumptions: (Array.isArray(suggestion.assumptions) ? suggestion.assumptions : []).filter(value => typeof value === "string").slice(0, 3).map(value => value.slice(0, 600)) };
     }).sort((a, b) => b.score - a.score);
-    return { id: entry.id, interpretations };
+    const seen = new Set();
+    const valueAssessments = (entry.valueAssessments || []).map(assessment => {
+      if (!candidate.groups.some(group => group.id === assessment.evidenceId) || seen.has(assessment.evidenceId) || !Number.isFinite(assessment.missingScore) || assessment.missingScore < 0 || assessment.missingScore > 1 || !["missing", "legitimate", "not_applicable", "unresolved"].includes(assessment.meaning) || typeof assessment.explanation !== "string" || !assessment.explanation.trim() || assessment.explanation.length > 600) throw new Error("Invalid per-representation AI assessment.");
+      seen.add(assessment.evidenceId); return { ...assessment };
+    });
+    if (entry.valueAssessments !== undefined && ["missing_token", "sentinel", "impute", "keep"].includes(candidate.kind) && valueAssessments.length !== candidate.groups.length) throw new Error("AI assessments did not cover every supplied representation.");
+    return { id: entry.id, interpretations, valueAssessments };
   });
 }

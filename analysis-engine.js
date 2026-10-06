@@ -4,7 +4,6 @@ var AnalysisEngine = (() => {
   const cache = new WeakMap();
   const contexts = new WeakMap();
   const text = value => String(value ?? "").trim();
-  const tokenSet = ["NULL", "N/A", "NA", "-"];
   const quantile = (sorted, p) => {
     if (!sorted.length) return null;
     const position = (sorted.length - 1) * p, lower = Math.floor(position);
@@ -12,7 +11,7 @@ var AnalysisEngine = (() => {
   };
   function policy(column, options = {}) {
     const declared = options.policies?.find(entry => entry.column === column) || engine.defaultPolicy(column);
-    return { ...declared, missingTokens: [...declared.missingTokens, ...(options.includeTokens ? tokenSet : [])] };
+    return declared;
   }
   function prepare(headers, rows, options = {}) {
     const contextKey = options.revision === undefined ? null : JSON.stringify([headers, options]);
@@ -27,6 +26,7 @@ var AnalysisEngine = (() => {
       if (saved.get(column)?.signature === signature) { columns.set(column, saved.get(column)); continue; }
       const blanks = rows.map(row => {
         const decision = classified.get(`${row._row}:${column}`);
+        if (decision?.value === row[column] && decision.meaning === "legitimate") return false;
         return engine.missing(row[column], parsing) || (decision?.value === row[column] && ["missing", "not_applicable"].includes(decision.meaning));
       });
       const numbers = rows.map((row, index) => {

@@ -337,6 +337,24 @@ At 620px, analytical headings stack and similarity columns become one column.
 These additions reuse the current palette and typography; no new visual world
 or decorative copy is introduced.
 
+### Per-representation value review
+
+Token and zero/negative findings use a compact horizontal strip of exact values,
+counts, and their independently assessed AI missingness confidence. Selection
+uses the existing blue border/backing; the strip scrolls locally on mobile.
+One focused value shows its column context, bounded AI explanation, non-calibrated
+score label, native meaning radios, exact match count, and a source-preserving
+confirmation. **Confirm & next value** advances directly through representations;
+skipped values stay open. Completed missingness decisions link to comparison and
+treatment. Confidence is never preselected as the analyst's decision.
+
+The value strip is 180px per item, with inherited control focus styling. The
+current value uses the existing 23px finding-title scale and wraps long text;
+the heading, actions, and treatment link wrap without introducing a new palette.
+Blanket token-missingness checkboxes were removed from both comparison and
+similar-row fill controls. Classification records meaning without rewriting
+source cells; treatment still uses the established preview and approval flow.
+
 ### Signature comparison
 
 Original, working, and proposed distributions share bins, axes, and scale. Bars occupy a (120px) chart height with bin gaps (5px) and series gaps (2px). Visible legends and comparison metrics support the color distinction. Scoped counts, exact record previews, and amber blocked/constraint exceptions precede final approval; the footer stays below them in normal flow.

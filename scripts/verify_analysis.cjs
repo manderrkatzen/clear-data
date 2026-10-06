@@ -71,7 +71,9 @@ test("blanks, declared tokens, zero, constants, and insufficient groups are dist
   assert.equal(analysis.compare(headers, rows.slice(0, 12), "target").insufficientData, true);
   const tokenRows = rows.map(row => ({ ...row, target: row.target || "NULL" }));
   assert.equal(analysis.compare(headers, tokenRows, "target").nMissing, 0);
-  assert.equal(analysis.compare(headers, tokenRows, "target", { includeTokens: true }).nMissing, 10);
+  assert.equal(analysis.compare(headers, tokenRows, "target", { includeTokens: true }).nMissing, 0, "An old blanket-token option cannot classify values");
+  const classifications = tokenRows.slice(0, 10).map(row => ({ rowId: row._row, column: "target", value: "NULL", meaning: "missing" }));
+  assert.equal(analysis.compare(headers, tokenRows, "target", { classifications }).nMissing, 10);
   assert.throws(() => analysis.holdSimilar(headers, rows, "target", "category", "target"));
   assert.throws(() => analysis.fillSimilar(headers, rows, "target", { columns: ["target"] }));
   const balanced = Array.from({ length: 40 }, (_, index) => ({ _row: index + 1, target: index < 20 ? "" : "2", a: String(index % 5), b: String(index % 4), c: index % 2 ? "A" : "B" }));

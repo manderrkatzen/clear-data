@@ -377,6 +377,8 @@ function validateProject(data) {
     change.patches.forEach((patch) => { if (!ids.has(patch.rowId) || !data.headers.includes(patch.column) || typeof patch.before !== "string" || typeof patch.after !== "string") throw new Error("Invalid decision patch in project."); });
     change.removedRows.forEach((row) => { if (!ids.has(row._row) || data.headers.some((column) => typeof row[column] !== "string")) throw new Error("Invalid removed record in project."); });
     if (change.interpretationValues && (!Array.isArray(change.interpretationValues) || change.interpretationValues.some(entry => !ids.has(entry.rowId) || !data.headers.includes(entry.column) || typeof entry.value !== "string" || !["legitimate", "missing", "not_applicable", "format", "error", "resolved"].includes(entry.meaning)))) throw new Error("Invalid cell interpretation in project.");
+    const assessment = change.treatment?.valueAssessment;
+    if (assessment && (typeof assessment.evidenceId !== "string" || !Number.isFinite(assessment.missingScore) || assessment.missingScore < 0 || assessment.missingScore > 1 || !["missing", "legitimate", "not_applicable", "unresolved"].includes(assessment.meaning) || typeof assessment.explanation !== "string" || assessment.explanation.length > 600 || typeof assessment.value !== "string" || !change.interpretationValues?.every(entry => entry.value === assessment.value))) throw new Error("Invalid reviewed representation assessment.");
     const metadata = change.treatment?.fillMetadata;
     if (validateProvenance && ["groupwise", "knn"].includes(change.treatment?.operation) && !metadata) throw new Error("Similar-row fills require a source trace.");
     if (metadata && validateProvenance) {
