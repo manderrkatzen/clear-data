@@ -1,7 +1,7 @@
 // Browser-only review features. These classic-script functions use app.js globals.
 function newReviewId() { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 function cloneReview(value) { return JSON.parse(JSON.stringify(value)); }
-function emptyRuleConfig() { return { schema: [], metrics: [], outliers: [], duplicates: null, columns: [], relations: [] }; }
+function emptyRuleConfig() { return { schema: [], metrics: [], outliers: [], duplicates: null, columns: [], relations: [], kpis: [], acceptedSuggestions: [] }; }
 function downloadArtifact(text, name, type) {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const link = document.createElement("a");
@@ -48,6 +48,7 @@ function qualityReportData() {
     removedRowIds: state.original.filter((row) => !currentIds.has(row._row)).map((row) => row._row),
     findings: state.issues.map((item) => ({ id: item.id, column: item.column, type: item.type, label: item.label, severity: item.severity, status: item.status, summary: item.summary, rowIds: (item.currentRows || item.rows).filter((row) => currentIds.has(row._row)).map((row) => row._row), reviewedRowIds: item.rows.map((row) => row._row), rule: item.rule || item.outlierDefinition || item.duplicateDefinition || null })),
     activeDecisions: state.changes.map((change) => cloneReview(change.snapshot)),
+    scorecards: typeof CapabilitiesEngine !== "undefined" ? { source: CapabilitiesEngine.qualityScorecard(state.headers, state.original, state.ruleConfig, { policies: state.ruleConfig.columns || [] }), working: CapabilitiesEngine.qualityScorecard(state.headers, state.rows, state.ruleConfig, { revision: state.datasetRevision, policies: state.ruleConfig.columns || [], classifications: effectiveClassifications() }) } : null,
     auditEvents: cloneReview(state.auditEvents || []), rules: exportRuleConfig(),
     interpretation: "Accepted findings may retain blanks or unusual values. Modified-cell counts compare remaining working rows with source; removed records are counted separately. History and these artifacts are analyst review records, not a certification of correctness.",
   };
@@ -58,6 +59,14 @@ function qualityReportHtml(report = qualityReportData()) {
   const m = report.summary;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ClearData quality report — ${esc(report.dataset)}</title><style>body{font:15px system-ui,sans-serif;color:#1d292e;margin:40px auto;padding:0 24px;max-width:1200px;line-height:1.6}h1,h2{line-height:1.2}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #dfe6e3;padding:8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eff5f0}.table-scroll{overflow:auto;margin:16px 0}.summary{padding:16px;background:#eff5f0;border-radius:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f8faf8;padding:16px}@media print{body{margin:0;max-width:none}.table-scroll{overflow:visible}thead{display:table-header-group}tr{break-inside:avoid}}</style></head><body><h1>ClearData quality report</h1><p><strong>${esc(report.dataset)}</strong><br>Generated ${esc(report.generatedAt)}</p><div class="summary">${m.sourceRows} source rows → ${m.rows} working rows · ${m.columns} columns<br>${m.changedRows} modified rows · ${m.changedCells} modified cells · ${m.removedRows} removed rows<br>${m.openFindings} open findings · ${m.decisions} active approved decisions · ${m.approvedNoChange} accepted without changing values</div><p>${esc(report.interpretation)}</p><h2>Completeness</h2><p>Counts use the source and remaining working population, respectively. Row removal can reduce blank counts without filling values.</p>${table(["Column", "Source blanks", "Working blanks"], report.completeness.map((item) => [item.column, item.sourceBlanks, item.workingBlanks]))}<h2>Findings and unresolved concerns</h2>${table(["Finding", "Column", "Priority", "Status", "Current affected row IDs", "Evidence"], report.findings.map((item) => [item.label, item.column, item.severity, item.status, item.rowIds.join(", ") || "None", item.summary]))}<h2>Active decisions</h2>${table(["Approved at", "Treatment", "Column", "Reviewed row IDs", "Modified cells", "Removed row IDs", "Reason", "Analyst note"], report.activeDecisions.map((item) => [item.createdAt, item.title, item.issue.column, item.rowIds.join(", "), item.patches.length, item.removedRows.map((row) => row._row).join(", "), item.reason, item.note]))}<h2>Approval and rollback log</h2>${table(["Event at", "Event", "Decision ID", "Treatment", "Reason / note"], report.auditEvents.map((event) => [event.at, event.kind, event.decision.id, event.decision.title, event.decision.note || event.note || event.decision.reason]))}<h2>Configured review rules</h2><pre>${esc(JSON.stringify(report.rules, null, 2))}</pre><p>Use the JSON decision log for full cell-level before/after values and removed-record snapshots. This self-contained HTML report can be printed to PDF using your browser.</p></body></html>`;
 }
+const baseQualityReportHtml = qualityReportHtml;
+qualityReportHtml = (report = qualityReportData()) => {
+  const html = baseQualityReportHtml(report);
+  if (!report.scorecards) return html;
+  const metric = (card, kind) => kind === "validity" && !card.hasRules ? "No rules" : card[kind] === null ? "—" : `${card[kind].toFixed(1)}%`;
+  const table = `<h2>Source and working quality scorecard</h2><div class="table-scroll"><table><thead><tr><th>Column</th><th>Source validity</th><th>Working validity</th><th>Source consistency</th><th>Working consistency</th></tr></thead><tbody>${report.scorecards.source.map(source => { const working = report.scorecards.working.find(card => card.column === source.column); return `<tr><th>${escapeHtml(source.column)}</th><td>${metric(source, "validity")}</td><td>${metric(working, "validity")}</td><td>${metric(source, "consistency")}</td><td>${metric(working, "consistency")}</td></tr>`; }).join("")}</tbody></table></div>`;
+  return html.replace("</body>", `${table}</body>`);
+};
 function decisionLogCsv() {
   const headers = ["event_at", "event", "decision_id", "treatment", "column", "row_id", "before", "after", "reason", "analyst_note", "interpretation", "scope"];
   const rows = [];
@@ -181,8 +190,11 @@ function validIsoDate(text) {
   try { return isoDate(`${parts[2]}/${parts[3]}/${parts[1]}`) === text; } catch { return false; }
 }
 function schemaProblems(row, rule) {
+  if (typeof CapabilitiesEngine !== "undefined") return CapabilitiesEngine.schemaProblems(row, rule, { policies: state.ruleConfig.columns || [], classifications: effectiveClassifications() });
   const value = String(row[rule.column] ?? "").trim();
-  if (!value || CleaningEngine.missing(value, columnPolicy(rule.column))) return rule.required ? ["Required value is blank"] : [];
+  const status = observationState(row, rule.column);
+  if (status === "not_applicable") return [];
+  if (status !== "present") return rule.required ? ["Required observation is missing or unreviewed blank"] : [];
   let number;
   try { number = CleaningEngine.parseNumber(value); } catch { number = NaN; }
   const problems = [];
@@ -250,7 +262,11 @@ function normalizeRuleConfig(input, headers = state.headers) {
   }
   const columns = CleaningEngine.normalizePolicies(input.columns || [], headers);
   const relations = normalizeRelationRules(input.relations || [], headers);
-  return { schema, metrics, outliers, duplicates, columns, relations };
+  const kpis = typeof CapabilitiesEngine !== "undefined" ? CapabilitiesEngine.normalizeKpis(input.kpis || [], headers) : [];
+  if (!Array.isArray(input.acceptedSuggestions || []) || (input.acceptedSuggestions || []).some(entry => !entry || typeof entry.id !== "string" || typeof entry.ruleId !== "string" || !Number.isFinite(entry.passRate) || entry.passRate < .8 || entry.passRate > 1)) throw new Error("Invalid accepted suggestion metadata.");
+  const knownRules = new Set([...schema, ...metrics, ...relations].map(rule => rule.id));
+  const acceptedSuggestions = (input.acceptedSuggestions || []).filter(entry => knownRules.has(entry.ruleId)).map(entry => ({ id: entry.id, ruleId: entry.ruleId, passRate: entry.passRate }));
+  return { schema, metrics, outliers, duplicates, columns, relations, kpis, acceptedSuggestions };
 }
 function metricFormula(rule) {
   const symbol = { difference: "−", sum: "+", product: "×", ratio: "÷" }[rule.operation];
@@ -258,9 +274,9 @@ function metricFormula(rule) {
 }
 function metricResult(row, rule) {
   const values = [row[rule.left], row[rule.right]];
-  if ([rule.left, rule.right].some(column => CleaningEngine.missing(row[column], columnPolicy(column)) || ["missing", "not_applicable"].includes(cellInterpretation(row, column)))) return { error: "Missing or invalid numerical source" };
+  if ([rule.left, rule.right].some(column => observationState(row, column) !== "present")) return { error: "Missing or invalid numerical source" };
   let left, right;
-  try { [left, right] = values.map(value => CleaningEngine.parseNumber(value)); } catch { return { error: "Missing or invalid numerical source" }; }
+  try { [left, right] = values.map((value, index) => CleaningEngine.parseNumber(value, columnPolicy([rule.left, rule.right][index]))); } catch { return { error: "Missing or invalid numerical source" }; }
   if (rule.operation === "ratio" && right === 0) return { error: "Zero denominator" };
   const result = ({ difference: () => left - right, sum: () => left + right, product: () => left * right, ratio: () => left / right })[rule.operation]() * rule.factor;
   if (!Number.isFinite(result) || Math.abs(result) >= 1e21) return { error: "Result cannot be represented as a finite fixed-decimal value" };
@@ -382,7 +398,8 @@ function validateProject(data) {
     const metadata = change.treatment?.fillMetadata;
     if (validateProvenance && ["groupwise", "knn"].includes(change.treatment?.operation) && !metadata) throw new Error("Similar-row fills require a source trace.");
     if (metadata && validateProvenance) {
-      if (!["groupwise", "knn"].includes(metadata.method) || change.treatment.operation !== metadata.method || !metadata.params || !Array.isArray(metadata.params.columns) || !metadata.params.columns.length || new Set(metadata.params.columns).size !== metadata.params.columns.length || metadata.params.columns.some(column => column === change.issue.column || !data.headers.includes(column)) || !Number.isInteger(metadata.params.k) || metadata.params.k < 1 || metadata.params.k > 50 || !Number.isInteger(metadata.params.minObserved) || metadata.params.minObserved < 1 || metadata.params.minObserved > 1000 || !["median", "mean"].includes(metadata.params.statistic) || !Array.isArray(metadata.fills) || metadata.fills.length !== change.patches.filter(patch => patch.column === change.issue.column).length || !Number.isInteger(metadata.fallbackCount) || metadata.fallbackCount < 0 || metadata.fallbackCount > metadata.fills.length) throw new Error("Invalid similar-fill decision metadata.");
+      const compatibleOperation = change.treatment.operation === metadata.method || change.treatment.operation === "groupMedian" && metadata.method === "groupwise" && metadata.params?.strict === true;
+      if (!["groupwise", "knn"].includes(metadata.method) || !compatibleOperation || !metadata.params || !Array.isArray(metadata.params.columns) || !metadata.params.columns.length || new Set(metadata.params.columns).size !== metadata.params.columns.length || metadata.params.columns.some(column => column === change.issue.column || !data.headers.includes(column)) || !Number.isInteger(metadata.params.k) || metadata.params.k < 1 || metadata.params.k > 50 || !Number.isInteger(metadata.params.minObserved) || metadata.params.minObserved < 1 || metadata.params.minObserved > 1000 || !["median", "mean"].includes(metadata.params.statistic) || !Array.isArray(metadata.fills) || metadata.fills.length !== change.patches.filter(patch => patch.column === change.issue.column).length || !Number.isInteger(metadata.fallbackCount) || metadata.fallbackCount < 0 || metadata.fallbackCount > metadata.fills.length) throw new Error("Invalid similar-fill decision metadata.");
       const filled = new Set();
       for (const fill of metadata.fills) {
         if (!ids.has(fill.row) || !change.rowIds.includes(fill.row) || filled.has(fill.row) || !Number.isFinite(fill.value) || !["band", "widened", "knn", "global"].includes(fill.source) || (fill.bandLabel !== undefined && typeof fill.bandLabel !== "string") || (metadata.method === "knn" && (!Array.isArray(fill.neighbourRows) || new Set(fill.neighbourRows).size !== fill.neighbourRows.length || fill.neighbourRows.length > metadata.params.k || fill.neighbourRows.some(id => !ids.has(id) || id === fill.row) || (fill.source === "knn" && !fill.neighbourRows.length)))) throw new Error("Invalid per-cell fill provenance.");

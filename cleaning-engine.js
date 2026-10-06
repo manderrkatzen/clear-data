@@ -1,7 +1,7 @@
 // Pure, deterministic profiling and treatment functions shared by the browser,
 // profiling worker, and Node regressions. No function mutates source records.
 var CleaningEngine = (() => {
-  const operations = ["retain", "classify", "missing", "constant", "median", "mean", "groupMedian", "groupwise", "knn", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "cap", "remove", "recalculate", "deduplicate", "mergeDuplicates"];
+  const operations = ["retain", "leaveMissing", "classify", "missing", "constant", "median", "mean", "groupMedian", "groupwise", "knn", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "cap", "remove", "recalculate", "deduplicate", "mergeDuplicates"];
   const missingPattern = /^(null|n\/?a|none|nil|unknown|not available|not applicable|missing|undefined|--?|\?)$/i;
   const decimalPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
   const text = value => String(value ?? "");
@@ -57,8 +57,9 @@ var CleaningEngine = (() => {
     if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() !== Number(month) - 1 || date.getUTCDate() !== Number(day)) throw new Error("Invalid calendar date.");
     return `${text(year).padStart(4, "0")}-${text(month).padStart(2, "0")}-${text(day).padStart(2, "0")}`;
   }
-  function stats(values) {
-    const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  function stats(values, alreadySorted = false) {
+    const sorted = values.filter(Number.isFinite);
+    if (!alreadySorted) sorted.sort((a, b) => a - b);
     const quantile = p => { const position = (sorted.length - 1) * p, lower = Math.floor(position); return sorted.length ? sorted[lower] + (sorted[Math.ceil(position)] - sorted[lower]) * (position - lower) : null; };
     return { count: sorted.length, mean: sorted.length ? sorted.reduce((sum, value) => sum + value, 0) / sorted.length : null, median: quantile(.5), q1: quantile(.25), q3: quantile(.75), min: sorted[0] ?? null, max: sorted.at(-1) ?? null };
   }
@@ -76,16 +77,29 @@ var CleaningEngine = (() => {
   }
   function defaultPolicy(column) { return { column, role: "auto", missingTokens: [], numberFormat: "plain", dateFormat: "iso", currency: false, percentage: false, decimals: 2, meaning: "" }; }
   function missing(value, policy) { return !text(value).trim() || policy.missingTokens.some(token => token.trim().toLowerCase() === text(value).trim().toLowerCase()); }
+  function observationState(row, column, policy = defaultPolicy(column), classifications = []) {
+    const decision = classifications instanceof Map ? classifications.size ? classifications.get(`${row._row}:${column}`) : null : classifications.length ? classifications.find(entry => entry.rowId === row._row && entry.column === column) : null;
+    if (decision && text(decision.value) === text(row[column])) {
+      if (decision.meaning === "not_applicable") return "not_applicable";
+      if (decision.meaning === "missing") return "missing";
+      if (decision.meaning === "legitimate") return "present";
+    }
+    const value = text(row[column]).trim();
+    if (!value) return "blank_unreviewed";
+    if (!policy.missingTokens.length) return "present";
+    const normalized = value.toLowerCase();
+    return policy.missingTokens.some(token => token.trim().toLowerCase() === normalized) ? "missing" : "present";
+  }
   function profile(headers, rows, policies = [], schema = [], classifications = []) {
     const columns = [], candidates = [];
     const classified = new Map(classifications.map(entry => [`${entry.rowId}:${entry.column}`, entry]));
     for (const column of headers) {
       const policy = policies.find(entry => entry.column === column) || defaultPolicy(column);
       const entries = rows.map(row => ({ rowId: row._row, value: text(row[column]) }));
-      const excluded = entry => { const decision = classified.get(`${entry.rowId}:${column}`); return decision?.value === entry.value && ["missing", "not_applicable"].includes(decision.meaning); };
+      const stateOf = entry => observationState({ _row: entry.rowId, [column]: entry.value }, column, policy, classified);
       const meaningReviewed = entry => { const decision = classified.get(`${entry.rowId}:${column}`); return decision?.value === entry.value && ["missing", "not_applicable", "legitimate"].includes(decision.meaning); };
       const observed = entries.filter(entry => entry.value.trim());
-      const numeric = observed.filter(entry => { try { parseNumber(entry.value); return true; } catch { return false; } });
+      const numeric = observed.filter(entry => { try { parseNumber(entry.value, policy); return true; } catch { return false; } });
       const typedObserved = observed.filter(entry => !missingPattern.test(entry.value.trim()) && !missing(entry.value, policy));
       const numericIds = new Set(numeric.map(entry => entry.rowId));
       const schemaRole = schema.find(rule => rule.column === column)?.type;
@@ -93,7 +107,7 @@ var CleaningEngine = (() => {
       const role = policy.role !== "auto" ? policy.role : schemaRole && schemaRole !== "any" ? schemaRole : isIdentifier(column) || hasLeadingZero ? "identifier" : typedObserved.length && typedObserved.filter(entry => numericIds.has(entry.rowId)).length / typedObserved.length >= .6 ? "number" : /date|timestamp/i.test(column) ? "date" : "text";
       const counts = new Map();
       entries.forEach(entry => { if (!counts.has(entry.value)) counts.set(entry.value, []); counts.get(entry.value).push(entry.rowId); });
-      const numericalStats = stats(numeric.filter(entry => (!missing(entry.value, policy) || classified.get(`${entry.rowId}:${column}`)?.meaning === "legitimate" && classified.get(`${entry.rowId}:${column}`)?.value === entry.value) && !excluded(entry)).map(entry => parseNumber(entry.value)));
+      const numericalStats = stats(numeric.filter(entry => stateOf(entry) === "present").map(entry => parseNumber(entry.value, policy)));
       const columnProfile = { column, role, policy, total: rows.length, blanks: entries.length - observed.length, declaredMissing: entries.filter(entry => missing(entry.value, policy)).length, distinct: new Set(observed.map(entry => entry.value)).size, statistics: numericalStats, numericObserved: numeric.length };
       columns.push(columnProfile);
       const add = (kind, label, selected, evidence, score) => {
@@ -104,7 +118,7 @@ var CleaningEngine = (() => {
       };
       add("missing_token", "Review possible missing-value tokens", observed.filter(entry => !meaningReviewed(entry) && (missingPattern.test(entry.value.trim()) || missing(entry.value, policy))), "AI assesses each exact representation using the column name, dataset purpose, declared meaning, counts, and distribution. Review its meaning individually.", .8);
       if (["number", "integer"].includes(role)) {
-        add("sentinel", "Review zero and negative value meanings", numeric.filter(entry => !meaningReviewed(entry) && !missing(entry.value, policy) && (parseNumber(entry.value) <= 0 || [9999, 99999].includes(parseNumber(entry.value)))), "Zero and negatives are screening candidates, not confirmed missing values. Their meaning depends on the column; for example, zero children is a legitimate count.", .45);
+        add("sentinel", "Review zero and negative value meanings", numeric.filter(entry => !meaningReviewed(entry) && !missing(entry.value, policy) && (parseNumber(entry.value, policy) <= 0 || [9999, 99999].includes(parseNumber(entry.value, policy)))), "Zero and negatives are screening candidates, not confirmed missing values. Their meaning depends on the column; for example, zero children is a legitimate count.", .45);
         add("number_format", "Numbers needing explicit parsing", observed.filter(entry => !missing(entry.value, policy) && !missingPattern.test(entry.value.trim()) && !numericIds.has(entry.rowId)), "Nonblank values were not parsed as ordinary decimal numbers. Choose separators, currency, or percentage semantics before conversion.", .85);
       } else if (role !== "identifier" && observed.some(entry => /^(?:[$€£¥]|\(\d)|\d+[,.]\d|\d+%$/.test(entry.value.trim()))) {
         add("number_format", "Possible formatted numerical values", observed.filter(entry => /[$€£¥%]|\d[,.]\d|^\(\d/.test(entry.value)), "Formatted values may be numerical; declaration and parsing are separate from inference.", .6);
@@ -122,7 +136,7 @@ var CleaningEngine = (() => {
     }
     return { columns, candidates };
   }
-  function scopeRows(rows, eligibleIds, scope = {}) {
+  function scopeRows(rows, eligibleIds, scope = {}, options = {}) {
     const eligible = new Set(eligibleIds);
     if (scope.mode && !["all", "selected", "condition"].includes(scope.mode)) throw new Error("Choose a supported treatment scope.");
     if (scope.mode === "selected" && (!Array.isArray(scope.rowIds) || scope.rowIds.some(id => !eligible.has(id)))) throw new Error("Selection must contain only records belonging to this finding.");
@@ -136,7 +150,9 @@ var CleaningEngine = (() => {
       if (scope.operator === "contains") return left.toLowerCase().includes(right.toLowerCase());
       if (scope.operator === "=") return left === right;
       if (scope.operator === "!=") return left !== right;
-      try { const a = parseNumber(left), b = parseNumber(right); return ({ ">": a > b, ">=": a >= b, "<": a < b, "<=": a <= b })[scope.operator]; } catch { return false; }
+      const policy = options.policies?.find(entry => entry.column === scope.column) || defaultPolicy(scope.column);
+      if (observationState(row, scope.column, policy, options.classifications || []) !== "present") return false;
+      try { const a = parseNumber(left, policy), b = parseNumber(right); return ({ ">": a > b, ">=": a >= b, "<": a < b, "<=": a <= b })[scope.operator]; } catch { return false; }
     });
   }
   function fixed(value, decimals) {
@@ -145,18 +161,19 @@ var CleaningEngine = (() => {
   }
   function treatment(headers, rows, eligibleIds, column, draft, policy = defaultPolicy(column), classifications = [], options = {}) {
     if (!headers.includes(column) || !operations.includes(draft.operation)) throw new Error("Choose a supported column and treatment.");
-    const selected = scopeRows(rows, eligibleIds, draft.scope);
+    const selected = scopeRows(rows, eligibleIds, draft.scope, { ...options, policies: options.policies || [policy], classifications });
     const patches = [], blocked = [], removedRows = [];
     const selectedIds = new Set(selected.map(row => row._row));
     const decimals = draft.decimals ?? policy.decimals;
     if (!Number.isInteger(Number(decimals)) || Number(decimals) < 0 || Number(decimals) > 12) throw new Error("Precision must be between 0 and 12.");
     const classified = new Map(classifications.map(entry => [`${entry.rowId}:${entry.column}`, entry]));
-    const reference = rows.filter(row => { const entry = classified.get(`${row._row}:${column}`), meaning = entry?.value === row[column] ? entry.meaning : null; return !selectedIds.has(row._row) && (meaning === "legitimate" || !missing(row[column], policy)) && !["missing", "not_applicable"].includes(meaning); });
-    const referenceValues = reference.flatMap(row => { try { return [parseNumber(row[column])]; } catch { return []; } });
+    const reference = rows.filter(row => !selectedIds.has(row._row) && observationState(row, column, policy, classified) === "present");
+    const referenceValues = reference.flatMap(row => { try { return [parseNumber(row[column], policy)]; } catch { return []; } });
     const referenceStats = stats(referenceValues);
-    if (["groupwise", "knn"].includes(draft.operation)) {
+    if (["groupwise", "knn", "groupMedian"].includes(draft.operation)) {
       const analysis = typeof AnalysisEngine !== "undefined" ? AnalysisEngine : require("./analysis-engine.js");
-      const result = options.similarResult || analysis.fillSimilar(headers, rows, column, { ...draft.similar, method: draft.operation, rowIds: selected.map(row => row._row) }, { ...options, policies: options.policies || [policy], classifications });
+      const params = draft.operation === "groupMedian" ? { columns: [draft.groupColumn], strict: true, minObserved: 1, statistic: "median", method: "groupwise" } : { ...draft.similar, method: draft.operation };
+      const result = options.similarResult || analysis.fillSimilar(headers, rows, column, { ...params, rowIds: selected.map(row => row._row) }, { ...options, policies: options.policies || [policy], classifications });
       const fillById = new Map(result.fills.map(fill => [fill.row, fill]));
       const actualFills = [];
       for (const row of selected) {
@@ -200,18 +217,16 @@ var CleaningEngine = (() => {
       const before = row[column];
       try {
         let after = before;
+        if (draft.operation === "leaveMissing" && !["missing", "blank_unreviewed"].includes(observationState(row, column, policy, classified))) throw new Error("Only missing observations can be left missing.");
         if (draft.operation === "remove") { removedRows.push({ ...row }); continue; }
         if (draft.operation === "missing") after = "";
         if (draft.operation === "constant") {
           if (typeof draft.value !== "string") throw new Error("A replacement value is required.");
           after = draft.value;
         }
-        if (["mean", "median", "groupMedian"].includes(draft.operation)) {
+        if (["mean", "median"].includes(draft.operation)) {
+          if (!["missing", "blank_unreviewed"].includes(observationState(row, column, policy, classified))) throw new Error("Only missing observations can receive statistical fills.");
           let value = referenceStats[draft.operation === "mean" ? "mean" : "median"];
-          if (draft.operation === "groupMedian") {
-            if (!text(row[draft.groupColumn]).trim()) throw new Error("Blank group key; no estimate was fabricated.");
-            value = stats(reference.filter(other => other[draft.groupColumn] === row[draft.groupColumn]).flatMap(other => { try { return [parseNumber(other[column])]; } catch { return []; } })).median;
-          }
           if (value === null) throw new Error("No observed reference values; provide a reviewed constant or retain the record.");
           after = fixed(value, Number(decimals));
         }
@@ -222,13 +237,14 @@ var CleaningEngine = (() => {
         }
         if (draft.operation === "map") after = Object.hasOwn(mapping, before) ? mapping[before] : before;
         if (draft.operation === "parseNumber") after = fixed(parseNumber(before, { ...policy, ...draft }), Number(decimals));
-        if (draft.operation === "scale") after = fixed(parseNumber(before) * parseNumber(draft.factor), Number(decimals));
+        if (draft.operation === "scale") after = fixed(parseNumber(before, policy) * parseNumber(draft.factor), Number(decimals));
         if (draft.operation === "parseDate") after = parseDate(before, draft.dateFormat || policy.dateFormat);
-        if (draft.operation === "cap") after = fixed(Math.max(text(draft.lower).trim() ? parseNumber(draft.lower) : -Infinity, Math.min(text(draft.upper).trim() ? parseNumber(draft.upper) : Infinity, parseNumber(before))), Number(decimals));
+        if (draft.operation === "cap") after = fixed(Math.max(text(draft.lower).trim() ? parseNumber(draft.lower) : -Infinity, Math.min(text(draft.upper).trim() ? parseNumber(draft.upper) : Infinity, parseNumber(before, policy))), Number(decimals));
         if (draft.operation === "recalculate") {
           const rule = draft.rule;
           if (!rule || !headers.includes(rule.left) || !headers.includes(rule.right) || !["sum", "difference", "product", "ratio"].includes(rule.operation)) throw new Error("Invalid metric definition.");
-          const a = parseNumber(row[rule.left]), b = parseNumber(row[rule.right]);
+          if ([rule.left, rule.right].some(field => observationState(row, field, options.policies?.find(entry => entry.column === field) || defaultPolicy(field), classified) !== "present")) throw new Error("Missing or not-applicable metric input.");
+          const a = parseNumber(row[rule.left], options.policies?.find(policy => policy.column === rule.left) || defaultPolicy(rule.left)), b = parseNumber(row[rule.right], options.policies?.find(policy => policy.column === rule.right) || defaultPolicy(rule.right));
           if (rule.operation === "ratio" && b === 0) throw new Error("Zero denominator.");
           after = fixed(({ sum: a + b, difference: a - b, product: a * b, ratio: a / b })[rule.operation] * rule.factor, rule.decimals);
         }
@@ -237,6 +253,6 @@ var CleaningEngine = (() => {
     }
     return { selectedIds: selected.map(row => row._row), patches, blocked, removedRows, referenceStats };
   }
-  return { operations, parseNumber, parseDate, stats, profile, defaultPolicy, normalizePolicies, missing, scopeRows, treatment, isIdentifier };
+  return { operations, parseNumber, parseDate, stats, profile, defaultPolicy, normalizePolicies, missing, observationState, scopeRows, treatment, isIdentifier };
 })();
 if (typeof module !== "undefined") module.exports = CleaningEngine;

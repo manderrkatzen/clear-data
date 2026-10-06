@@ -29,7 +29,7 @@ const baseUrl = process.env.BASE_URL || "http://localhost:4174";
     const layout = async label => {
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${label}: no page overflow`);
       const overlaps = await page.evaluate(() => {
-        const inputs = [...document.querySelectorAll(".guided-stage .review-fields input,.guided-stage .review-fields select")].filter(input => input.getClientRects().length);
+        const inputs = [...document.querySelectorAll(".guided-stage .review-fields input,.guided-stage .review-fields select")].filter(input => input.getClientRects().length && !input.closest("details:not([open])"));
         const errors = [];
         for (let i = 0; i < inputs.length; i++) for (let j = i + 1; j < inputs.length; j++) {
           const a = inputs[i].getBoundingClientRect(), b = inputs[j].getBoundingClientRect();

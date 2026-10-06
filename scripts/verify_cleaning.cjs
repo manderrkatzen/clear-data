@@ -14,7 +14,7 @@ function workspace(csv) {
     return nodes.get(selector);
   };
   const context = vm.createContext({ document: { querySelector: node, querySelectorAll: () => [] }, fetch: async () => ({ ok: true, json: async () => ({ available: false }) }), console, setTimeout() {}, URL, Blob });
-  for (const file of ["cleaning-engine.js", "analysis-engine.js", "spreadsheet.js", "workspace.js", "review.js", "review-ui.js", "value-review.js", "app.js"]) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
+  for (const file of ["cleaning-engine.js", "analysis-engine.js", "capabilities-engine.js", "spreadsheet.js", "workspace.js", "review.js", "review-ui.js", "value-review.js", "capabilities.js", "app.js"]) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
   const run = code => vm.runInContext(code, context);
   run("render = () => {}; globalThis.approve = item => { state.reviewStep = 5; const draft = reviewDraft(item); draft.previewFingerprint = guidedFingerprint(item, draft); approveGuidedDecision(item); };");
   context.csv = csv; run('loadData(csv, "exceptions.csv")');
@@ -60,7 +60,7 @@ test("date interpretation is explicit and invalid dates / Excel's fictitious lea
 });
 test("grouped fills use scoped reference populations and expose groups without observations", () => {
   const rows = [{ _row: 1, region: "A", x: "10" }, { _row: 2, region: "A", x: "20" }, { _row: 3, region: "B", x: "" }, { _row: 4, region: "A", x: "NULL" }, { _row: 5, region: "", x: "" }];
-  const preview = engine.treatment(["region", "x"], rows, [3, 4, 5], "x", { operation: "groupMedian", groupColumn: "region", decimals: 0 });
+  const preview = engine.treatment(["region", "x"], rows, [3, 4, 5], "x", { operation: "groupMedian", groupColumn: "region", decimals: 0 }, engine.defaultPolicy("x"), [{ rowId: 4, column: "x", value: "NULL", meaning: "missing" }]);
   assert.deepEqual(preview.patches, [{ rowId: 4, column: "x", before: "NULL", after: "15" }]);
   assert.deepEqual(preview.blocked.map(entry => entry.rowId), [3, 5]);
   assert.equal(rows[3].x, "NULL");

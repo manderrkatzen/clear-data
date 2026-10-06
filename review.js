@@ -27,11 +27,16 @@ function cellInterpretation(row, column) {
   const entry = classificationCache.index.get(`${row._row}:${column}`);
   return entry?.value === row[column] ? entry.meaning : null;
 }
+function observationState(row, column) {
+  effectiveClassifications();
+  return CleaningEngine.observationState(row, column, columnPolicy(column), classificationCache.index);
+}
 function interpretedNumericValues(rows, column, classification = null, original = false) {
+  const baseline = original ? new Map() : (effectiveClassifications(), classificationCache.index);
   return rows.flatMap(row => {
-    const meaning = classification?.rowIds.includes(row._row) ? classification.meaning : cellInterpretation(row, column);
-    if (!original && (["missing", "not_applicable"].includes(meaning) || meaning !== "legitimate" && CleaningEngine.missing(row[column], columnPolicy(column)))) return [];
-    try { return [CleaningEngine.parseNumber(row[column])]; } catch { return []; }
+    const entries = classification?.rowIds.includes(row._row) ? [{ rowId: row._row, column, value: row[column], meaning: classification.meaning }] : baseline;
+    if (CleaningEngine.observationState(row, column, columnPolicy(column), entries) !== "present") return [];
+    try { return [CleaningEngine.parseNumber(row[column], columnPolicy(column))]; } catch { return []; }
   });
 }
 function resetGuidedReview() {
@@ -89,15 +94,15 @@ function normalizeRelationRules(rules, headers) {
   });
 }
 function relationProblem(row, rule) {
-  if (rule.kind === "requiredIf") return row[rule.left] === rule.value && CleaningEngine.missing(row[rule.column], columnPolicy(rule.column)) ? `${rule.column} is required when ${rule.left} = ${rule.value}` : "";
+  if (rule.kind === "requiredIf") return row[rule.left] === rule.value && ["missing", "blank_unreviewed"].includes(observationState(row, rule.column)) ? `${rule.column} is required when ${rule.left} = ${rule.value}` : "";
   try {
-    if ([rule.left, rule.right].some(column => CleaningEngine.missing(row[column], columnPolicy(column)))) return "Cannot compare missing values; review the missing inputs.";
-    const convert = value => rule.comparisonType === "number" ? CleaningEngine.parseNumber(value) : rule.comparisonType === "date" ? CleaningEngine.parseDate(value) : value;
-    const a = convert(row[rule.left]), b = convert(row[rule.right]);
+    if ([rule.left, rule.right].some(column => observationState(row, column) !== "present")) return "Cannot compare unavailable observations; review the input meanings.";
+    const convert = (value, column) => rule.comparisonType === "number" ? CleaningEngine.parseNumber(value, columnPolicy(column)) : rule.comparisonType === "date" ? CleaningEngine.parseDate(value) : value;
+    const a = convert(row[rule.left], rule.left), b = convert(row[rule.right], rule.right);
     return ({ "=": a === b, "!=": a !== b, ">": a > b, ">=": a >= b, "<": a < b, "<=": a <= b })[rule.operator] ? "" : `${rule.left} (${row[rule.left]}) must be ${rule.operator} ${rule.right} (${row[rule.right]})`;
   } catch (error) { return error.message; }
 }
-function reviewRows(item) { return item.recommendation === "outlier" ? activeRows(item) : item.rows.filter(row => state.rows.some(current => current._row === row._row)); }
+function reviewRows(item) { if (item.recommendation === "outlier") return activeRows(item); const current = new Set(state.rows.map(row => row._row)); return item.rows.filter(row => current.has(row._row)); }
 function reviewDraft(item) {
   state.reviewDrafts ||= {};
   return state.reviewDrafts[item.id] ||= { operation: "retain", interpretation: "unresolved", value: "", factor: item.recommendation === "convert" ? "0.01" : "1", decimals: item.recommendation === "convert" ? 4 : columnPolicy(item.column).decimals, scope: { mode: "all", rowIds: [], column: state.headers[0], operator: "=", value: "" }, mapping: {}, groupColumn: state.headers.find(column => column !== item.column) || item.column, numberFormat: columnPolicy(item.column).numberFormat, dateFormat: columnPolicy(item.column).dateFormat, currency: columnPolicy(item.column).currency, percentage: columnPolicy(item.column).percentage, lower: "", upper: "", survivor: "first", survivorIds: [], acknowledgeConflicts: false, note: "", acknowledgeConstraints: false, skipBlocked: false };
@@ -117,7 +122,7 @@ function guidedPreview(item, draft = reviewDraft(item)) {
     treatment.keys = definition.columns; treatment.keyMode = definition.mode === "key";
   }
   if (draft.operation === "recalculate") treatment.rule = item.rule;
-  const options = typeof analyticalTreatmentOptions === "function" ? analyticalTreatmentOptions(item, draft) : {};
+  const options = { policies: state.ruleConfig.columns || [], ...(typeof analyticalTreatmentOptions === "function" ? analyticalTreatmentOptions(item, draft) : {}) };
   const preview = CleaningEngine.treatment(state.headers, state.rows, reviewRows(item).map(row => row._row), item.column, treatment, policy, effectiveClassifications(), options);
   if (preview.fillMetadata) treatment.fillMetadata = preview.fillMetadata;
   const proposed = state.rows.map(row => ({ ...row })), byId = new Map(proposed.map(row => [row._row, row]));
@@ -138,8 +143,10 @@ function guidedPreview(item, draft = reviewDraft(item)) {
       if (problem && problem !== relationProblem(original, rule)) constraints.push({ rowId: row._row, column: rule.column, reason: problem });
     }
   }
-  const classification = { rowIds: preview.selectedIds.filter(id => !preview.blocked.some(entry => entry.rowId === id)), meaning: ["retain", "classify", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" };
-  return { ...preview, after, constraints, classification, beforeStats: CleaningEngine.stats(interpretedNumericValues(state.rows, item.column)), afterStats: CleaningEngine.stats(interpretedNumericValues(after, item.column, classification)), fingerprint: guidedFingerprint(item, draft), treatment };
+  const classification = { rowIds: preview.selectedIds.filter(id => !preview.blocked.some(entry => entry.rowId === id)), meaning: ["retain", "leaveMissing", "classify", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" };
+  const result = { ...preview, after, constraints, classification, beforeStats: CleaningEngine.stats(interpretedNumericValues(state.rows, item.column)), afterStats: CleaningEngine.stats(interpretedNumericValues(after, item.column, classification)), fingerprint: guidedFingerprint(item, draft), treatment };
+  if (typeof enrichCapabilityPreview === "function") enrichCapabilityPreview(item, draft, result);
+  return result;
 }
 function approveGuidedDecision(item) {
   try {
@@ -161,12 +168,14 @@ function approveGuidedDecision(item) {
     preview.patches.forEach(patch => { rowById.get(patch.rowId)[patch.column] = patch.after; });
     const removedIds = new Set(preview.removedRows.map(row => row._row));
     state.rows = state.rows.filter(row => !removedIds.has(row._row));
-    const interpretationValues = reviewedRows.map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: ["retain", "classify", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" }));
+    const interpretationValues = reviewedRows.map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: ["retain", "leaveMissing", "classify", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" }));
     const sample = (patches, key) => patches.slice(0, 3).map(patch => String(patch[key]).trim() ? patch[key] : "Blank").join(", ");
     const change = { id: newReviewId(), createdAt: new Date().toISOString(), issue: item, title: treatmentLabel(draft.operation), disposition: draft.operation === "retain" ? "valid" : "finalized", rows: reviewedRows, before: preview.patches.length ? sample(preview.patches, "before") : "Values retained", after: preview.patches.length ? sample(preview.patches, "after") : removedIds.size ? `${removedIds.size} records removed` : "Values retained", reason: item.summary, note: draft.note || "", interpretation: draft.interpretation, interpretationValues, treatment: { ...preview.treatment, previewFingerprint: undefined }, originals: [], patches: preview.patches, removedRows: preview.removedRows, reviewedFingerprints: fingerprints, fingerprint: reviewFingerprint(item, reviewedRows) };
     state.changes.unshift(change);
+    if (draft.operation === "leaveMissing") change.disposition = "valid";
     recordDecisionEvent(change);
     refreshIssues();
+    state.dependencyFollowUps = state.issues.filter(finding => finding.status === "open" && ["metric", "metricBlocked"].includes(finding.recommendation) && preview.dependencyImpact?.some(dependency => dependency.ruleId === finding.ruleId)).map(finding => finding.id);
     state.lastReviewedColumn = item.column;
     state.selectedIssue = null;
     state.reviewResult = `${preview.patches.length} cells changed · ${removedIds.size} records removed · ${reviewedRows.length} records reviewed. ${preview.blocked.length} blocked records remain unresolved. Working profiles and charts updated.`;
@@ -174,6 +183,9 @@ function approveGuidedDecision(item) {
   } catch (error) { notify(error.message); }
 }
 function treatmentLabel(operation) {
+  if (operation === "groupMedian") return "Fill with group median (strict single-group)";
+  if (operation === "current") return "Use current draft / AI proposal";
+  if (operation === "leaveMissing") return "Leave missing observations unchanged";
   if (operation === "classify") return "Record reviewed value meaning";
   if (operation === "groupwise") return "Fill from similar groups";
   if (operation === "knn") return "Fill from nearest neighbours";
@@ -182,7 +194,12 @@ function treatmentLabel(operation) {
 }
 function reviewOperations(item) {
   const base = ["retain", "constant", "missing", "remove"];
-  if (item.recommendation === "manual") return ["retain", "constant", "missing", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "median", "mean", "groupMedian", "cap", "remove"];
+  if (["impute", "keep"].includes(item.recommendation)) base.push("leaveMissing");
+  if (item.recommendation === "manual") {
+    const methods = ["retain", "constant", "missing", "trim", "lowercase", "uppercase", "map", "parseNumber", "parseDate", "scale", "median", "mean", "groupMedian", "cap", "remove"];
+    if (["number", "integer"].includes(cleaningProfile().columns.find(profile => profile.column === item.column)?.role) && reviewRows(item).some(row => ["missing", "blank_unreviewed"].includes(observationState(row, item.column)))) methods.push("groupwise", "knn");
+    return methods;
+  }
   const numerical = ["number", "integer"].includes(cleaningProfile().columns.find(profile => profile.column === item.column)?.role);
   if (numerical && (["impute", "keep"].includes(item.recommendation) || ["missing_token", "sentinel"].includes(item.candidate?.kind))) base.splice(2, 0, "median", "mean", "groupMedian", "groupwise", "knn");
   if (numerical || item.recommendation === "convert") base.splice(2, 0, "scale");

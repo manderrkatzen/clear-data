@@ -117,6 +117,8 @@ Run the data-treatment and API regression checks with:
 node --test scripts/verify_quality.cjs scripts/verify_cleaning.cjs
 node --test scripts/verify_pattern.cjs
 node --test scripts/verify_analysis.cjs
+node --test scripts/verify_next_capabilities.cjs
+node scripts/verify_next_performance.cjs
 ```
 
 CSV import supports quoted multiline fields and rejects invalid headers or malformed quoting without replacing the current workspace. Numerical previews use the same rounded values as approval. Report counts distinguish approved decisions from actual modified rows and cells. Rollback preserves later approved values and refreshes findings.
@@ -137,6 +139,7 @@ npm install --prefix /tmp/cleardata-tools playwright
 PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_ui.cjs
 PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_analytics_ui.cjs
 PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_value_review_ui.cjs
+PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_next_capabilities_ui.cjs
 ```
 
 `BASE_URL` selects another server. `ARTIFACT_DIR` selects an existing screenshot
@@ -204,12 +207,17 @@ columns, operations, and parameters, and requires qualified language for partial
 or insufficient verdicts. **Review proposed treatment** configures a draft;
 the normal scoped preview and explicit approval are still required.
 
+See `NEXT_CAPABILITIES_CHANGE_SUMMARY.md` for robust Cliff’s delta/permutation
+evidence, observation-state consistency, affected/present and band lenses,
+transient treatment comparisons, saved KPIs, export flags, opt-in suggested rules,
+dependency follow-ups, expanded manual methods, and quality scorecards.
+
 Fixture note: the current sales sample confirms delivery-days/channel rates,
 quantity medians 9 vs 2 (12 vs 12 within Distributor), and channel-based fills
-4.3/4.5. The tenure example in `new_capabilities.md` does not match this CSV:
-unit-price SMD ≈ .256 and quantity SMD ≈ .234 are moderate under the specified .2
-threshold. Tests preserve those measured results rather than force no-pattern;
-a balanced deterministic fixture separately checks the no-pattern rule.
+4.3/4.5. `customer_tenure_months` now demonstrates no-pattern with independent
+latent tenure and gaps below eight months (seed 44, 121 gaps). Run
+`node scripts/generate_no_pattern_demo.cjs --write` to reproduce it while retaining
+the other sales fields. Robust effect thresholds were not weakened.
 
 Impeccable is installed in `.opencode/skills/impeccable`. Restart OpenCode to discover
 `/impeccable`. [PRODUCT.md](PRODUCT.md) records product truth and [DESIGN.md](DESIGN.md)

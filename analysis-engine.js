@@ -24,71 +24,98 @@ var AnalysisEngine = (() => {
       const parsing = policy(column, options);
       const signature = JSON.stringify([parsing, rows.map(row => [row[column], classified.get(`${row._row}:${column}`)?.meaning])]);
       if (saved.get(column)?.signature === signature) { columns.set(column, saved.get(column)); continue; }
-      const blanks = rows.map(row => {
-        const decision = classified.get(`${row._row}:${column}`);
-        if (decision?.value === row[column] && decision.meaning === "legitimate") return false;
-        return engine.missing(row[column], parsing) || (decision?.value === row[column] && ["missing", "not_applicable"].includes(decision.meaning));
-      });
+      const states = rows.map(row => engine.observationState(row, column, parsing, classified));
+      const blanks = states.map(status => ["missing", "blank_unreviewed"].includes(status));
       const numbers = rows.map((row, index) => {
-        if (blanks[index]) return null;
-        if (parsing.numberFormat === "plain" && !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text(row[column]))) return null;
+        if (states[index] !== "present") return null;
+        if (parsing.numberFormat === "plain") {
+          const raw = text(row[column]);
+          if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw)) return null;
+          const value = Number(raw); return Number.isFinite(value) ? value : null;
+        }
         try { return engine.parseNumber(row[column], parsing); } catch { return null; }
       });
       const dates = rows.map((row, index) => {
-        if (blanks[index]) return null;
+        if (states[index] !== "present") return null;
         if (parsing.dateFormat === "iso" && !/^\d{4}-\d{2}-\d{2}$/.test(text(row[column]))) return null;
         if (["mdy", "dmy"].includes(parsing.dateFormat) && !/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(text(row[column]))) return null;
         try { return engine.parseDate(row[column], parsing.dateFormat).slice(0, 7); } catch { return null; }
       });
-      const observed = blanks.filter(blank => !blank).length;
-      const distinct = new Set(rows.filter((_, index) => !blanks[index]).map(row => text(row[column]))).size;
+      const observed = states.filter(status => status === "present").length;
+      const distinct = new Set(rows.filter((_, index) => states[index] === "present").map(row => text(row[column]))).size;
       const dateRole = parsing.role === "date" || (dates.filter(Boolean).length >= Math.max(1, observed * .9));
       const numericRole = ["number", "integer"].includes(parsing.role) || (parsing.role === "auto" && numbers.filter(Number.isFinite).length >= Math.max(1, observed * .9));
       const type = dateRole ? "date" : numericRole ? "numeric" : "categorical";
       const sorted = numbers.filter(Number.isFinite).sort((a, b) => a - b);
-      const entry = { signature, blanks, numbers, dates, observed, distinct, type, sorted, policy: parsing, idLike: parsing.role === "identifier" || (engine.isIdentifier(column) && distinct / Math.max(1, observed) >= .95) };
+      const entry = { signature, states, blanks, numbers, dates, observed, distinct, type, sorted, policy: parsing, idLike: parsing.role === "identifier" || (engine.isIdentifier(column) && distinct / Math.max(1, observed) >= .95) };
       saved.set(column, entry); columns.set(column, entry);
     }
     const context = { headers, rows, columns, options };
     if (contextKey) contexts.set(rows, { key: contextKey, context });
     return context;
   }
-  function statistics(values) {
-    const result = engine.stats(values);
+  function statistics(values, alreadySorted = false) {
+    const result = engine.stats(values, alreadySorted);
     result.iqr = result.count ? result.q3 - result.q1 : null;
     result.sd = result.count > 1 ? Math.sqrt(values.reduce((sum, value) => sum + (value - result.mean) ** 2, 0) / (result.count - 1)) : 0;
     return result;
   }
-  function histogram(groups, bins = 16) {
-    const sorted = groups.flat().sort((a, b) => a - b);
-    const min = quantile(sorted, .01), max = quantile(sorted, .99);
+  function cliffsDelta(missingValues, presentValues, alreadySorted = false) {
+    if (!missingValues.length || !presentValues.length) return 0;
+    const a = alreadySorted ? missingValues : [...missingValues].sort((x, y) => x - y), b = alreadySorted ? presentValues : [...presentValues].sort((x, y) => x - y);
+    let lower = 0, upper = 0, difference = 0;
+    for (const value of a) {
+      while (lower < b.length && b[lower] < value) lower++;
+      if (upper < lower) upper = lower;
+      while (upper < b.length && b[upper] <= value) upper++;
+      difference += lower - (b.length - upper);
+    }
+    return difference / (a.length * b.length);
+  }
+  function winsorizedSmd(a, b, combinedSorted = null) {
+    if (!a.length || !b.length) return 0;
+    const sorted = combinedSorted || [...a, ...b].sort((x, y) => x - y), low = quantile(sorted, .01), high = quantile(sorted, .99);
+    const moments = values => {
+      let mean = 0, m2 = 0, count = 0;
+      for (const raw of values) { const value = Math.max(low, Math.min(high, raw)); count++; const delta = value - mean; mean += delta / count; m2 += delta * (value - mean); }
+      return { count, mean, sd: Math.sqrt(m2 / Math.max(1, count - 1)) };
+    };
+    const x = moments(a), y = moments(b);
+    const pooled = Math.sqrt(((x.count - 1) * x.sd ** 2 + (y.count - 1) * y.sd ** 2) / Math.max(1, x.count + y.count - 2));
+    return pooled ? (x.mean - y.mean) / pooled : x.mean === y.mean ? 0 : Math.sign(x.mean - y.mean) * 1e6;
+  }
+  function histogram(groups, bins = 16, range = null, combinedSorted = null) {
+    const sorted = combinedSorted || groups.flat().sort((a, b) => a - b);
+    const min = range ? range.min : quantile(sorted, .01), max = range ? range.max : quantile(sorted, .99);
     const sets = groups.map(values => {
       const counts = Array(bins).fill(0);
       let below = 0, above = 0;
       for (const value of values) {
-        if (value < min) below++;
-        if (value > max) above++;
+        if (value < min) { below++; continue; }
+        if (value > max) { above++; continue; }
         counts[Math.max(0, Math.min(bins - 1, Math.floor((value - min) / (max - min || 1) * bins)))]++;
       }
       return { counts, below, above };
     });
-    return { min, max, bins, sets };
+    return { min, max, trueMin: sorted[0] ?? null, trueMax: sorted.at(-1) ?? null, bins, sets };
   }
   function compareColumn(context, targetColumn, column, indices) {
     const { rows, columns } = context, target = columns.get(targetColumn), comparison = columns.get(column);
-    const selected = indices || rows.map((_, index) => index);
+    const selected = (indices || rows.map((_, index) => index)).filter(index => target.states[index] !== "not_applicable");
     const overallMissing = selected.filter(index => target.blanks[index]).length / Math.max(1, selected.length);
-    const usable = selected.filter(index => !comparison.blanks[index]);
-    const excludedBlankRows = selected.length - usable.length;
+    const usable = selected.filter(index => comparison.states[index] === "present");
+    const excludedBlankRows = selected.filter(index => comparison.blanks[index]).length;
+    const excludedNotApplicableRows = selected.filter(index => comparison.states[index] === "not_applicable").length;
     if (comparison.type === "numeric") {
       const missingValues = [], presentValues = [];
       for (const index of usable) if (Number.isFinite(comparison.numbers[index])) (target.blanks[index] ? missingValues : presentValues).push(comparison.numbers[index]);
       if (new Set([...missingValues, ...presentValues]).size < 2) return null;
-      const missingStats = statistics(missingValues), presentStats = statistics(presentValues);
-      const pooled = Math.sqrt(((missingStats.count - 1) * missingStats.sd ** 2 + (presentStats.count - 1) * presentStats.sd ** 2) / Math.max(1, missingStats.count + presentStats.count - 2));
-      const direction = Math.sign((missingStats.mean ?? 0) - (presentStats.mean ?? 0));
-      const effectSize = !missingStats.count || !presentStats.count ? 0 : pooled ? Math.abs(missingStats.mean - presentStats.mean) / pooled : direction ? 1e6 : 0;
-      return { column, type: "numeric", effectSize, direction, strength: effectSize >= .5 ? "strong" : effectSize >= .2 ? "moderate" : effectSize > 0 ? "weak" : "none", missingStats, presentStats, histogram: histogram([missingValues, presentValues]), excludedBlankRows, excludedInvalidRows: usable.length - missingValues.length - presentValues.length, summary: `${column}: missing-group median ${missingStats.median ?? "unavailable"}; present-group median ${presentStats.median ?? "unavailable"}.` };
+      missingValues.sort((a, b) => a - b); presentValues.sort((a, b) => a - b);
+      const combinedSorted = [...missingValues, ...presentValues].sort((a, b) => a - b);
+      const missingStats = statistics(missingValues, true), presentStats = statistics(presentValues, true);
+      const delta = cliffsDelta(missingValues, presentValues, true), direction = Math.sign(delta), effectSize = Math.abs(delta);
+      const directionText = direction > 0 ? "higher in missing group" : direction < 0 ? "lower in missing group" : "no directional difference";
+      return { column, type: "numeric", effectSize, effectMeasure: "cliffs_delta", cliffsDelta: delta, winsorizedSmd: winsorizedSmd(missingValues, presentValues, combinedSorted), direction, directionText, strength: effectSize >= .33 ? "strong" : effectSize >= .147 ? "moderate" : effectSize > 0 ? "weak" : "none", missingStats, presentStats, histogram: histogram([missingValues, presentValues], 16, null, combinedSorted), excludedBlankRows, excludedNotApplicableRows, excludedInvalidRows: usable.length - missingValues.length - presentValues.length, summary: `${column}: ${directionText}; missing-group median ${missingStats.median ?? "unavailable"}; present-group median ${presentStats.median ?? "unavailable"}.` };
     }
     const counts = new Map();
     let invalid = 0;
@@ -109,21 +136,21 @@ var AnalysisEngine = (() => {
   function compare(headers, rows, targetColumn, options = {}) {
     if (!headers.includes(targetColumn)) throw new Error("Choose an existing target column.");
     const context = prepare(headers, rows, options), target = context.columns.get(targetColumn);
-    const nMissing = target.blanks.filter(Boolean).length, nPresent = rows.length - nMissing;
-    if (nMissing < 5 || nPresent < 5) return { targetColumn, total: rows.length, nMissing, nPresent, insufficientData: true, results: [], pattern: "insufficient", note: "At least five missing and five present records are needed." };
+    const nMissing = target.blanks.filter(Boolean).length, excludedNotApplicable = target.states.filter(status => status === "not_applicable").length, nPresent = rows.length - nMissing - excludedNotApplicable;
+    if (nMissing < 5 || nPresent < 5) return { targetColumn, total: rows.length, nMissing, nPresent, excludedNotApplicable, insufficientData: true, results: [], pattern: "insufficient", note: "At least five missing and five present records are needed." };
     const candidates = options.columns || headers.filter(column => column !== targetColumn && !context.columns.get(column).idLike);
     if (!Array.isArray(candidates) || candidates.some(column => !headers.includes(column) || column === targetColumn)) throw new Error("Comparison columns must exist and differ from the target.");
     const results = candidates.map(column => compareColumn(context, targetColumn, column)).filter(Boolean).sort((a, b) => b.effectSize - a.effectSize || headers.indexOf(a.column) - headers.indexOf(b.column));
     const none = results.length >= 3 && results.every(result => ["weak", "none"].includes(result.strength));
-    return { targetColumn, total: rows.length, nMissing, nPresent, insufficientData: false, results, pattern: none ? "none_detected" : "detected", note: none ? "Missing rows look like present rows in every other column. The gaps may depend on the missing value itself, so filling with an average could bias results." : "" };
+    return { targetColumn, total: rows.length, nMissing, nPresent, excludedNotApplicable, insufficientData: false, results, pattern: none ? "none_detected" : "detected", note: none ? "Missing rows look like present rows in every other column. The gaps may depend on the missing value itself, so filling with an average could bias results." : "" };
   }
   function bandsFor(context, column, banding = {}) {
     const entry = context.columns.get(column);
     if (!entry) throw new Error("Choose an existing hold column.");
     if (entry.type !== "numeric") {
       const counts = new Map();
-      context.rows.forEach((row, index) => { if (!entry.blanks[index]) { const key = text(row[column]); counts.set(key, (counts.get(key) || 0) + 1); } });
-      return { labels: context.rows.map((row, index) => entry.blanks[index] ? "Unknown" : counts.get(text(row[column])) < 10 ? "Other" : text(row[column])), numeric: false };
+      context.rows.forEach((row, index) => { if (entry.states[index] === "present") { const key = text(row[column]); counts.set(key, (counts.get(key) || 0) + 1); } });
+      return { labels: context.rows.map((row, index) => entry.states[index] !== "present" ? "Unknown" : counts.get(text(row[column])) < 10 ? "Other" : text(row[column])), numeric: false };
     }
     const mode = banding.mode || "quantiles";
     let edges;
@@ -152,7 +179,7 @@ var AnalysisEngine = (() => {
     if (!target) throw new Error("Choose an existing target column.");
     const unbanded = compareColumn(context, targetColumn, comparisonColumn);
     const definition = bandsFor(context, holdColumn, banding), groups = new Map();
-    definition.labels.forEach((label, index) => { if (!groups.has(label)) groups.set(label, []); groups.get(label).push(index); });
+    definition.labels.forEach((label, index) => { if (target.states[index] === "not_applicable") return; if (!groups.has(label)) groups.set(label, []); groups.get(label).push(index); });
     const bands = [...groups].map(([label, indices]) => {
       const nMissing = indices.filter(index => target.blanks[index]).length, nPresent = indices.length - nMissing;
       const result = compareColumn(context, targetColumn, comparisonColumn, indices);
@@ -177,21 +204,22 @@ var AnalysisEngine = (() => {
     const selected = params.rowIds ? new Set(params.rowIds) : null;
     const rowIds = new Set(rows.map(row => row._row));
     if (selected && [...selected].some(id => !rowIds.has(id))) throw new Error("Fill scope contains unknown source rows.");
-    const donors = rows.map((row, index) => ({ row, index, value: target.numbers[index] })).filter(entry => !target.blanks[entry.index] && Number.isFinite(entry.value) && !selected?.has(entry.row._row));
+    const donors = rows.map((row, index) => ({ row, index, value: target.numbers[index] })).filter(entry => target.states[entry.index] === "present" && Number.isFinite(entry.value) && !selected?.has(entry.row._row));
     const missing = rows.map((row, index) => ({ row, index })).filter(entry => target.blanks[entry.index] && (!selected || selected.has(entry.row._row)));
     const global = statistics(donors.map(entry => entry.value)).median;
-    const definitions = columns.map(column => bandsFor(context, column, params.banding?.[column] || {}));
+    const definitions = columns.map(column => params.strict ? { labels: rows.map(row => String(row[column] ?? "")), numeric: false } : bandsFor(context, column, params.banding?.[column] || {}));
     const key = index => JSON.stringify(definitions.map(definition => definition.labels[index]));
     const groups = new Map();
     for (const donor of donors) { const label = key(donor.index); if (!groups.has(label)) groups.set(label, []); groups.get(label).push(donor); }
     const ranges = columns.map(column => { const entry = context.columns.get(column); return (entry.sorted.at(-1) ?? 0) - (entry.sorted[0] ?? 0); });
     const features = columns.map((column, index) => {
       const comparison = context.columns.get(column), min = comparison.sorted[0] ?? 0;
-      return { numeric: comparison.type === "numeric", values: rows.map((row, rowIndex) => comparison.blanks[rowIndex] ? null : comparison.type === "numeric" ? comparison.numbers[rowIndex] === null ? null : (comparison.numbers[rowIndex] - min) / (ranges[index] || 1) : text(row[column])) };
+      return { numeric: comparison.type === "numeric", values: rows.map((row, rowIndex) => comparison.states[rowIndex] !== "present" ? null : comparison.type === "numeric" ? comparison.numbers[rowIndex] === null ? null : (comparison.numbers[rowIndex] - min) / (ranges[index] || 1) : text(row[column])) };
     });
     const estimates = new Map();
     const fills = [], blocked = [];
     for (const entry of missing) {
+      if (params.strict && columns.some(column => context.columns.get(column).states[entry.index] !== "present")) { blocked.push({ rowId: entry.row._row, reason: "Strict group fill requires observed group keys." }); continue; }
       const estimateKey = method === "groupwise" ? key(entry.index) : JSON.stringify(features.map(feature => feature.values[entry.index]));
       if (estimates.has(estimateKey)) { fills.push({ row: entry.row._row, ...estimates.get(estimateKey) }); continue; }
       let references = [], source = "global", bandLabel;
@@ -200,6 +228,7 @@ var AnalysisEngine = (() => {
         references = groups.get(key(entry.index)) || [];
         if (references.length >= minObserved) source = "band";
         else {
+          if (params.strict) { blocked.push({ rowId: entry.row._row, reason: "Strict group has no observed reference values; no fallback was applied." }); continue; }
           // Expand numeric bands in distance order; sparse categories share the Other pool.
           const distance = donor => definitions.reduce((sum, definition, index) => {
             if (definition.numeric) {
@@ -248,6 +277,49 @@ var AnalysisEngine = (() => {
     const distributions = histogram([before, after]);
     return { method, params: { ...params, method, columns, minObserved, k, statistic }, fills, blocked, fallbackCount: fills.filter(fill => ["widened", "global"].includes(fill.source)).length, beforeStats: statistics(before), afterStats: statistics(after), histogramBefore: { ...distributions, sets: [distributions.sets[0]] }, histogramAfter: { ...distributions, sets: [distributions.sets[1]] } };
   }
-  return { compare, holdSimilar, fillSimilar, prepare, bandsFor, statistics, histogram, policy };
+  function significance(headers, rows, targetColumn, result, options = {}) {
+    const context = prepare(headers, rows, options), target = context.columns.get(targetColumn), iterations = 500;
+    const results = result.results.map(entry => ({ ...entry }));
+    if (result.nMissing > 20000 || result.nPresent > 20000) {
+      results.slice(0, 5).forEach(entry => { entry.pValue = null; entry.significance = "skipped"; entry.significanceNote = "A target group exceeds 20,000 rows."; });
+      return { ...result, results };
+    }
+    const applicable = rows.map((_, index) => index).filter(index => target.states[index] !== "not_applicable");
+    const positions = new Map(applicable.map((index, position) => [index, position]));
+    for (const entry of results.slice(0, 5)) {
+      const comparison = context.columns.get(entry.column);
+      const usable = applicable.filter(index => comparison.states[index] === "present" && (comparison.type !== "numeric" || Number.isFinite(comparison.numbers[index])) && (comparison.type !== "date" || comparison.dates[index] !== null));
+      let seed = Number(options.permutationSeed ?? 1) >>> 0;
+      for (const char of `${targetColumn}:${entry.column}`) seed = Math.imul(seed ^ char.charCodeAt(0), 16777619) >>> 0;
+      const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+      const labels = applicable.map(index => target.blanks[index] ? 1 : 0);
+      let evaluate;
+      if (comparison.type === "numeric") {
+        const ordered = usable.map(index => ({ position: positions.get(index), value: comparison.numbers[index] })).sort((a, b) => a.value - b.value);
+        const ranks = [];
+        for (let offset = 0; offset < ordered.length;) {
+          let end = offset + 1; while (end < ordered.length && ordered[end].value === ordered[offset].value) end++;
+          const rank = (offset + 1 + end) / 2;
+          for (let index = offset; index < end; index++) ranks.push({ position: ordered[index].position, rank });
+          offset = end;
+        }
+        evaluate = () => { let n = 0, rankSum = 0; for (const entry of ranks) if (labels[entry.position]) { n++; rankSum += entry.rank; } const other = ranks.length - n; return n && other ? Math.abs((2 * rankSum - n * (n + 1) - n * other) / (n * other)) : 0; };
+      } else {
+        const counts = new Map(), members = [];
+        for (const index of usable) { const label = comparison.type === "date" ? comparison.dates[index] : text(rows[index][entry.column]); if (!counts.has(label)) counts.set(label, { total: 0, missing: 0 }); counts.get(label).total++; members.push({ position: positions.get(index), group: counts.get(label) }); }
+        const overall = result.nMissing / applicable.length;
+        evaluate = () => { for (const group of counts.values()) group.missing = 0; for (const member of members) if (labels[member.position]) member.group.missing++; let effect = 0; for (const group of counts.values()) if (group.total >= 10) effect = Math.max(effect, Math.abs(group.missing / group.total - overall)); return effect; };
+      }
+      let extreme = 0;
+      for (let iteration = 0; iteration < iterations; iteration++) {
+        for (let index = labels.length - 1; index > 0; index--) { const other = Math.floor(random() * (index + 1)); [labels[index], labels[other]] = [labels[other], labels[index]]; }
+        if (evaluate() >= entry.effectSize - 1e-12) extreme++;
+      }
+      entry.pValue = extreme / iterations; entry.permutations = iterations;
+      entry.significance = entry.pValue < .01 ? "robust" : entry.pValue < .05 ? "likely" : "could be chance";
+    }
+    return { ...result, results };
+  }
+  return { compare, holdSimilar, fillSimilar, prepare, bandsFor, statistics, histogram, policy, cliffsDelta, winsorizedSmd, significance };
 })();
 if (typeof module !== "undefined") module.exports = AnalysisEngine;

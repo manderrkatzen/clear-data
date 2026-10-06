@@ -45,7 +45,7 @@ function parseCsv(text) {
   return { headers, rows };
 }
 function csvText(headers = state.headers, rows = state.rows) {
-  const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const quote = value => `"${(typeof CapabilitiesEngine !== "undefined" ? CapabilitiesEngine.safeCsvValue(value) : String(value ?? "")).replaceAll('"', '""')}"`;
   return [headers.map(quote).join(","), ...rows.map((row) => headers.map((header) => quote(row[header])).join(","))].join("\r\n");
 }
 function issue(id, column, type, label, rows, severity, summary, recommendation, details = {}) { return { id, column, type, label, rows, severity, summary, recommendation, status: "open", ...details }; }
@@ -54,9 +54,8 @@ function quantile(sorted, p) { const position = (sorted.length - 1) * p; const l
 function numericStats(values) { const sorted = values.filter(Number.isFinite).sort((a, b) => a - b); const mean = sorted.reduce((sum, value) => sum + value, 0) / (sorted.length || 1); return { mean, median: quantile(sorted, .5) || 0, min: sorted[0] || 0, max: sorted[sorted.length - 1] || 0, q1: quantile(sorted, .25) || 0, q3: quantile(sorted, .75) || 0 }; }
 function observedNumericEntries(column) {
   return state.rows.flatMap(row => {
-    const meaning = cellInterpretation(row, column);
-    if (["missing", "not_applicable"].includes(meaning) || meaning !== "legitimate" && CleaningEngine.missing(row[column], columnPolicy(column))) return [];
-    try { return [{ row, raw: String(row[column]).trim(), value: CleaningEngine.parseNumber(row[column]) }]; } catch { return []; }
+    if (observationState(row, column) !== "present") return [];
+    try { return [{ row, raw: String(row[column]).trim(), value: CleaningEngine.parseNumber(row[column], columnPolicy(column)) }]; } catch { return []; }
   });
 }
 function numericValues(column) { return observedNumericEntries(column).map(entry => entry.value); }
@@ -73,8 +72,7 @@ function detectIssues() {
   const numeric = new Set(numericColumns());
   state.headers.forEach((column) => {
     const missing = rows.filter(row => {
-      const meaning = cellInterpretation(row, column);
-      return meaning === "missing" || CleaningEngine.missing(row[column], columnPolicy(column)) && !["legitimate", "not_applicable"].includes(meaning);
+      return ["missing", "blank_unreviewed"].includes(observationState(row, column));
     });
     if (!missing.length) return;
     const isNumeric = numeric.has(column);
@@ -133,6 +131,7 @@ function render() {
   if (state.screen === "data") enhanceDatasetScreen();
   if (state.screen === "data") { if (state.headers.length) { screen.insertAdjacentHTML?.("beforeend", cleaningOverviewHtml()); bindCleaningOverview(); } screen.insertAdjacentHTML?.("beforeend", workspaceTools()); bindWorkspaceTools(); }
   if (state.screen === "changes") decorateDecisionHistory();
+  if (typeof enhanceCapabilityPages === "function") enhanceCapabilityPages();
 }
 function reviewOverview() {
   const open = state.issues.filter((item) => item.status === "open");
@@ -320,7 +319,7 @@ function applyFix(item, action) {
 function openIssue(id) {
   if (!id) return;
   const item = state.issues.find((entry) => entry.id === id);
-  if (!item || item.status !== "open") return notify("This finding is closed. Inspect its decision in Changes, or roll it back to reopen it.");
+  if (!item || item.status !== "open") return notify("This finding is closed. Inspect its decision in Decisions, or roll it back to reopen it.");
   const opening = state.screen !== "issues" || state.selectedIssue !== id;
   state.selectedIssue = opening ? id : null;
   if (opening) state.reviewStep = 1;
@@ -389,7 +388,10 @@ function loadSample(name) {
   document.querySelectorAll("[data-sample]").forEach((button) => button.onclick = () => loadSample(button.dataset.sample));
   $("#backToSource").onclick = render;
 }
-function downloadCsv() { const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csvText()], { type: "text/csv" })); link.download = `cleaned-${state.fileName || "dataset.csv"}`; link.click(); URL.revokeObjectURL(link.href); }
+function downloadCsv() {
+  const output = CapabilitiesEngine.exportData(state.headers, state.rows, state.changes, state.original, state.exportOptions || {}, state.ruleConfig);
+  const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csvText(output.headers, output.rows)], { type: "text/csv" })); link.download = `cleaned-${state.fileName || "dataset.csv"}`; link.click(); URL.revokeObjectURL(link.href);
+}
 function notify(message) { const toast = $("#toast"); toast.textContent = message; toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 3000); }
 $("#navigation").onclick = (event) => {
   const button = event.target.closest("[data-screen]");
@@ -423,7 +425,7 @@ function scatterData(item) {
   selected.x = columns.includes(selected.x) ? selected.x : columns[0] || item.column;
   selected.y = columns.includes(selected.y) ? selected.y : columns.find((column) => column !== selected.x) || selected.x;
   const points = state.rows.flatMap(row => {
-    if ([selected.x, selected.y].some(column => ["missing", "not_applicable"].includes(cellInterpretation(row, column)) || CleaningEngine.missing(row[column], columnPolicy(column)))) return [];
+    if ([selected.x, selected.y].some(column => observationState(row, column) !== "present")) return [];
     try { return [{ row, rawX: String(row[selected.x]).trim(), rawY: String(row[selected.y]).trim(), x: CleaningEngine.parseNumber(row[selected.x]), y: CleaningEngine.parseNumber(row[selected.y]) }]; } catch { return []; }
   });
   const range = (key) => points.length ? [Math.min(...points.map((point) => point[key])), Math.max(...points.map((point) => point[key]))] : [0, 1];
@@ -463,7 +465,7 @@ function renderOutlierWorkspace(item) {
 function bindReviewControls() {
   document.querySelectorAll("[data-open-issue]").forEach((button) => button.onclick = () => {
     const item = state.issues.find((entry) => entry.id === Number(button.dataset.openIssue));
-    if (item.status !== "open") return notify("This finding is closed. Use Changes to roll back an approved decision.");
+    if (item.status !== "open") return notify("This finding is closed. Use Decisions to roll back an approved decision.");
     openIssue(item.id);
   });
   document.querySelectorAll("input[name=fix]").forEach((input) => input.onchange = () => { state.selectedFix = input.value; renderIssues(); });

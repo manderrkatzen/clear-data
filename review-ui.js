@@ -52,12 +52,12 @@ function reviewDistribution(column, afterRows, classification = null) {
     const distinct = rows => new Set(rows.map(row => row[column]).filter(value => String(value ?? "").trim())).size;
     return `<div class="comparison-metrics">${series.map(entry => `<div><span>${entry.name}</span><b>${distinct(entry.rows)} labels</b><small>${countBlanks(entry.rows)} blanks</small></div>`).join("")}</div>`;
   }
-  const range = CleaningEngine.stats(series.flatMap(entry => entry.values)), min = range.min, max = range.max;
-  const bins = values => { const counts = Array(18).fill(0); values.forEach(value => counts[Math.min(17, Math.floor((value - min) / (max - min || 1) * 18))]++); return counts; };
-  const sets = series.map(entry => bins(entry.values)), scale = Math.max(1, ...sets.flat());
+  const histogram = AnalysisEngine.histogram(series.map(entry => entry.values)), min = histogram.min, max = histogram.max;
+  const sets = histogram.sets.map(set => set.counts), scale = Math.max(1, ...sets.flat());
+  const rangeNote = `Shared 1st–99th percentile range · ${histogram.bins} bins. True min ${histogram.trueMin}, max ${histogram.trueMax}. ${histogram.sets.map((set, index) => `${series[index].name}: ${set.below} below / ${set.above} above`).join(" · ")}.`;
   const format = value => value === null ? "—" : value.toLocaleString(undefined, { maximumSignificantDigits: 6 });
   const metrics = series.map(entry => { const stats = CleaningEngine.stats(entry.values); return `<div><span>${entry.name}</span><b>Median ${format(stats.median)}</b><small>Mean ${format(stats.mean)} · ${entry.values.length} parsed values</small></div>`; }).join("");
-  return `<div class="review-distribution"><div class="chart-legend">${series.map(entry => `<span class="${entry.className}">${entry.legend}</span>`).join("")}</div><div class="distribution-bars" role="img" aria-label="${series.map(entry => entry.name).join(", ")} distributions of ${escapeHtml(column)}">${sets[0].map((_, index) => `<div>${sets.map((counts, seriesIndex) => `<i class="${series[seriesIndex].className}" style="height:${counts[index] / scale * 100}%" title="${series[seriesIndex].name}: ${counts[index]} values"></i>`).join("")}</div>`).join("")}</div><div class="distribution-axis"><span>${format(min)}</span><span>${escapeHtml(column)}</span><span>${format(max)}</span></div><div class="comparison-metrics">${metrics}</div><p class="review-scope">Common bins and count scale. Unparsed text is not zero. Blanks: ${series.map(entry => `${entry.name.toLowerCase()} ${countBlanks(entry.rows)}`).join(", ")}.</p></div>`;
+  return `<div class="review-distribution"><div class="chart-legend">${series.map(entry => `<span class="${entry.className}">${entry.legend}</span>`).join("")}</div><div class="distribution-bars" role="img" aria-label="${series.map(entry => entry.name).join(", ")} distributions of ${escapeHtml(column)}">${sets[0].map((_, index) => `<div>${sets.map((counts, seriesIndex) => `<i class="${series[seriesIndex].className}" style="height:${counts[index] / scale * 100}%" title="${series[seriesIndex].name}: ${counts[index]} values"></i>`).join("")}</div>`).join("")}</div><div class="distribution-axis"><span>${format(min)}</span><span>${escapeHtml(column)}</span><span>${format(max)}</span></div><div class="comparison-metrics">${metrics}</div><p class="review-scope">${escapeHtml(rangeNote)} Unparsed text is not zero. Blanks: ${series.map(entry => `${entry.name.toLowerCase()} ${countBlanks(entry.rows)}`).join(", ")}.</p></div>`;
 }
 function renderGuidedIssues() {
   $("#topEyebrow").textContent = "GUIDED CLEANING REVIEW";
@@ -86,7 +86,10 @@ function renderGuidedIssues() {
     if (records) records.before(details); else stage.append(details);
   }
   if (typeof enhanceAnalyticalReview === "function") enhanceAnalyticalReview(selected);
+  if (typeof enhanceCapabilities === "function") enhanceCapabilities(selected);
   bindGuidedUI(selected);
+  const history = $("#guidedHistory");
+  if (history) { history.textContent = "Open Decisions"; history.previousElementSibling.textContent = "Inspect decisions or roll them back in Decisions."; }
   if (typeof enhanceValueReview === "function") enhanceValueReview(selected);
 }
 function guidedWorkspaceHtml(item) {
@@ -175,6 +178,7 @@ function bindGuidedUI(item) {
       if (target >= 4) {
         const fingerprint = guidedFingerprint(item, draft), selectedIssue = state.selectedIssue;
         if (typeof prepareAnalyticalPreview === "function") await prepareAnalyticalPreview(item, draft);
+        if (typeof prepareCapabilityPreview === "function") await prepareCapabilityPreview(item, draft);
         if (fingerprint !== guidedFingerprint(item, draft) || state.selectedIssue !== selectedIssue) throw new Error("The review changed. Generate a new preview.");
         const preview = guidedPreview(item);
         if (!preview.selectedIds.length) throw new Error("The scope contains no matching records.");

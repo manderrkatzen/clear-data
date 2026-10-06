@@ -166,6 +166,9 @@ summary span { font-size: 13px; }
 .similar-columns label { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
 .similar-columns input { flex-shrink: 0; }
 .similar-banding { margin: 16px 0; }
+.candidate-lenses { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; margin-top: 18px; }
+.candidate-lenses > section, .record-band { min-width: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.capability-records > button, .candidate-comparison > button { margin-top: 12px; }
 .value-review-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px; }
 .value-review-heading h3 { margin: 0; font-size: 21px; }
 .value-review-heading > span { color: var(--muted); font-size: 13px; }

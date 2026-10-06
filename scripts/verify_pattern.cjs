@@ -15,6 +15,10 @@ test("pattern validation allows only submitted columns, supported bounded fixes,
   assert.equal(ai.validatePatternPlan({ ...plan, proposal: { operation: "fill_constant", params: { value: 0 } } }, summary).proposal.params.value, 0);
   assert.equal(ai.validatePatternPlan({ ...plan, proposal: { operation: "leave_missing", params: {} } }, summary).proposal.operation, "leave_missing");
   assert.throws(() => ai.validatePatternRequest({ summary: { ...evidence().summary, nMissing: 1001 } }));
+  const chance = evidence(); chance.summary.held = []; Object.assign(chance.summary.results[0], { significance: "could be chance", pValue: .6 });
+  const uncertain = ai.validatePatternRequest(chance), unqualified = { explanation: "Channel explains the gaps.", likelyDriver: "channel", caution: null, proposal: null, mentionedColumns: ["channel"] };
+  assert.throws(() => ai.validatePatternPlan(unqualified, uncertain), /qualified language/);
+  assert.equal(ai.validatePatternPlan({ ...unqualified, explanation: "Channel could be associated with the gaps by chance." }, uncertain).requiresConfirmation, true);
 });
 test("Worker and Pages pattern endpoints send only aggregate summaries to the provider", async () => {
   const worker = (await import(pathToFileURL(path.join(__dirname, "../src/worker.js")))).default;

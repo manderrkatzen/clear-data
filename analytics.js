@@ -22,6 +22,14 @@ function analyticalTask(task, column, input = {}) {
   const store = analyticalStore();
   const payload = { id: ++store.nextJob, task, targetColumn: column, ...input };
   if (typeof Worker === "undefined") {
+    if (task === "business") return Promise.resolve({ kpis: CapabilitiesEngine.kpiImpact(state.headers, state.rows, payload.params.preview, payload.params.definitions, payload.options), dependencies: CapabilitiesEngine.dependencyImpact(state.headers, state.rows, payload.params.preview, payload.params.metrics, payload.options) });
+    if (task === "scorecards") return Promise.resolve(CapabilitiesEngine.qualityScorecard(state.headers, state.rows, payload.params.rules, payload.options));
+    if (task === "significance") return Promise.resolve(AnalysisEngine.significance(state.headers, state.rows, column, payload.params.result, payload.options));
+    if (task === "suggestions") return Promise.resolve(CapabilitiesEngine.suggestedRules(state.headers, state.rows, payload.options));
+    if (task === "kpi") return Promise.resolve(CapabilitiesEngine.kpiImpact(state.headers, state.rows, payload.params.preview, payload.params.definitions, payload.options));
+    if (task === "candidates") return Promise.resolve(CapabilitiesEngine.compareCandidates(state.headers, state.rows, column, payload.params.eligibleIds, payload.params.drafts, payload.options));
+    if (task === "impact") return Promise.resolve(CapabilitiesEngine.bandImpact(state.headers, state.rows, column, payload.params.preview, payload.params.grouping, payload.options));
+    if (task === "records") return Promise.resolve(CapabilitiesEngine.recordView(state.headers, state.rows, column, payload.params, payload.options));
     return Promise.resolve(task === "fill" ? AnalysisEngine.fillSimilar(state.headers, state.rows, column, payload.params, payload.options) : task === "hold" ? AnalysisEngine.holdSimilar(state.headers, state.rows, column, payload.comparisonColumn, payload.holdColumn, payload.banding, payload.options) : AnalysisEngine.compare(state.headers, state.rows, column, payload.options));
   }
   if (!store.worker) {
@@ -45,14 +53,14 @@ function analyticalTask(task, column, input = {}) {
 function analyticalNumber(value) { return value === null || value === undefined ? "—" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 3 }); }
 function analyticalHistogram(histogram, names = ["Target missing", "Target present"]) {
   if (!histogram || histogram.min === null) return "";
-  const max = Math.max(1, ...histogram.sets.flatMap(set => set.counts));
-  return `<div class="analytical-histogram"><div class="chart-legend">${names.map((name, index) => `<span class="${index ? "working" : "source"}">${escapeHtml(name)}</span>`).join("")}</div><div class="distribution-bars" role="img" aria-label="${escapeHtml(names.join(" and "))} counts in shared percentile bins">${Array.from({ length: histogram.bins }, (_, index) => `<div>${histogram.sets.map((set, series) => `<i class="${series ? "working" : "source"}" style="height:${set.counts[index] / max * 100}%" title="${escapeHtml(names[series])}: ${set.counts[index]}"></i>`).join("")}</div>`).join("")}</div><div class="distribution-axis"><span>${analyticalNumber(histogram.min)}</span><span>Shared 1st–99th percentile range</span><span>${analyticalNumber(histogram.max)}</span></div><small>Tail values stay in edge bins. ${histogram.sets.map((set, index) => `${names[index]}: ${set.below} below, ${set.above} above`).join(" · ")}.</small></div>`;
+  const max = histogram.countScale || Math.max(1, ...histogram.sets.flatMap(set => set.counts));
+  return `<div class="analytical-histogram"><div class="chart-legend">${names.map((name, index) => `<span class="${index ? "working" : "source"}">${escapeHtml(name)}</span>`).join("")}</div><div class="distribution-bars" role="img" aria-label="${escapeHtml(names.join(" and "))} counts in shared percentile bins">${Array.from({ length: histogram.bins }, (_, index) => `<div>${histogram.sets.map((set, series) => `<i class="${series ? "working" : "source"}" style="height:${set.counts[index] / max * 100}%" title="${escapeHtml(names[series])}: ${set.counts[index]}"></i>`).join("")}</div>`).join("")}</div><div class="distribution-axis"><span>${analyticalNumber(histogram.min)}</span><span>Shared 1st–99th percentile range</span><span>${analyticalNumber(histogram.max)}</span></div><small>Separate edge counts: ${histogram.sets.map((set, index) => `${names[index]}: ${set.below} below, ${set.above} above`).join(" · ")}. True min ${analyticalNumber(histogram.trueMin)} / max ${analyticalNumber(histogram.trueMax)}.</small></div>`;
 }
 function analyticalStatsTable(result) {
   return `<div class="analysis-table-wrap"><table class="profile-table analysis-table"><thead><tr><th>Group</th><th>Parsed count</th><th>Mean</th><th>Median</th><th>IQR</th></tr></thead><tbody>${[["Target missing", result.missingStats], ["Target present", result.presentStats]].map(([label, stats]) => `<tr><th>${label}</th><td>${stats?.count ?? 0}</td><td>${analyticalNumber(stats?.mean)}</td><td>${analyticalNumber(stats?.median)}</td><td>${analyticalNumber(stats?.iqr)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function analyticalComparisonDetails(result) {
-  if (result.type === "numeric") return `${analyticalStatsTable(result)}${analyticalHistogram(result.histogram)}`;
+  if (result.type === "numeric") return `${analyticalStatsTable(result)}${analyticalHistogram(result.histogram)}<p class="review-scope">Cliff’s δ ${analyticalNumber(result.cliffsDelta)} · ${escapeHtml(result.directionText)}. Secondary 1st–99th-percentile winsorized SMD ${analyticalNumber(result.winsorizedSmd)}.</p>`;
   return `<div class="analysis-table-wrap"><table class="profile-table analysis-table"><thead><tr><th>${result.type === "date" ? "Month" : "Category"}</th><th>Records</th><th>Target missing</th><th>Missing rate</th></tr></thead><tbody>${(result.categoryRates || result.monthlyRates).map(rate => `<tr><th>${escapeHtml(rate.label)}</th><td>${rate.total}</td><td>${rate.missing}</td><td>${(rate.rate * 100).toFixed(1)}%${rate.eligible ? "" : ' <small>(under 10; excluded from ranking)</small>'}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function analyticalBandFields(prefix, banding) {
@@ -88,7 +96,7 @@ async function prepareAnalyticalPreview(item, draft) {
   if (!["groupwise", "knn"].includes(draft.operation)) return;
   const params = similarDraft(item), store = analyticalStore(), key = analyticalFillKey(item, draft);
   if (store.fills.has(key)) return;
-  const rowIds = CleaningEngine.scopeRows(state.rows, reviewRows(item).map(row => row._row), draft.scope).map(row => row._row);
+  const rowIds = CleaningEngine.scopeRows(state.rows, reviewRows(item).map(row => row._row), draft.scope, analyticalOptions()).map(row => row._row);
   const next = $("#reviewNext"), steps = [...document.querySelectorAll("[data-review-step]")];
   if (next) { next.disabled = true; next.textContent = "Computing preview…"; }
   steps.forEach(button => { button.disabled = true; });
@@ -118,6 +126,12 @@ function enhanceAnalyticalReview(item) {
     const distribution = stage.querySelector(".review-distribution,.comparison-metrics");
     if (distribution) distribution.insertAdjacentHTML("beforebegin", analyticalEvidenceHtml(item));
     else stage.insertAdjacentHTML("beforeend", analyticalEvidenceHtml(item));
+    const excluded = analyticalTarget(item.column).result?.excludedNotApplicable || 0;
+    if (excluded) stage.querySelector(".analytical-counts")?.insertAdjacentHTML("afterend", `<p class="review-scope">${excluded} not-applicable records excluded from both target groups.</p>`);
+    stage.querySelectorAll(".analytical-section > .analysis-table-wrap tbody tr").forEach((row, index) => {
+      const result = analyticalTarget(item.column).result?.results[index];
+      if (result?.type === "numeric") row.cells[2].textContent = `${analyticalNumber(result.effectSize)} |δ| · ${result.directionText}`;
+    });
     const hold = stage.querySelector(".analytical-hold"), data = analyticalTarget(item.column);
     if (hold) {
       if (data.holdOpen) hold.open = true;
@@ -150,6 +164,7 @@ function bindAnalyticalEvidence(item) {
   };
   $("#compareMissing").onclick = () => run("compare", async () => {
     data.result = await analyticalTask("compare", item.column, { options: analyticalOptions() });
+    data.permutationError = false;
     data.comparisonColumn = data.result.results[0]?.column || ""; data.held = []; data.ai = null;
   });
   document.querySelectorAll("[data-analysis-column]").forEach(button => button.onclick = () => { data.comparisonColumn = button.dataset.analysisColumn; renderPreservingReviewFocus(); });
@@ -172,7 +187,7 @@ function bindAnalyticalEvidence(item) {
       if (proposal.operation === "fill_constant") { draft.operation = "constant"; draft.value = String(proposal.params.value); }
       if (proposal.operation === "fill_groupwise") { draft.operation = "groupwise"; params.columns = [...proposal.params.holdColumns]; params.statistic = proposal.params.statistic; }
       if (proposal.operation === "fill_knn") { draft.operation = "knn"; params.columns = [...proposal.params.columns]; params.k = proposal.params.k; }
-      if (proposal.operation === "leave_missing") draft.operation = "missing";
+      if (proposal.operation === "leave_missing") draft.operation = "leaveMissing";
       delete draft.previewFingerprint; state.reviewStep = 3; render();
     } catch (error) { notify(error.message); }
   });
@@ -193,6 +208,17 @@ function bindSimilarTreatment(item) {
 function buildPatternSummary(column, data) {
   return { targetColumn: column, total: data.result.total, nMissing: data.result.nMissing, results: data.result.results.slice(0, 3).map(result => ({ column: result.column, type: result.type, effectSize: result.effectSize, missingStats: result.missingStats, presentStats: result.presentStats, ...(result.categoryRates ? { categoryRates: result.categoryRates.slice(0, 30) } : {}), ...(result.monthlyRates ? { monthlyRates: result.monthlyRates.slice(0, 30) } : {}) })), held: data.held.map(result => ({ comparisonColumn: result.comparisonColumn, holdColumn: result.holdColumn, verdict: result.verdict, combinedEffect: result.combinedEffect, unbandedEffect: result.unbandedEffect })) };
 }
+const baseBuildPatternSummary = buildPatternSummary;
+buildPatternSummary = (column, data) => {
+  const summary = baseBuildPatternSummary(column, data);
+  summary.excludedNotApplicable = data.result.excludedNotApplicable || 0;
+  summary.results.forEach((result, index) => {
+    const computed = data.result.results[index];
+    if (computed.type === "numeric") Object.assign(result, { effectMeasure: "cliffs_delta", cliffsDelta: computed.cliffsDelta, winsorizedSmd: computed.winsorizedSmd, directionText: computed.directionText });
+    if (computed.significance) Object.assign(result, { pValue: computed.pValue, significance: computed.significance });
+  });
+  return summary;
+};
 async function requestPatternExplanation(item, data) {
   const store = analyticalStore(), controller = new AbortController(); store.controllers.add(controller);
   const summary = buildPatternSummary(item.column, data), fingerprint = JSON.stringify(summary);

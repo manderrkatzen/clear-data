@@ -8,6 +8,13 @@
 
 **Scope:** the analyst-facing website, its pages, individual interface units, decisions, calculations, outputs, and operational behavior. This is a description of the built product rather than a coding or software-architecture report.
 
+**Subsequent update:** this report captures the stated `7ee14ce` baseline.
+The next capability pass supersedes its SMD rankings, observation-state nuances,
+min/max preview ranges, absent export flags/KPIs/scorecards/rule suggestions,
+parked minimum candidate comparison, and manual-fill limitations.
+See [NEXT_CAPABILITIES_CHANGE_SUMMARY.md](NEXT_CAPABILITIES_CHANGE_SUMMARY.md)
+for current additions and per-item verification.
+
 ---
 
 ## Contents

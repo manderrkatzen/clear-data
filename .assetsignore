@@ -11,6 +11,8 @@
 !analysis-engine.js
 !analysis-worker.js
 !analytics.js
+!capabilities-engine.js
+!capabilities.js
 !profile-worker.js
 !review.js
 !review-ui.js

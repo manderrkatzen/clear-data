@@ -355,6 +355,18 @@ Blanket token-missingness checkboxes were removed from both comparison and
 similar-row fill controls. Classification records meaning without rewriting
 source cells; treatment still uses the established preview and approval flow.
 
+### Next capability extensions
+
+The analytical desk is retained. Added functions use existing native disclosures,
+review-field grids, profile-table styling and secondary buttons: affected/present
+records, band impacts, transient candidates, KPIs, suggested checks, export
+provenance, and profile scorecards. Candidate panels form a responsive grid of
+at most four recipes; promotion collapses that disclosure in normal preview.
+Tables retain local scrolling. Active charts use sixteen shared percentile bins
+with tail counts; numeric ranks label Cliff’s delta/direction and secondary
+winsorized SMD, with separate permutation evidence. This is a capability pass,
+not a visual redesign.
+
 ### Signature comparison
 
 Original, working, and proposed distributions share bins, axes, and scale. Bars occupy a (120px) chart height with bin gaps (5px) and series gaps (2px). Visible legends and comparison metrics support the color distinction. Scoped counts, exact record previews, and amber blocked/constraint exceptions precede final approval; the footer stays below them in normal flow.
