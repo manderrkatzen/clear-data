@@ -60,19 +60,26 @@ function reviewDistribution(column, afterRows, classification = null) {
   return `<div class="review-distribution"><div class="chart-legend">${series.map(entry => `<span class="${entry.className}">${entry.legend}</span>`).join("")}</div><div class="distribution-bars" role="img" aria-label="${series.map(entry => entry.name).join(", ")} distributions of ${escapeHtml(column)}">${sets[0].map((_, index) => `<div>${sets.map((counts, seriesIndex) => `<i class="${series[seriesIndex].className}" style="height:${counts[index] / scale * 100}%" title="${series[seriesIndex].name}: ${counts[index]} values"></i>`).join("")}</div>`).join("")}</div><div class="distribution-axis"><span>${format(min)}</span><span>${escapeHtml(column)}</span><span>${format(max)}</span></div><div class="comparison-metrics">${metrics}</div><p class="review-scope">${escapeHtml(rangeNote)} Unparsed text is not zero. Blanks: ${series.map(entry => `${entry.name.toLowerCase()} ${countBlanks(entry.rows)}`).join(", ")}.</p></div>`;
 }
 function renderGuidedIssues() {
+  const oldQueue = screen.querySelector(".candidate-list");
+  const queuePosition = { top: oldQueue?.scrollTop || 0, left: oldQueue?.scrollLeft || 0 };
   $("#topEyebrow").textContent = "GUIDED CLEANING REVIEW";
   const open = state.issues.filter(item => item.status === "open"), search = (state.reviewSearch || "").toLowerCase();
   const kinds = [...new Set(open.map(item => item.candidate?.kind || item.recommendation))];
   const visible = open.filter(item => (!search || `${item.column} ${item.label} ${item.type}`.toLowerCase().includes(search)) && (!state.reviewKind || state.reviewKind === "all" || (item.candidate?.kind || item.recommendation) === state.reviewKind));
   const selected = open.find(item => item.id === state.selectedIssue);
   const rank = item => state.interpretations?.[analysisCandidateId(item)]?.interpretations?.[0]?.score ?? item.candidate?.score ?? (item.severity === "high" ? .7 : .4);
-  visible.sort((a, b) => rank(b) - rank(a) || a.id - b.id);
+  if (selected && state.reviewQueueOrder?.length) {
+    const positions = new Map(state.reviewQueueOrder.map((id, index) => [id, index]));
+    visible.sort((a, b) => (positions.get(a.id) ?? Infinity) - (positions.get(b.id) ?? Infinity) || a.id - b.id);
+  } else visible.sort((a, b) => rank(b) - rank(a) || a.id - b.id);
+  state.reviewQueueOrder = visible.map(item => item.id);
   screen.innerHTML = `<section class="page-head compact"><div><h1>Review findings</h1></div></section>${state.reviewResult ? `<div class="review-success" role="status">${escapeHtml(state.reviewResult)}<button class="ghost" id="dismissReviewResult">Dismiss</button></div>` : ""}${analysisBanner()}<div class="guided-tools"><button class="secondary" id="guidedPolicies">Column definitions</button><button class="secondary" id="guidedRelations">Business relationships</button><button class="secondary" id="guidedSchema">Schema / metric rules</button><button class="secondary" id="guidedDuplicates">Duplicate keys</button><button class="secondary" id="guidedManual">Manual correction</button><button class="ghost" id="guidedContext">Dataset context →</button></div><section class="guided-layout"><aside class="candidate-queue" aria-label="Findings queue"><header><h2>${open.length} open findings</h2><small>Sorted by recommendation rank; scores do not establish correctness.</small><input id="reviewSearch" type="search" aria-label="Search findings" placeholder="Search columns or findings" value="${escapeHtml(state.reviewSearch || "")}"><select id="reviewKind" aria-label="Filter finding type"><option value="all">All finding types</option>${kinds.map(kind => `<option value="${escapeHtml(kind)}" ${state.reviewKind === kind ? "selected" : ""}>${escapeHtml(kind.replaceAll("_", " "))}</option>`).join("")}</select></header><div class="candidate-list">${visible.map(item => `<button class="candidate-button ${selected?.id === item.id ? "active" : ""}" data-guided-issue="${item.id}" aria-pressed="${selected?.id === item.id}"><span>${escapeHtml(item.column)}</span><b>${escapeHtml(item.label)}</b><small>${reviewRows(item).length.toLocaleString()} records · ${state.interpretations?.[analysisCandidateId(item)] ? "AI alternatives ready" : "Local evidence"}</small></button>`).join("") || '<p class="review-scope">No findings match this filter.</p>'}</div><details class="review-closed"><summary>${state.issues.length - open.length} closed findings</summary><p>Inspect decisions or roll them back in Changes.</p><button class="secondary" id="guidedHistory">Open Changes</button></details></aside><div class="guided-workspace">${selected ? guidedWorkspaceHtml(selected) : `<section class="guided-empty"><h2>${open.length ? "Choose a finding to begin" : "No open findings from the current checks"}</h2>${open.length ? `<button class="primary" data-guided-issue="${visible[0]?.id || open[0].id}">Review first finding →</button>` : '<button class="primary" id="guidedView">Inspect working data</button>'}</section>`}</div></section>`;
   const toolbar = screen.querySelector?.(".guided-tools");
   if (toolbar) {
     const details = document.createElement("details"), summary = document.createElement("summary");
     details.className = "guided-setup"; summary.textContent = "Definitions, business checks & manual corrections";
     toolbar.before(details); details.append(summary, toolbar);
+    screen.querySelector(".candidate-queue").append(details);
   }
   const findingTitle = screen.querySelector?.(".guided-heading h2"), metadata = screen.querySelector?.(".guided-column");
   if (findingTitle && metadata) findingTitle.after(metadata);
@@ -85,14 +92,20 @@ function renderGuidedIssues() {
     plot.innerHTML = scatterChart(selected); details.append(summary, plot);
     if (records) records.before(details); else stage.append(details);
   }
-  if (typeof enhanceAnalyticalReview === "function") enhanceAnalyticalReview(selected);
-  if (typeof enhanceCapabilities === "function") enhanceCapabilities(selected);
+  const workbench = typeof isMissingWorkbench === "function" && isMissingWorkbench(selected);
+  if (!workbench && typeof enhanceAnalyticalReview === "function") enhanceAnalyticalReview(selected);
+  if (!workbench && typeof enhanceCapabilities === "function") enhanceCapabilities(selected);
   bindGuidedUI(selected);
   const history = $("#guidedHistory");
   if (history) { history.textContent = "Open Decisions"; history.previousElementSibling.textContent = "Inspect decisions or roll them back in Decisions."; }
   if (typeof enhanceValueReview === "function") enhanceValueReview(selected);
+  if (workbench) enhanceMissingWorkbench(selected);
+  if (typeof orderReviewStage === "function") orderReviewStage(selected);
+  if (typeof anchorReviewUI === "function") anchorReviewUI();
+  if (typeof finishReviewLayout === "function") finishReviewLayout(queuePosition);
 }
 function guidedWorkspaceHtml(item) {
+  if (typeof isMissingWorkbench === "function" && isMissingWorkbench(item)) return missingWorkbenchWorkspaceHtml(item);
   const step = state.reviewStep || 1;
   let content = "";
   if (step === 1) content = guidedEvidenceHtml(item);
@@ -152,7 +165,10 @@ function guidedPreviewHtml(item, preview, approving) {
 }
 function bindGuidedUI(item) {
   bindAnalysisTools();
-  document.querySelectorAll("[data-guided-issue]").forEach(button => button.onclick = () => { state.selectedIssue = Number(button.dataset.guidedIssue); state.reviewStep = 1; render(); });
+  document.querySelectorAll("[data-guided-issue]").forEach(button => {
+    button.id = `reviewFinding${button.dataset.guidedIssue}`;
+    button.onclick = () => { state.selectedIssue = Number(button.dataset.guidedIssue); state.reviewStep = 1; renderPreservingReviewFocus(); };
+  });
   $("#reviewSearch").oninput = event => { state.reviewSearch = event.target.value; renderPreservingReviewFocus(); };
   $("#reviewKind").onchange = event => { state.reviewKind = event.target.value; render(); };
   $("#guidedPolicies").onclick = () => showColumnPolicies(item?.column);
@@ -168,7 +184,7 @@ function bindGuidedUI(item) {
   const draft = reviewDraft(item);
   const update = (action, rerender = true) => { action(); delete draft.previewFingerprint; if (rerender) renderPreservingReviewFocus(); };
   $("#guidedDefer").onclick = () => { state.selectedIssue = null; state.reviewStep = 1; render(); };
-  $("#reviewBack").onclick = () => { state.reviewStep = Math.max(1, state.reviewStep - 1); render(); };
+  $("#reviewBack").onclick = () => { state.reviewStep = typeof isMissingWorkbench === "function" && isMissingWorkbench(item) && state.reviewStep === 4 ? 1 : Math.max(1, state.reviewStep - 1); render(); };
   const navigate = async target => {
     try {
       if (target >= 3 && draft.interpretation === "unresolved") {
@@ -196,10 +212,18 @@ function bindGuidedUI(item) {
     } catch (error) { notify(error.message); }
   };
   document.querySelectorAll("[data-review-step]").forEach(button => button.onclick = async () => {
+    if (typeof isMissingWorkbench === "function" && isMissingWorkbench(item) && state.reviewStep < 4 && Number(button.dataset.reviewStep) >= 4) {
+      await chooseWorkbenchCandidate(item);
+      document.querySelector('[data-review-step][aria-current="step"]')?.focus({ preventScroll: true });
+      return;
+    }
     await navigate(Number(button.dataset.reviewStep));
     document.querySelector('[data-review-step][aria-current="step"]')?.focus({ preventScroll: true });
   });
-  $("#reviewNext")?.addEventListener("click", () => navigate(state.reviewStep + 1));
+  $("#reviewNext")?.addEventListener("click", () => {
+    if (typeof isMissingWorkbench === "function" && isMissingWorkbench(item) && state.reviewStep < 4) chooseWorkbenchCandidate(item);
+    else navigate(state.reviewStep + 1);
+  });
   $("#approveGuided")?.addEventListener("click", () => approveGuidedDecision(item));
   document.querySelectorAll("input[name=reviewInterpretation]").forEach(input => input.onchange = () => update(() => { draft.interpretation = input.value; }));
   const scalar = { reviewOperation: "operation", reviewValue: "value", reviewFactor: "factor", reviewDecimals: "decimals", reviewGroupColumn: "groupColumn", reviewNumberFormat: "numberFormat", reviewDateFormat: "dateFormat", reviewLower: "lower", reviewUpper: "upper", reviewSurvivor: "survivor" };

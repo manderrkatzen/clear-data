@@ -47,6 +47,7 @@ function resetGuidedReview() {
   state.reviewStep = 1;
   state.reviewSearch = "";
   state.reviewKind = "all";
+  state.reviewQueueOrder = [];
   state.interpretations = {};
   state.analysisStatus = "idle";
   state.analysisMessage = "";

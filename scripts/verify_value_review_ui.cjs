@@ -58,13 +58,12 @@ const fixture = "id,number_of_children,temperature_c,measurement_a,measurement_b
       await chooseValue("-23"); await page.locator("#skipRepresentation").click();
       assert.equal(await page.evaluate(() => cellInterpretation(state.rows[3], "number_of_children")), null);
       await page.locator("#treatConfirmedMissing").click();
-      await page.locator("#compareMissing").click();
-      await page.waitForFunction(() => analyticalTarget("number_of_children").result !== null);
+       await page.waitForFunction(() => missingWorkbenchState(state.issues.find(item => item.id === state.selectedIssue)).results);
       assert.equal(await page.evaluate(() => analyticalTarget("number_of_children").result.nMissing), 12);
-      await page.locator('[data-review-step="2"]').click();
-      await page.locator("input[name=reviewInterpretation][value=missing]").check();
-      await page.locator('[data-review-step="3"]').click(); await page.locator("#reviewOperation").selectOption("mean");
-      await page.locator('[data-review-step="4"]').click(); await page.waitForFunction(() => state.reviewStep === 4);
+       await page.locator('[data-workbench-parameters="0"] > summary').click();
+       await page.locator("#workbench0_reviewOperation").selectOption("mean");
+       await page.waitForFunction(() => missingWorkbenchState(state.issues.find(item => item.id === state.selectedIssue)).results && !missingWorkbenchState(state.issues.find(item => item.id === state.selectedIssue)).pending);
+       await page.locator("#chooseWorkbenchFix").click(); await page.waitForFunction(() => state.reviewStep === 4);
       assert.equal(await page.evaluate(() => guidedPreview(state.issues.find(item => item.id === state.selectedIssue)).patches.length), 12);
       assert.equal(await page.evaluate(() => state.rows[0].number_of_children), "NULL");
       await page.locator('[data-review-step="5"]').click(); await page.waitForFunction(() => state.reviewStep === 5);

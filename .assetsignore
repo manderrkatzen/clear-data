@@ -16,6 +16,7 @@
 !profile-worker.js
 !review.js
 !review-ui.js
+!review-workbench.js
 !value-review.js
 !review.css
 !design-system.css

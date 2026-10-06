@@ -29,6 +29,10 @@ const fixture = "id,amount,region,visit_date,status\n001,10,North,2025-01-01,Act
     };
     const choose = async expression => page.evaluate(expression => { const item = state.issues.find(new Function("item", `return ${expression}`)); state.selectedIssue = null; openIssue(item.id); }, expression);
     const toTreatment = async meaning => {
+      if (await page.locator(".missing-workbench").count()) {
+        await page.waitForFunction(() => missingWorkbenchState(state.issues.find(item => item.id === state.selectedIssue)).results);
+        return;
+      }
       await page.locator("#reviewNext").click();
       assert.equal(await page.locator("[data-current-step]").getAttribute("data-current-step"), "2");
       await page.locator(`input[name=reviewInterpretation][value=${meaning}]`).check();
@@ -144,7 +148,10 @@ const fixture = "id,amount,region,visit_date,status\n001,10,North,2025-01-01,Act
       await page.evaluate(async sample => loadData(await (await fetch(sample)).text(), sample), sample);
       await page.waitForFunction(() => state.analysisStatus === "complete");
       await choose('item.recommendation === "impute"'); await toTreatment("missing");
-      await page.locator("#reviewOperation").selectOption("mean"); await finalize();
+       await page.locator('[data-workbench-parameters="0"] > summary').click();
+       await page.locator("#workbench0_reviewOperation").selectOption("mean");
+       await page.waitForFunction(() => { const data = missingWorkbenchState(state.issues.find(item => item.id === state.selectedIssue)); return data.results && !data.pending; });
+       await finalize();
       assert.ok(await page.evaluate(() => state.changes[0].patches.length > 0));
       await page.locator("[data-screen=changes]").click(); await page.locator("[data-rollback]").first().click(); await page.locator("#doRollback").click();
       assert.equal(await page.evaluate(() => metrics().changedCells), 0);

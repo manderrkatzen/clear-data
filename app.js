@@ -132,6 +132,7 @@ function render() {
   if (state.screen === "data") { if (state.headers.length) { screen.insertAdjacentHTML?.("beforeend", cleaningOverviewHtml()); bindCleaningOverview(); } screen.insertAdjacentHTML?.("beforeend", workspaceTools()); bindWorkspaceTools(); }
   if (state.screen === "changes") decorateDecisionHistory();
   if (typeof enhanceCapabilityPages === "function") enhanceCapabilityPages();
+  if (typeof labelReviewSurfaces === "function") labelReviewSurfaces();
 }
 function reviewOverview() {
   const open = state.issues.filter((item) => item.status === "open");

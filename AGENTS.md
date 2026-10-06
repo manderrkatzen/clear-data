@@ -1,8 +1,13 @@
 # Repository Guide
 
+## Initialization and Tooling Directive
+
+- Read this guide on initialization. For every task, use the Impeccable skill when applicable and Playwright for browser/UI verification, unless their overhead is genuinely unnecessary (for example, a local documentation-only task, a trivial non-UI edit, or a backend-only task). State any relevant omission briefly; do not skip these tools for substantive UI work.
+- Local reference documents requested by the user stay local unless publishing them is explicitly requested. Application updates continue to follow the release instructions below.
+
 ## Project
 
-ClearData is an AI-assisted CSV data-quality workspace. Its workflow is **Data → View → Issues → Changes → Report**. Deterministic checks identify findings; users review treatment previews, explicitly approve changes, and can roll them back or export the working dataset.
+ClearData is an AI-assisted CSV data-quality workspace. Its visible workflow is **Dataset → Explore → Review → Decisions → Report** (internal screens: `data`, `view`, `issues`, `changes`, `report`). Deterministic checks identify findings; users review treatment previews, explicitly approve changes, and can roll them back or export the working dataset.
 
 ## Structure
 
@@ -13,6 +18,7 @@ ClearData is an AI-assisted CSV data-quality workspace. Its workflow is **Data �
 - `cleaning-engine.js` and `profile-worker.js`: pure profiling/parsing/scoped treatments and background profiling; the engine is also required by Node tests.
 - `analysis-engine.js`, `analysis-worker.js`, and `analytics.js`: deterministic missingness/held comparisons, cached background computation, traceable group-wise/KNN fills, and summary-only AI explanations integrated into review stages. Keep per-cell fill provenance in approved history and project validation.
 - `review.js`, `review-ui.js`, and `review.css`: candidate integration, validated automatic AI interpretation, scoped preview/approval, and the five-step review. Classic scripts load before `app.js`.
+- `review-workbench.js`: numeric missing-value UI orchestration, shared hold/candidate/inspection state, stable `data-ui` anchors, and the opt-in `?debug=ui` overlay. Reuse the existing engines; keep internal Preview/Approve steps 4/5 and their validation intact while displaying Workbench → Preview → Approve. Verify with `scripts/verify_review_workbench_ui.cjs` and the existing analytical/value-review runners.
 - `value-review.js`: per-representation contextual missingness assessments and source-preserving, reversible one-by-one meaning decisions. Do not replace these with blanket token/zero missingness switches. Verify this flow with `scripts/verify_value_review_ui.cjs`.
 - `capabilities-engine.js` and `capabilities.js`: local record/group lenses, transient candidates, KPIs, export provenance, suggested checks, dependencies, and scorecards. All observation semantics use `CleaningEngine.observationState`; numeric ranks use Cliff’s delta. Verify with `scripts/verify_next_capabilities.cjs`, `scripts/verify_next_performance.cjs`, and `scripts/verify_next_capabilities_ui.cjs`.
 - `design-system.css`: final-loaded visual authority, with local typography in `fonts/`. Read `PRODUCT.md` and `DESIGN.md` before visual changes.

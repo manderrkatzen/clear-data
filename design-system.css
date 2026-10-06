@@ -114,6 +114,9 @@ summary span { font-size: 13px; }
 .analysis-banner p { font-size: 13px; color: #486386; }
 .analysis-banner small { font-size: 12px; color: #486386; }
 .guided-setup { margin: 14px 0 20px; }
+/* Opt-in UI region labels are positioned outside document flow. */
+.debug-ui [data-ui] { outline: 1px dashed var(--blue); outline-offset: -1px; position: relative; }
+.debug-ui [data-ui]::after { content: attr(data-ui); position: absolute; top: 0; right: 0; z-index: 4; padding: 1px 4px; background: var(--blue-soft); color: var(--ink); font: 11px/1.3 var(--font-ui); pointer-events: none; }
 .guided-layout { grid-template-columns: 258px minmax(0, 1fr); gap: 18px; }
 .candidate-queue { background: #f9fbfe; border-color: #ccd8e7; border-radius: 8px; top: 90px; }
 .candidate-queue > header { background: #f0f4fa; padding: 17px; }
@@ -129,6 +132,29 @@ summary span { font-size: 13px; }
 .candidate-button.active span, .candidate-button.active small { color: #315b9c; }
 .review-closed { border-top: 1px solid var(--line); padding: 14px 17px; }
 .guided-card { background: white; border: 1px solid #cbd7e7; border-radius: 8px; overflow: visible; }
+.workbench-stepper { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.missing-workbench { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+.workbench-evidence, .workbench-fixes { min-width: 0; }
+.workbench-region { border: 0; border-top: 1px solid var(--line); padding: 18px 0; margin: 0; min-width: 0; }
+.workbench-region h3 { font-size: 19px; margin: 0 0 12px; }
+.workbench-region > summary { font-size: 19px; font-weight: 600; margin-bottom: 12px; }
+.workbench-region .review-fields { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.workbench-candidates { display: grid; gap: 12px; }
+.workbench-candidate { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.workbench-candidate.is-active { border-color: var(--blue); background: var(--blue-soft); }
+.workbench-candidate-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.workbench-candidate-heading label { display: flex; gap: 8px; align-items: start; font-weight: 600; }
+.workbench-candidate details { margin-top: 12px; }
+.workbench-meaning { margin: 8px 0 0; font-size: 13px; }
+.workbench-meaning .ghost { padding: 4px 8px; min-height: 32px; }
+.workbench-meaning-popover { width: min(620px, calc(100vw - 32px)); max-height: 80vh; overflow: auto; padding: 24px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); font-family: var(--font-ui); }
+.workbench-histogram i { flex: 1; width: auto; }
+.workbench-histogram .is-muted { opacity: .4; }
+.workbench-histogram .is-active { opacity: 1; }
+.chart-legend .is-active { font-weight: 600; color: var(--ink); }
+.workbench-region .analysis-table-wrap { max-height: 300px; }
+.workbench-region .candidate-kpi { margin: 14px 0; }
+@media (max-width: 1200px) { .missing-workbench { grid-template-columns: minmax(0, 1fr); } }
 .guided-heading { background: white; padding: 21px 24px 19px; border-radius: 8px 8px 0 0; }
 .guided-heading h2 { font-size: 23px; font-weight: 600; line-height: 1.25; margin: 4px 0; letter-spacing: -.35px; }
 .guided-column { font: 400 13px var(--font-ui); color: #526783; margin: 8px 0 0; }
@@ -196,6 +222,20 @@ summary span { font-size: 13px; }
 .guided-stage p { color: #4b607c; font-size: 14px; line-height: 1.65; }
 .guided-stage .review-scope { font-size: 13px !important; }
 .guided-footer { position: static; background: #fff; border-top: 1px solid #cedaeb; border-radius: 0 0 8px 8px; padding: 15px 24px; }
+.guided-card > .guided-footer { position: sticky; bottom: 0; z-index: 5; }
+.guided-card > .guided-stage { padding-bottom: calc(24px + var(--review-footer-height, 74px)); }
+@media (min-width: 801px) {
+  .guided-card { display: flex; flex-direction: column; max-height: var(--review-workspace-height, calc(100dvh - 110px)); }
+  .guided-card > .guided-heading, .guided-card > .review-stepper, .guided-card > .guided-footer { flex-shrink: 0; }
+  .guided-card > .guided-stage { flex: 1 1 auto; min-height: 0; overflow: auto; }
+}
+.candidate-queue > .guided-setup { margin: 0; padding: 16px; border-top: 1px solid var(--line); }
+.candidate-queue .guided-tools { display: grid; margin-top: 12px; }
+.candidate-queue .guided-tools button { width: 100%; text-align: left; }
+@media (max-width: 800px) {
+  .guided-card > .guided-footer { position: static; }
+  .guided-card > .guided-stage { padding-bottom: 24px; }
+}
 .guided-footer > span { font-size: 12px; }
 #approveGuided { background: #176146; border-color: #176146; }
 #approveGuided:hover { background: #104b35; }
