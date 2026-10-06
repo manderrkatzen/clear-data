@@ -62,11 +62,18 @@ const fixture = "id,amount,region,visit_date,status\n001,10,North,2025-01-01,Act
       assert.equal(await page.evaluate(() => metrics().changedCells), 0);
       await choose('item.candidate?.kind === "missing_token" && item.column === "amount"');
       await layout(`${width} evidence`);
-      await page.locator("#reviewNext").click();
+      assert.equal(await page.locator(".review-stepper button:disabled").count(), 0);
+      assert.ok(!(await page.locator(".guided-stage").innerText()).includes("Evidence first."));
+      await page.locator('[data-review-step="3"]').click();
+      assert.equal(await page.locator("[data-current-step]").getAttribute("data-current-step"), "2", "Missing interpretation routes to the choice");
+      await page.locator('[data-review-step="1"]').click();
+      await page.locator('[data-review-step="2"]').focus();
+      await page.locator('[data-review-step="2"]').press("Enter");
+      assert.equal(await page.evaluate(() => document.activeElement.dataset.reviewStep), "2", "Stepper retains keyboard focus after rendering");
       assert.ok((await page.locator(".interpretation-top").innerText()).includes("not a calibrated probability"));
       await layout(`${width} interpretation`);
       await page.locator("input[name=reviewInterpretation][value=missing]").check();
-      await page.locator("#reviewNext").click();
+      await page.locator('[data-review-step="3"]').click();
       await page.locator("#reviewOperation").selectOption("missing");
       if (width === 1440) {
         await page.locator("#reviewOperation").focus();
@@ -76,10 +83,22 @@ const fixture = "id,amount,region,visit_date,status\n001,10,North,2025-01-01,Act
       await page.locator("#reviewScopeMode").selectOption("selected");
       await page.locator("#reviewRowIds").fill("2");
       await layout(`${width} treatment`);
-      await page.locator("#reviewNext").click(); await layout(`${width} preview`);
+      await page.locator('[data-review-step="5"]').click();
+      assert.equal(await page.locator("[data-current-step]").getAttribute("data-current-step"), "4", "Approval requires visiting the preview");
+      await layout(`${width} preview`);
       assert.equal(await page.evaluate(() => state.rows[1].amount), "NULL");
       if (process.env.ARTIFACT_DIR && [1440, 390].includes(width)) { await page.evaluate(() => scrollTo(0, 0)); await page.screenshot({ path: `${process.env.ARTIFACT_DIR}/guided-preview-${width}.png`, fullPage: true }); }
-      await page.locator("#reviewNext").click(); await layout(`${width} approval`);
+      await page.locator('[data-review-step="5"]').click(); await layout(`${width} approval`);
+      await page.locator('[data-review-step="3"]').click();
+      assert.equal(await page.locator("#reviewRowIds").inputValue(), "2", "Going back preserves scope");
+      await page.locator("#reviewOperation").selectOption("constant");
+      await page.locator("#reviewValue").fill("10");
+      await page.locator('[data-review-step="5"]').click();
+      assert.equal(await page.locator("[data-current-step]").getAttribute("data-current-step"), "4", "Editing treatment invalidates approval preview");
+      await page.locator('[data-review-step="3"]').click();
+      await page.locator("#reviewOperation").selectOption("missing");
+      await page.locator('[data-review-step="4"]').click();
+      await page.locator('[data-review-step="5"]').click();
       await page.locator("#approveGuided").click();
       assert.equal(await page.evaluate(() => state.rows[1].amount), "");
       assert.equal(await page.evaluate(() => state.rows[3].amount), "0");
@@ -99,6 +118,8 @@ const fixture = "id,amount,region,visit_date,status\n001,10,North,2025-01-01,Act
     await page.locator("#reviewDateFormat").selectOption("dmy");
     await page.locator("#reviewNext").click();
     assert.ok((await page.locator(".preview-exceptions").innerText()).includes("Row 4"));
+    await page.locator('[data-review-step="5"]').click();
+    assert.equal(await page.locator("[data-current-step]").getAttribute("data-current-step"), "4", "Stepper cannot bypass blocked-record acknowledgement");
     await page.locator("#reviewSkipBlocked").check();
     await page.locator("#reviewNext").click(); await page.locator("#approveGuided").click();
     assert.equal(await page.evaluate(() => state.rows[1].visit_date), "2025-03-02");

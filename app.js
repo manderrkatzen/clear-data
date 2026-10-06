@@ -137,7 +137,7 @@ function reviewOverview() {
 function renderData() {
   $("#topEyebrow").textContent = "DATA SOURCE";
   if (!state.headers.length) {
-    screen.innerHTML = `<section class="empty-state"><span class="source-icon">▤</span><p class="eyebrow">YOUR DATA. YOUR DECISIONS.</p><h1>From messy CSV to explainable changes.</h1><p>Find quality problems, compare treatments, and approve only what makes sense. Ask the AI copilot for a proposal when you need another approach.</p><div class="source-actions"><button class="primary" id="openCsv">Open CSV</button><button class="secondary" id="sampleCsv">Try a sample dataset</button></div><ol class="workflow-strip"><li><b>1. Inspect</b><span>Checks surface the evidence</span></li><li><b>2. Decide</b><span>You review the proposed impact</span></li><li><b>3. Keep control</b><span>Export or roll back any decision</span></li></ol><p class="ai-status" id="aiStatus" aria-live="polite">Checking AI availability...</p></section>`;
+    screen.innerHTML = `<section class="empty-state"><span class="source-icon">▤</span><h1>Import a dataset</h1><p>Open a CSV or choose a sample dataset.</p><div class="source-actions"><button class="primary" id="openCsv">Open CSV</button><button class="secondary" id="sampleCsv">Try a sample dataset</button></div><p class="ai-status" id="aiStatus" aria-live="polite">Checking AI availability...</p></section>`;
     $("#openCsv").onclick = () => $("#fileInput").click();
     $("#sampleCsv").onclick = () => loadSample();
     updateAiStatus();

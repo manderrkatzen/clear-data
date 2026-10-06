@@ -33,7 +33,9 @@ node server.js
 
 Open `http://localhost:4174`. The server reads configuration from `process.env`; it does not automatically load `.env`. Export variables in the shell or use Node's `--env-file=.env` option on a supporting runtime. Consult `.env.example` for configuration names.
 
-For Workers development, use `npx wrangler dev`. See `DEPLOYMENT.md` for runtime variables and secrets; deploy only when requested.
+For Workers development, use `npx wrangler dev`. See `DEPLOYMENT.md` for runtime variables and secrets.
+
+The user requests publishing every completed update by default: after verification, commit the intended changes, push the current release branch to GitHub, and deploy the existing Cloudflare Worker with `npx wrangler deploy --keep-vars`, unless the user explicitly asks not to. Verify the affected flow on the permanent hosted URL and report the commit and deployment result. Preserve unrelated user files and server-side secrets.
 
 The permanent hosted URL is `https://clearview-data-quality-copilot.ritwikranjanpandey.workers.dev`. Releases and rollbacks must update that existing Worker. Keep its name unchanged, `workers_dev: true`, and `preview_urls: false`; preserve alternative versions in Git rather than publishing separate preview URLs unless the user explicitly changes this requirement.
 
