@@ -1,11 +1,13 @@
 importScripts("cleaning-engine.js", "analysis-engine.js");
 importScripts("capabilities-engine.js");
+importScripts("review-bands.js");
 let dataset = null;
 self.onmessage = event => {
   if (event.data.rows) dataset = { headers: event.data.headers, rows: event.data.rows };
   const { id, task, targetColumn, options, params, comparisonColumn, holdColumn, banding } = event.data;
   try {
     const { headers, rows } = dataset;
+    if (task === "reviewBands") { self.postMessage({ id, result: reviewBandComparisons(headers, rows, targetColumn, params, options) }); return; }
     if (task === "business") { self.postMessage({ id, result: { kpis: CapabilitiesEngine.kpiImpact(headers, rows, params.preview, params.definitions, options), dependencies: CapabilitiesEngine.dependencyImpact(headers, rows, params.preview, params.metrics, options) } }); return; }
     if (task === "scorecards") { self.postMessage({ id, result: CapabilitiesEngine.qualityScorecard(headers, rows, params.rules, options) }); return; }
     if (task === "significance") { self.postMessage({ id, result: AnalysisEngine.significance(headers, rows, targetColumn, params.result, options) }); return; }

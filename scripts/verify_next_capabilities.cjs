@@ -15,7 +15,7 @@ function workspace(csv) {
   const nodes = new Map(), node = selector => { if (!nodes.has(selector)) nodes.set(selector, { innerHTML: "", textContent: "", value: "", classList: { add() {}, remove() {}, toggle() {} }, addEventListener() {}, querySelectorAll() { return []; } }); return nodes.get(selector); };
   const context = vm.createContext({ document: { querySelector: node, querySelectorAll: () => [] }, fetch: async () => ({ ok: true, json: async () => ({ available: false }) }), console, setTimeout() {}, URL, Blob });
   for (const file of ["cleaning-engine.js", "analysis-engine.js", "capabilities-engine.js", "spreadsheet.js", "workspace.js", "review.js", "review-ui.js", "value-review.js", "capabilities.js", "app.js"]) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
-  const run = code => vm.runInContext(code, context); run("render = () => {}; globalThis.approve = item => { state.reviewStep = 5; const draft = reviewDraft(item); draft.previewFingerprint = guidedFingerprint(item, draft); approveGuidedDecision(item); };"); context.csv = csv; run('loadData(csv, "next.csv")');
+  const run = code => vm.runInContext(code, context); run("render = () => {}; globalThis.approve = item => { const draft = reviewDraft(item); draft.previewFingerprint = guidedFingerprint(item, draft); approveGuidedDecision(item); };"); context.csv = csv; run('loadData(csv, "next.csv")');
   return { run, value: expression => JSON.parse(run(`JSON.stringify(${expression})`)), context };
 }
 test("1.1 robust ranks expose tenure no-pattern and retain delivery/channel direction", () => {

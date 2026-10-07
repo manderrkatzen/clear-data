@@ -6,7 +6,6 @@ let profileWorker = null;
 let reviewController = null;
 let automaticReviewRun = 0;
 const interpretationCache = new Map();
-const reviewSteps = ["Understand", "Interpret", "Treat & scope", "Preview", "Approve"];
 function invalidateCleaningProfile() { cleaningCache = null; classificationCache = null; }
 function cleaningProfile() {
   const key = JSON.stringify([state.datasetRevision, state.rows.length, state.ruleConfig?.columns, state.ruleConfig?.schema]);
@@ -44,10 +43,10 @@ function resetGuidedReview() {
   invalidateCleaningProfile();
   state.reviewDrafts = {};
   state.valueReview = {};
-  state.reviewStep = 1;
   state.reviewSearch = "";
   state.reviewKind = "all";
   state.reviewQueueOrder = [];
+  state.datasetSetupOpen = false;
   state.interpretations = {};
   state.analysisStatus = "idle";
   state.analysisMessage = "";
@@ -60,7 +59,6 @@ function invalidateGuidedReview() {
   cancelAutomaticReview(false);
   state.reviewDrafts = {};
   state.interpretations = {};
-  state.reviewStep = 1;
   state.analysisStatus = "stale";
   state.analysisMessage = "Data or rules changed. Previous AI suggestions were invalidated; refresh analysis for the working data.";
 }
@@ -152,7 +150,7 @@ function guidedPreview(item, draft = reviewDraft(item)) {
 function approveGuidedDecision(item) {
   try {
     const draft = reviewDraft(item);
-    if (item.status !== "open" || state.reviewStep !== 5 || !draft.previewFingerprint || draft.previewFingerprint !== guidedFingerprint(item, { ...draft, previewFingerprint: undefined })) throw new Error("The data or treatment changed. Review the preview again before approval.");
+    if (item.status !== "open" || !draft.previewFingerprint || draft.previewFingerprint !== guidedFingerprint(item, { ...draft, previewFingerprint: undefined })) throw new Error("The data or treatment changed. Check the current fix before approval.");
     if (draft.interpretation === "unresolved") throw new Error("Choose an interpretation before approving; unresolved findings can be left open.");
     if (draft.operation === "classify" && !["missing", "legitimate", "not_applicable"].includes(draft.interpretation)) throw new Error("Choose missing, legitimate, or not applicable for this representation.");
     if (draft.operation === "retain" && draft.interpretation === "missing") throw new Error("Retaining values is not a missing-value normalization. Choose normalize to missing, or an appropriate retention interpretation.");
@@ -181,6 +179,7 @@ function approveGuidedDecision(item) {
     state.selectedIssue = null;
     state.reviewResult = `${preview.patches.length} cells changed · ${removedIds.size} records removed · ${reviewedRows.length} records reviewed. ${preview.blocked.length} blocked records remain unresolved. Working profiles and charts updated.`;
     render();
+    return change;
   } catch (error) { notify(error.message); }
 }
 function treatmentLabel(operation) {

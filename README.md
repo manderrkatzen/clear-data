@@ -17,8 +17,8 @@ The analyst remains in control: detected issues can be finalized, marked valid, 
 1. Load a local CSV or select a bundled sample dataset.
 2. Inspect values in a spreadsheet-style view.
 3. Choose a finding from the searchable review queue.
-4. Follow **Understand → Interpret → Treat & scope → Preview → Approve**.
-5. Confirm the meaning, exact record scope, and treatment; approve or leave unresolved.
+4. Review **Find → Compare → Fix** on one page: confirm value meanings, compare cohorts, and check the selected fix's before/after chart.
+5. Use **Advanced** for scope, interpretation, business impact, provenance, and copilot questions. Select **Approve** to validate a fresh exact preview and apply the fix, or leave the finding open.
 6. Review history, roll back changes, and export the cleaned dataset.
 
 ## Features
@@ -82,7 +82,7 @@ On **Dataset**, use **Save project** to save the current workspace in IndexedDB.
 
 This works with the existing Cloudflare static asset deployment and requires no new database binding or server-side upload. Storage is specific to the browser and site origin: localhost, a preview URL, and the deployed Worker have separate project libraries. Browser storage can be cleared; use backups for portable retention.
 
-On **Review**, expand **Definitions, business checks & manual corrections** for
+On **Dataset**, expand **Definitions, business checks & manual corrections** for
 column policies, business relationships, schema/metrics, duplicate keys, and manual
 corrections. Duplicates use exact, case-sensitive comparison and skip blank business
 keys. Survivor policies are explicit. Complementary merges fill only blank survivor
@@ -153,17 +153,16 @@ approval/restore/rollback/export, and a responsive 50,000-row background worker.
 
 ### Missingness analysis and similar-row fills
 
-Open a missing-value finding in **Review → Understand → Missing vs present** and
-select **Compare columns**. The ranked results show numeric distributions and
-pooled-SD effect sizes, category missing rates, or monthly missing rates. Select
-a comparison column to inspect its statistics. **Hold similar** compares within
-categorical groups or numeric quantile, fixed-width, or custom-edge bands.
+Open a missing-value finding in **Review → Compare**. Comparison runs automatically;
+the main page shows a deterministic summary and the top three comparison charts.
+The existing numeric ranking uses Cliff’s delta; category/monthly comparisons use
+missing-rate gaps. **Hold similar by** compares within categorical groups or
+numeric quartile, fixed-width, or custom-edge bands, and is shared with Fix.
 An explicit no-pattern note appears only when at least three usable comparisons
 are all weak or absent. Fewer than five missing/present records is insufficient.
 
-In **Treat & scope**, select **Fill from similar groups** or **Fill from nearest
-neighbours**. Group-wise fills support multiple hold columns, median/mean, numeric
-bands, and a minimum reference count. KNN uses scaled numerical distances and
+In **Fix**, select **Median by [hold column]** or choose **KNN** in More fixes.
+The existing group-wise engine uses the shared hold and band settings. KNN uses scaled numerical distances and
 exact categorical matches, defaults to seven neighbours, and resolves ties by
 source order. Sparse groups widen where possible, then fall back to the global
 observed median. Token and sentinel meanings come from individual analyst
@@ -178,18 +177,17 @@ explanation for each representation. Zero children, negative temperatures,
 unknown tokens, and invalid values require different contextual judgments.
 Scores are model-assessed, not calibrated probabilities; advice never classifies.
 
-Open a token or zero/negative finding to see the column's representation strip.
-Pick NULL, N/A, zero, or a negative value, choose **Missing observation**, **Keep
-as a valid value**, or **Not applicable**, then **Confirm & next value**. **Skip
-for now** leaves the representation unresolved. Each confirmation records the
-exact scope and meaning in reversible history without rewriting stored values.
-Confirmed missing representations join the missing-value finding for comparison
-and the usual treatment preview/approval. Legitimate zero remains observed.
+Open a token or zero/negative finding to see its value chips in **Find**. Pick
+NULL, N/A, zero, or a negative value and select **Missing** or **Keep as valid**.
+This one-click decision records exact matches in reversible history without
+rewriting source values. Not-applicable and other interpretations live in
+**Advanced**. Confirmed missing representations feed Compare and Fix immediately;
+unconfirmed tokens do not enter physical fill scope. Legitimate zero stays observed.
 
 All representations are covered by bounded batches (at most ten groups per
 candidate and six candidates per request), with stable evidence IDs. Assessments
-appear as batches complete. **Assess this value with AI** can request only the
-currently selected representation. Server and browser validation reject unknown
+appear as batches complete. Refresh analysis from Dataset, or ask a finding-level
+question in Advanced. Server and browser validation reject unknown
 IDs, duplicated evidence, missing coverage, and scores outside 0–1. The dedicated
 Playwright runner checks incremental delivery, contextual scores, individual
 decisions, legitimate zero, skipped negatives, treatment, and restore/rollback.

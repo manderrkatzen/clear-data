@@ -123,6 +123,8 @@ function refreshChrome() {
   $("#navChangeCount").classList.toggle("hidden", !state.changes.length);
   $("#undoButton").classList.toggle("hidden", !state.changes.length);
   $("#contextAction").textContent = state.screen === "data" ? "Inspect data" : state.screen === "report" ? "Export cleaned CSV" : state.screen === "issues" && openCount() ? "Next finding →" : openCount() ? "Review findings →" : "View report →";
+  $("#contextAction").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
+  $("#headerIssues").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
 }
 function render() {
   refreshChrome();
@@ -132,7 +134,7 @@ function render() {
   if (state.screen === "data") { if (state.headers.length) { screen.insertAdjacentHTML?.("beforeend", cleaningOverviewHtml()); bindCleaningOverview(); } screen.insertAdjacentHTML?.("beforeend", workspaceTools()); bindWorkspaceTools(); }
   if (state.screen === "changes") decorateDecisionHistory();
   if (typeof enhanceCapabilityPages === "function") enhanceCapabilityPages();
-  if (typeof labelReviewSurfaces === "function") labelReviewSurfaces();
+  if (typeof location !== "undefined" && document.body) document.body.classList.toggle("debug-ui", new URLSearchParams(location.search).get("debug") === "ui");
 }
 function reviewOverview() {
   const open = state.issues.filter((item) => item.status === "open");
@@ -163,25 +165,7 @@ function renderData() {
 }
 async function updateAiStatus() { const status = $("#aiStatus"); if (!status) return; try { const response = await fetch("/api/ai/status", { cache: "no-store" }); if (!response.ok) throw new Error("Status request failed."); const result = await response.json(); status.textContent = result.available ? `AI configured: ${result.provider} · ${result.model} (provider health not tested)` : "AI proposals are not configured on this server."; status.classList.toggle("available", Boolean(result.available)); } catch { status.textContent = "AI status check could not reach the server"; } }
 function renderIssues() {
-  return renderGuidedIssues();
-}
-function renderLegacyIssues() {
-  $("#topEyebrow").textContent = "ISSUE REVIEW";
-  const overview = reviewOverview();
-  const groups = overview.open.reduce((all, item) => ((all[item.column] ??= []).push(item), all), Object.create(null));
-  const closed = state.issues.filter((item) => item.status !== "open");
-  const groupHtml = Object.entries(groups).map(([column, items]) => `<article class="issue-group"><header><div><h2>${escapeHtml(column)}</h2><span>${inferType(column)} · ${new Set(items.flatMap((item) => item.rows.map((row) => row._row))).size} rows with open findings</span></div><b>${items.length} open</b></header>${items.map(renderIssueRow).join("")}</article>`).join("");
-  screen.innerHTML = `<section class="page-head compact"><div><p class="eyebrow">HUMAN-IN-THE-LOOP REVIEW</p><h1>Make every change explainable.</h1><p>Inspect the evidence. Choose a treatment. Review its impact before approving.</p></div></section><section class="review-overview" aria-label="Review progress"><div><strong>${overview.open.length}</strong><span>open findings</span></div><div><strong>${overview.rows.toLocaleString()}</strong><span>rows to inspect</span></div><div><strong>${overview.closed}</strong><span>closed findings</span></div><div><strong>${metrics().changedCells}</strong><span>modified cells</span></div></section><details class="review-configuration"><summary>Define additional checks <span>Business keys, schema & derived metrics</span></summary><p>Automatic checks cannot know your business definitions. Add constraints without changing source values.</p><div class="workspace-actions"><button class="secondary" id="configureDuplicates">Review duplicates / keys</button><button class="secondary" id="configureSchema">Schema / metric rules</button></div></details><section class="issue-groups">${groupHtml || '<section class="empty-panel"><h2>Current findings are reviewed</h2><p>Inspect your data or define additional checks. Review completion is not a guarantee of correctness.</p><button class="primary" id="viewReviewedData">Inspect data</button></section>'}</section>${closed.length ? `<details class="closed-findings"><summary>${closed.length} closed findings <span>Accepted, finalized, or resolved by another change</span></summary>${closed.map(renderIssueRow).join("")}<p>Use Changes to inspect decisions or roll them back.</p></details>` : ""}`;
-  $("#configureDuplicates").onclick = configureDuplicates;
-  $("#configureSchema").onclick = showRuleEditor;
-  $("#viewReviewedData")?.addEventListener("click", () => go("view"));
-  bindIssueLinks();
-}
-function renderIssueRow(item) {
-  const expanded = state.selectedIssue === item.id && item.status === "open";
-  const status = item.status === "open" ? (expanded ? "Collapse ↑" : "Review →") : item.status === "valid" ? "Accepted unchanged" : item.status === "resolved" ? "Resolved by related change" : "Finalized";
-  const recordSummary = expanded && item.recommendation === "outlier" ? `${previewOutlier(item).rows.length.toLocaleString()} records match the displayed definition` : `${item.rows.length.toLocaleString()} records · ${item.recommendation === "outlier" ? "Numerical outlier review" : escapeHtml(item.type)}`;
-  return `<div class="issue-row ${item.status !== "open" ? "resolved" : ""}"><button class="issue-summary" data-open-issue="${item.id}" aria-expanded="${expanded}"><span class="severity-dot ${item.severity}" aria-hidden="true"></span><span><b>${escapeHtml(item.label)}</b><small>${recordSummary}</small></span><em>${status}</em></button>${expanded ? renderIssueWorkspace(item) : ""}</div>`;
+  return renderSimpleReview();
 }
 function categoryProfile(item) { const counts = state.rows.map((row) => String(row[item.column] ?? "")).filter((value) => value.trim()).reduce((all, value) => ((all[value] = (all[value] || 0) + 1, all)), Object.create(null)); return { counts, total: Object.values(counts).reduce((sum, value) => sum + value, 0), variants: Object.entries(counts).filter(([value]) => value.replace(/[ _-]/g, "").toLowerCase() === "paidsocial") }; }
 function categoryImpact(item, action) {
@@ -323,7 +307,6 @@ function openIssue(id) {
   if (!item || item.status !== "open") return notify("This finding is closed. Inspect its decision in Decisions, or roll it back to reopen it.");
   const opening = state.screen !== "issues" || state.selectedIssue !== id;
   state.selectedIssue = opening ? id : null;
-  if (opening) state.reviewStep = 1;
   if (opening) state.selectedFix = "";
   state.aiMessage = "";
   go("issues");
@@ -672,7 +655,6 @@ function bindIssueLinks() {
 // The active definitions keep one reusable, issue-scoped record subview below the analytical row.
 function issueFilter(item) { return state.issueFilters[item.id] ||= { join: "AND", conditions: [{ column: state.headers[0], operator: "contains", value: "" }] }; }
 function filteredIssueRows(item) { const filter = issueFilter(item), conditions = filter.conditions.filter((entry) => String(entry.value).trim()); return !conditions.length ? activeRows(item) : activeRows(item).filter((row) => filter.join === "OR" ? conditions.some((entry) => match(row, entry)) : conditions.every((entry) => match(row, entry))); }
-function renderIssueWorkspace(item) { if (item.recommendation === "duplicates") return renderDuplicateWorkspace(item); if (item.recommendation === "metric") return renderMetricWorkspace(item); return item.recommendation === "outlier" ? renderOutlierWorkspace(item) : renderTreatmentWorkspace(item); }
 
 function affectedColumnConfig(item, filter) {
   const identifiers = [...new Set([...state.headers.filter((column) => /(^id$|_id$|name$|^city$|^channel$)/i.test(column)), ...state.headers.filter((column) => !numericColumns().includes(column))])].filter((column) => column !== item.column).slice(0, 2);

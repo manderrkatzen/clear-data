@@ -194,18 +194,18 @@ components:
 
 ClearData is a precise, daylight analytical workspace. An ink-navy navigation rail frames white task surfaces on cool paper; blue identifies actions and selection, green marks final approval, and amber calls attention to exceptions. The character is restrained and information-led: readable data, aligned labels, compact controls, and meaningful hairline divisions.
 
-The system uses native browser controls, inline SVG icons, and a self-hosted typeface. Dataset evidence remains visually distinct from interpretation and approval. The review footer is sticky within the desktop workspace with measured bottom padding to protect content; at mobile widths it stays in normal flow.
+The system uses native browser controls, inline SVG icons, and a self-hosted typeface. Review is a single vertical Find / Compare / Fix page. Secondary controls live in a side panel; the approval action follows the live chart in normal flow.
 
 **Key Characteristics:**
 - Navy navigation, white task surfaces, and cool-paper surroundings.
 - Source Sans 3 with tabular numerals for analytical comparisons.
 - Blue progression, green final approval, and amber contextual warnings.
 - Restrained corners, hairline divisions, and SVG finding icons.
-- Native controls and an unobstructed, desktop-sticky review footer.
+- Native controls, three question-led cards, and one approval action.
 
 This is a source-grounded record of the implemented system. In `index.html`, styles load in this order: `styles.css`, `spreadsheet.css`, `workspace.css`, `review.css`, then `design-system.css`. The last file is the authoritative visual layer; earlier files still supply layout, interaction states, and compatibility. Root frontmatter records reused primitives and component values, not new CSS variables. Its `fontFamily` values reproduce `--font-ui`; its `control` radius reproduces `--radius`. Color keys `ink` through `red-bg` reproduce the same-named root custom properties. Remaining color entries are extracted selector values.
 
-The finish reviewer reportedly requested four material fixes, now applied in one batch. The final verdict remains pending. This documentation pass does not constitute a new Playwright verification or an independent finish approval.
+The simplified Review surface is verified by `scripts/verify_simple_review_ui.cjs`, including desktop/mobile captures with exact debug labels, intermediate responsive widths, scoped approval, exceptions, provenance, project restore, and rollback.
 
 ## Colors
 
@@ -254,7 +254,7 @@ This is a practical, stepped type hierarchy, not a mathematical modular scale. C
 
 Desktop shell: CSS grid with a navigation column (196px) and `minmax(0, 1fr)` content. The sidebar is sticky at the viewport top, with height (100vh) and padding (26px 16px 20px). The dataset topbar is (72px) high with inline padding (30px). Screens have maximum width (1600px) and padding (28px 30px 40px).
 
-Guided review uses a findings queue (258px) beside a flexible white task surface, separated by (18px). The queue is sticky at (90px), and its list scrolls within (60vh). Setup tools sit below the queue, collapsed by default. Stage padding is (24px); five-step navigation uses equal columns and a minimum step height (72px). Numeric missing-value findings use three visible steps: Workbench, Preview, Approve. The review footer is sticky at the desktop workspace bottom, with padding (15px 24px); a ResizeObserver reserves its measured height in stage bottom padding. At 800px and below it returns to normal flow. Its buttons retain the earlier review-specific minimum height (44px), even though general buttons have a (40px) minimum.
+Review uses a findings queue (220px) beside a flexible main column capped at (1060px), with a (28px) gap. At 1100px the queue is (190px) with a (20px) gap; at 900px it moves above the finding as a horizontal list. The header shows the title, record count, Advanced, and Leave open. Three white question-led cards use a shared line border, (8px) corners, (24px) padding, and (20px) separation. They remain in ordinary page flow, without a stepper, navigation footer, or bounded scrolling stage. Setup definitions live in a collapsed Dataset disclosure.
 
 Metric and preview summaries use shared bordered strips rather than separated floating cards. Desktop overview metrics and preview summaries have four columns. Profile content scrolls within (480px); guided record previews within (330px). The spreadsheet scroll region is capped at (65vh); its issue rail is (180px) wide on desktop, inherited from `workspace.css`. Comparison metrics use `repeat(auto-fit, minmax(140px, 1fr))`.
 
@@ -266,22 +266,22 @@ All breakpoints are inclusive `max-width` queries:
 
 | Width | Effective behavior |
 | --- | --- |
-| 1200px | Rail becomes 178px; screen/topbar gutters 24px; queue 220px with 14px gap; stage padding 20px; preview summary becomes two columns. |
-| 1100px | Compatibility expanded-issue panels stack; this is an inherited workspace rule, not the guided-review breakpoint. |
-| 1000px | Guided queue moves into flow above the task; queue header becomes two columns; finding buttons become a horizontal scrolling list, 220px each, capped at 170px height. |
+| 1200px | Rail becomes 178px; screen/topbar gutters 24px. |
+| 1100px | Review queue becomes 190px with a 20px gap. |
+| 900px | Review queue moves above the finding; finding buttons become a horizontal scrolling list, 210px each. |
 | 800px | Shell becomes one column; rail becomes an in-flow navy header with horizontally scrollable navigation; product label and sidebar bottom disappear. Topbar height becomes automatic, minimum 70px; screen gutters 18px; overview metrics become two columns. |
 | 700px | Inherited spreadsheet rail becomes 105px; markers wrap, bubbles become 22px high, and marker labels become 100px wide. The inherited import workflow strip also becomes one column. |
-| 620px | Inherited review rules stack the analysis banner, review fields and comparison metrics; footer wraps; exception/value-group rows can wrap; rule forms become one column. |
-| 560px | Screen gutters 14px; navigation icons hidden; header badges and ghost action hidden; headings shrink; stage padding 20px 17px; footer padding 12px 17px, with step text on its own last row; comparison metrics stay one column. Spreadsheet rail stays 105px. |
+| 620px | Review cards use 20px × 17px insets; header actions wrap; comparison columns stack and group mini-charts use two columns; approval becomes full width; fields stack. |
+| 560px | Screen gutters 14px; navigation icons hidden; global header badges and ghost action hidden; headings shrink. Spreadsheet rail stays 105px. |
 | 400px | Inherited compatibility outlier controls become one column and decision-bar primary action expands to full width. |
 
 The effective inherited (700px) and (620px) changes matter: do not describe them as beginning only at the final layer's (560px) query. Wide tables retain local horizontal scrolling instead of shrinking the data to fit.
 
 ## Elevation & Depth
 
-Task surfaces are flat, separated by borders and tonal backgrounds. Standard action buttons explicitly remove shadows. Active review steps use an inset blue underline (2px), while selected spreadsheet rows retain subtle inset rules from the compatibility stylesheet. Dialogs are the raised exception, with shadow `0 16px 36px #142c4d26` and backdrop `#142c4d66`.
+Task surfaces are flat, separated by borders and tonal backgrounds. Standard action buttons explicitly remove shadows. Blue outlines and a soft backing identify selected value chips and fixes. Dialogs are the raised exception, with shadow `0 16px 36px #142c4d26` and backdrop `#142c4d66`.
 
-**The Flow First Rule.** Keep the guided action footer unobstructed: reserve its measured height on desktop and return it to normal flow on mobile. Evidence and exceptions must not be covered by approval controls.
+**The Flow First Rule.** Find, Compare, and Fix stay in document flow. Put the approval action after the chart and exception acknowledgements; keep secondary detail in Advanced rather than adding navigation steps.
 
 Buttons transition background and border color (150ms ease). Reduced-motion mode removes these transitions and the toast transform, with a zero-duration opacity transition. This does not claim that every legacy animation is disabled.
 
@@ -297,7 +297,7 @@ There are no raster assets in the new visual system. Its assets are inline SVG p
 
 ### Native buttons
 
-Blue primary, white secondary, and muted ghost actions share restrained corners, padding, and weight from frontmatter. General minimum height is (40px); guided footer, tools, analysis-banner actions, finding-value actions, and navigation retain contextual minimums of (44px) or greater. Final guided approval uses green through `#approveGuided`; other primary actions stay blue. Hover values are separate frontmatter variants. Secondary borders change from `secondary-line` to `secondary-hover-line`. Disabled buttons retain opacity (.5) and `cursor: not-allowed`; navigation overrides opacity to (1) and uses its muted rail text.
+Blue primary, white secondary, and muted ghost actions share restrained corners, padding, and weight from frontmatter. General minimum height is (40px); navigation retains larger contextual minimums. Review approval uses green through `#simpleApprove`. Fix selection uses a blue outline and soft backing. Hover values are separate frontmatter variants. Disabled buttons retain opacity (.5) and `cursor: not-allowed`.
 
 Keyboard focus uses outline (3px solid `focus`) with offset (3px) on buttons, fields, summaries, and links. Spreadsheet bubbles use their own category-colored (2px) outline; selected/focused flagged cells use an inset category outline.
 
@@ -315,65 +315,27 @@ Neutral, warning, and success badges are the implemented visual variants; labels
 
 ### Task surfaces and findings queue
 
-White guided cards use a guided-line border and surface corners. Workspace cards use the shared line and card inset. The queue uses queue-bg, separated rows, and a blue active-row backing with dark blue title text. Candidate rows have padding (14px 17px). Active step buttons use `aria-current="step"`, a pale-blue backing (`#eaf1ff`), a blue numbered circle, and an inset blue bottom rule. All step labels are clickable and keyboard-accessible; forward navigation shares interpretation, scope, exception, and preview guards with Continue. Computing a similar-row preview temporarily disables progression and shows a busy label.
+Find, Compare, and Fix use the existing white panel, line, restrained surface corners, and question-heading scale. The findings queue has separated, column-specific items and a soft-blue selected row. Order and focus remain stable during background updates. There is no stepper or staged fallback. A busy selected fix disables approval while the existing engines prepare its exact effect.
 
 ### Missingness analysis
 
-Understand adds a plain, divided analytical section after source value groups,
-before the original/working distribution. Ranked comparison tables use the
-existing profile-table typography and blue selection. Tables scroll locally
-inside a bounded 360px region; 520px minimum table width preserves readable data
-on mobile. Missing/present histograms reuse source/working series colors with
-visible legends, a shared percentile range, and explicit tail counts. Held
-comparisons use an inline disclosure with native selectors and number fields;
-numeric-band fields disappear for categorical holds. AI explanations follow the
-computed evidence and identify summary-only transmission beside the request.
-
-Similar-row treatment uses a native checkbox fieldset for hold/similarity columns,
-existing review fields, and explicit fallback guidance. Fill provenance appears
-as an open disclosure after preview counts and in decision history, with bounded
-scrolling and visible method, fallback count, band labels, or donor row IDs.
-At 620px, analytical headings stack and similarity columns become one column.
-These additions reuse the current palette and typography; no new visual world
-or decorative copy is introduced.
+Compare runs automatically. A deterministic sentence leads, followed by one shared hold control and a verdict. The top three comparison columns use compact charts rather than a ranking table. Numeric cohorts use overlaid shared-bin histograms; categories use missing-rate bars. Holds split these into bounded group mini-charts using the existing engines. Show more columns and Explain with AI are secondary links. Numeric-band settings appear only for numerical holds.
 
 ### Per-representation value review
 
-Token and zero/negative findings use a compact horizontal strip of exact values,
-counts, and their independently assessed AI missingness confidence. Selection
-uses the existing blue border/backing; the strip scrolls locally on mobile.
-One focused value shows its column context, bounded AI explanation, non-calibrated
-score label, native meaning radios, exact match count, and a source-preserving
-confirmation. **Confirm & next value** advances directly through representations;
-skipped values stay open. Completed missingness decisions link to comparison and
-treatment. Confidence is never preselected as the analyst's decision.
-
-The value strip is 180px per item, with inherited control focus styling. The
-current value uses the existing 23px finding-title scale and wraps long text;
-the heading, actions, and treatment link wrap without introducing a new palette.
-Blanket token-missingness checkboxes were removed from both comparison and
-similar-row fill controls. Classification records meaning without rewriting
-source cells; treatment still uses the established preview and approval flow.
+Find uses a horizontally scrolling strip of exact-value chips with counts, independent AI assessments, and meaning state. Blanks begin as missing; other representations need explicit review. One selected value shows a single-line explanation and Missing / Keep as valid actions. These record reversible source-preserving meaning decisions in one click. The confidence tooltip retains the model-assessed, non-calibrated wording. Unconfirmed representations never enter physical fill scope.
 
 ### Next capability extensions
 
-The analytical desk is retained. Added functions use existing native disclosures,
-review-field grids, profile-table styling and secondary buttons: affected/present
-records, band impacts, transient candidates, KPIs, suggested checks, export
-provenance, and profile scorecards. Candidate panels form a responsive grid of
-at most four recipes; promotion collapses that disclosure in normal preview.
-Tables retain local scrolling. Active charts use sixteen shared percentile bins
-with tail counts; numeric ranks label Cliff’s delta/direction and secondary
-winsorized SMD, with separate permutation evidence. This is a capability pass,
-not a visual redesign.
+Advanced contains scope, interpretation, the selected fix's KPI/dependency impact, provenance, and copilot questions. Changed rows and blocked lists open in the same native side-panel surface. Dataset retains definitions, reusable rules, suggested checks, projects, and quality scorecards. Statistical methods, source traces, and rollback replay remain in their existing engines.
 
-### Missing-value workbench
+### Single-page fix selection
 
-Numeric missing findings combine existing analytical and treatment capabilities in one stage, without changing engines or approval rules. Two columns hold evidence (pattern summary, one shared hold, affected/present records) and fixes (2–4 candidates, shared-bin distributions, per-candidate KPIs, choose-and-preview action). At 1200px and below, evidence stacks above fixes. Native disclosures contain parameter editors, shared scope, comparison detail, and band impacts; a native popover holds interpretation and AI advice. Existing blue selection, native fields, restrained borders, and chart series carry the structure. Transient candidates recompute through the existing worker with a debounced busy state and stale-result guards. Stable `data-ui` anchors support the opt-in `?debug=ui` overlay, whose tags stay outside document flow. Other findings retain the five-step flow; Preview places exact records before distribution and uses collapsible supporting evidence.
+Fix offers one selected treatment, with common choices visible and other valid methods in More fixes. Text replacement combines a Fill button with its editable value. The current before/after chart and a concise effect line update together. Scope, data, parameter, and classification changes invalidate transient results; approval builds a fresh exact preview and uses the existing fingerprint, blocked-subset, constraint, and provenance guarantees. A confirmation line offers Undo and advances the queue. `?debug=ui` labels the exact stable regions from the local simplification brief without adding layout space.
 
 ### Signature comparison
 
-Original, working, and proposed distributions share bins, axes, and scale. Bars occupy a (120px) chart height with bin gaps (5px) and series gaps (2px). Visible legends and comparison metrics support the color distinction. Scoped counts, exact record previews, and amber blocked/constraint exceptions precede final approval; the footer reserves content space on desktop and remains in normal flow on mobile.
+The main Fix chart compares current working values with the selected proposal on common bins and scale. It uses the existing 1st–99th percentile range, with edge counts in a compact disclosure. Text uses top-label counts, prioritizing newly introduced labels, plus blanks. A By group toggle reuses the existing band-impact lens. Amber blocked/constraint acknowledgements and the approval action follow the chart in normal flow.
 
 ### Dialogs and feedback
 
@@ -381,7 +343,7 @@ The application uses native `dialog` with the documented backdrop and shadow, pa
 
 ### Observed limitations, not canonized
 
-The final layer is authoritative where its selectors win; it does not reset every compatibility declaration. Remaining examples include `DM Sans` on metric explanatory text, generic project/decision fields and other legacy controls; `DM Mono` on inherited eyebrows and some old analytical widgets; green guided-card text selection and green field caret; review-specific placeholder colors; and inherited green-tinted compatibility panels. The topbar still renders an eyebrow, and guided preview/approval markup still emits stage kickers. These leftovers are not additional house fonts, a new green-selection rule, or a sanctioned kicker style for future surfaces. They are recorded without repair because this pass is documentation-only. This source scan does not verify their rendered frequency or contrast in Playwright.
+Some non-Review compatibility styles still contain legacy font names and contextual colors. They do not define a new visual direction for Review. The simplified surface uses the existing local typeface and tokens; the broader application shell retains its established appearance.
 
 ## Do's and Don'ts
 
@@ -390,7 +352,7 @@ The final layer is authoritative where its selectors win; it does not reset ever
 - **Do** use blue for progression and selection, green for final guided approval, and amber for contextual exceptions.
 - **Do** pair finding colors with SVG icons and textual descriptions.
 - **Do** preserve common bins and scales in original/working/proposed comparisons.
-- **Do** keep the review footer reachable and unobstructed, with measured content padding on desktop and normal flow on mobile.
+- **Do** keep one approval action after the live chart and put secondary detail in Advanced.
 - **Do** account for inherited responsive rules when extending the final visual layer.
 
 ### Don't:

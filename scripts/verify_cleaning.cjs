@@ -16,7 +16,7 @@ function workspace(csv) {
   const context = vm.createContext({ document: { querySelector: node, querySelectorAll: () => [] }, fetch: async () => ({ ok: true, json: async () => ({ available: false }) }), console, setTimeout() {}, URL, Blob });
   for (const file of ["cleaning-engine.js", "analysis-engine.js", "capabilities-engine.js", "spreadsheet.js", "workspace.js", "review.js", "review-ui.js", "value-review.js", "capabilities.js", "app.js"]) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
   const run = code => vm.runInContext(code, context);
-  run("render = () => {}; globalThis.approve = item => { state.reviewStep = 5; const draft = reviewDraft(item); draft.previewFingerprint = guidedFingerprint(item, draft); approveGuidedDecision(item); };");
+  run("render = () => {}; globalThis.approve = item => { const draft = reviewDraft(item); draft.previewFingerprint = guidedFingerprint(item, draft); approveGuidedDecision(item); };");
   context.csv = csv; run('loadData(csv, "exceptions.csv")');
   const value = expression => JSON.parse(run(`JSON.stringify(${expression})`));
   return { run, value, context, node };
@@ -120,7 +120,7 @@ test("preview staleness and blocked-record acknowledgement prevent unintended pa
   assert.equal(w.value("guidedPreview(item).blocked.length"), 1);
   w.run("approve(item)");
   assert.equal(w.value("metrics().changedCells"), 0);
-  w.run('const draft = reviewDraft(item); draft.skipBlocked = true; draft.previewFingerprint = guidedFingerprint(item, draft); state.reviewStep = 5; draft.dateFormat = "mdy"; approveGuidedDecision(item);');
+  w.run('const draft = reviewDraft(item); draft.skipBlocked = true; draft.previewFingerprint = guidedFingerprint(item, draft); draft.dateFormat = "mdy"; approveGuidedDecision(item);');
   assert.equal(w.value("metrics().changedCells"), 0);
   w.run('reviewDraft(item).dateFormat = "dmy"; approve(item)');
   assert.equal(w.value("state.rows[0].event_date"), "2025-03-02");
