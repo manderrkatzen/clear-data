@@ -22,35 +22,33 @@ var AnalysisEngine = (() => {
     const columns = new Map();
     for (const column of headers) {
       const parsing = policy(column, options);
-      const signature = JSON.stringify([parsing, rows.map(row => [row[column], classified.get(`${row._row}:${column}`)?.meaning])]);
+      // Reuse column caches without allocating a value/meaning pair for every unclassified cell.
+      const signature = JSON.stringify([parsing, rows.map(row => row[column]), classified.size ? rows.map(row => { const decision=classified.get(`${row._row}:${column}`);return decision && String(decision.value??"")===String(row[column]??"") ? decision.meaning : null; }) : null]);
       if (saved.get(column)?.signature === signature) { columns.set(column, saved.get(column)); continue; }
-      const states = rows.map(row => engine.observationState(row, column, parsing, classified));
-      const blanks = states.map(status => ["missing", "blank_unreviewed"].includes(status));
-      const numbers = rows.map((row, index) => {
-        if (states[index] !== "present") return null;
-        if (parsing.numberFormat === "plain") {
-          const raw = text(row[column]);
-          if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw)) return null;
-          const value = Number(raw); return Number.isFinite(value) ? value : null;
-        }
-        try { return engine.parseNumber(row[column], parsing); } catch { return null; }
-      });
-      const dates = rows.map((row, index) => {
-        if (states[index] !== "present") return null;
-        if (parsing.dateFormat === "iso" && !/^\d{4}-\d{2}-\d{2}$/.test(text(row[column]))) return null;
-        if (["mdy", "dmy"].includes(parsing.dateFormat) && !/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(text(row[column]))) return null;
-        try { return engine.parseDate(row[column], parsing.dateFormat).slice(0, 7); } catch { return null; }
-      });
-      const observed = states.filter(status => status === "present").length;
-      const distinct = new Set(rows.filter((_, index) => states[index] === "present").map(row => text(row[column]))).size;
-      const dateRole = parsing.role === "date" || (dates.filter(Boolean).length >= Math.max(1, observed * .9));
-      const numericRole = ["number", "integer"].includes(parsing.role) || (parsing.role === "auto" && numbers.filter(Number.isFinite).length >= Math.max(1, observed * .9));
+      // One observation-state pass builds the same masks and parsing evidence without intermediate arrays.
+      const states=Array(rows.length),blanks=Array(rows.length),numbers=Array(rows.length).fill(null),dates=Array(rows.length).fill(null),distinctValues=new Set();
+      let observed=0,numericCount=0,dateCount=0;
+      for(let index=0;index<rows.length;index++) {
+        const row=rows[index],status=engine.observationState(row,column,parsing,classified),raw=text(row[column]);
+        states[index]=status;blanks[index]=status==="missing"||status==="blank_unreviewed";
+        if(status!=="present")continue;
+        observed++;distinctValues.add(raw);
+        if(parsing.numberFormat==="plain") { if(/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw)){const value=Number(raw);if(Number.isFinite(value)){numbers[index]=value;numericCount++;}} }
+        else {try{numbers[index]=engine.parseNumber(row[column],parsing);numericCount++;}catch{}}
+        if(parsing.dateFormat==="iso" && (raw.length!==10 || raw[4]!=="-" || !/^\d{4}-\d{2}-\d{2}$/.test(raw)))continue;
+        if(["mdy","dmy"].includes(parsing.dateFormat) && !/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(raw))continue;
+        try{dates[index]=engine.parseDate(row[column],parsing.dateFormat).slice(0,7);dateCount++;}catch{}
+      }
+      const distinct=distinctValues.size;
+      const dateRole = parsing.role === "date" || dateCount >= Math.max(1, observed * .9);
+      const numericRole = ["number", "integer"].includes(parsing.role) || (parsing.role === "auto" && numericCount >= Math.max(1, observed * .9));
       const type = dateRole ? "date" : numericRole ? "numeric" : "categorical";
-      const sorted = numbers.filter(Number.isFinite).sort((a, b) => a - b);
-      const entry = { signature, states, blanks, numbers, dates, observed, distinct, type, sorted, policy: parsing, idLike: parsing.role === "identifier" || (engine.isIdentifier(column) && distinct / Math.max(1, observed) >= .95) };
+      const sortedIndices = numbers.map((value,index)=>Number.isFinite(value)?index:-1).filter(index=>index>=0).sort((a,b)=>numbers[a]-numbers[b]);
+      const sorted = sortedIndices.map(index=>numbers[index]);
+      const entry = { signature, states, blanks, numbers, dates, observed, distinct, type, sorted, sortedIndices, policy: parsing, idLike: parsing.role === "identifier" || (engine.isIdentifier(column) && distinct / Math.max(1, observed) >= .95) };
       saved.set(column, entry); columns.set(column, entry);
     }
-    const context = { headers, rows, columns, options };
+    const context = { headers, rows, columns, options, comparisons:new Map(), cohorts:new Map() };
     if (contextKey) contexts.set(rows, { key: contextKey, context });
     return context;
   }
@@ -101,21 +99,30 @@ var AnalysisEngine = (() => {
   }
   function compareColumn(context, targetColumn, column, indices) {
     const { rows, columns } = context, target = columns.get(targetColumn), comparison = columns.get(column);
-    const selected = (indices || rows.map((_, index) => index)).filter(index => target.states[index] !== "not_applicable");
-    const overallMissing = selected.filter(index => target.blanks[index]).length / Math.max(1, selected.length);
-    const usable = selected.filter(index => comparison.states[index] === "present");
-    const excludedBlankRows = selected.filter(index => comparison.blanks[index]).length;
-    const excludedNotApplicableRows = selected.filter(index => comparison.states[index] === "not_applicable").length;
+    const cacheKey=JSON.stringify([targetColumn,column]);
+    if (!indices && context.comparisons.has(cacheKey)) return context.comparisons.get(cacheKey);
+    const complete=result=>{if(!indices)context.comparisons.set(cacheKey,result);return result;};
+    let cohort=!indices ? context.cohorts.get(targetColumn) : null;
+    if(!cohort) {
+      const selected=[],source=indices || target.states.keys();let nMissing=0;
+      for(const index of source)if(target.states[index]!=="not_applicable"){selected.push(index);if(target.blanks[index])nMissing++;}
+      cohort={selected,nMissing};if(!indices)context.cohorts.set(targetColumn,cohort);
+    }
+    const selected=cohort.selected,overallMissing=cohort.nMissing/Math.max(1,selected.length),usable=[];
+    let excludedBlankRows=0,excludedNotApplicableRows=0;
+    for(const index of selected) { const status=comparison.states[index];if(status==="present")usable.push(index);if(comparison.blanks[index])excludedBlankRows++;if(status==="not_applicable")excludedNotApplicableRows++; }
     if (comparison.type === "numeric") {
-      const missingValues = [], presentValues = [];
-      for (const index of usable) if (Number.isFinite(comparison.numbers[index])) (target.blanks[index] ? missingValues : presentValues).push(comparison.numbers[index]);
-      if (new Set([...missingValues, ...presentValues]).size < 2) return null;
-      missingValues.sort((a, b) => a - b); presentValues.sort((a, b) => a - b);
-      const combinedSorted = [...missingValues, ...presentValues].sort((a, b) => a - b);
+      // Same values and methods, partitioned in pre-sorted column order instead of three re-sorts.
+      const missingValues = [], presentValues = [], combinedSorted = [], allowed=indices?new Set(indices):null;
+      for (const index of comparison.sortedIndices) {
+        if (target.states[index]==="not_applicable" || allowed && !allowed.has(index)) continue;
+        const value=comparison.numbers[index]; combinedSorted.push(value); (target.blanks[index] ? missingValues : presentValues).push(value);
+      }
+      if (!combinedSorted.length || combinedSorted[0]===combinedSorted.at(-1)) return complete(null);
       const missingStats = statistics(missingValues, true), presentStats = statistics(presentValues, true);
       const delta = cliffsDelta(missingValues, presentValues, true), direction = Math.sign(delta), effectSize = Math.abs(delta);
       const directionText = direction > 0 ? "higher in missing group" : direction < 0 ? "lower in missing group" : "no directional difference";
-      return { column, type: "numeric", effectSize, effectMeasure: "cliffs_delta", cliffsDelta: delta, winsorizedSmd: winsorizedSmd(missingValues, presentValues, combinedSorted), direction, directionText, strength: effectSize >= .33 ? "strong" : effectSize >= .147 ? "moderate" : effectSize > 0 ? "weak" : "none", missingStats, presentStats, histogram: histogram([missingValues, presentValues], 16, null, combinedSorted), excludedBlankRows, excludedNotApplicableRows, excludedInvalidRows: usable.length - missingValues.length - presentValues.length, summary: `${column}: ${directionText}; missing-group median ${missingStats.median ?? "unavailable"}; present-group median ${presentStats.median ?? "unavailable"}.` };
+      return complete({ column, type: "numeric", effectSize, effectMeasure: "cliffs_delta", cliffsDelta: delta, winsorizedSmd: winsorizedSmd(missingValues, presentValues, combinedSorted), direction, directionText, strength: effectSize >= .33 ? "strong" : effectSize >= .147 ? "moderate" : effectSize > 0 ? "weak" : "none", missingStats, presentStats, histogram: histogram([missingValues, presentValues], 16, null, combinedSorted), excludedBlankRows, excludedNotApplicableRows, excludedInvalidRows: usable.length - missingValues.length - presentValues.length, summary: `${column}: ${directionText}; missing-group median ${missingStats.median ?? "unavailable"}; present-group median ${presentStats.median ?? "unavailable"}.` });
     }
     const counts = new Map();
     let invalid = 0;
@@ -125,13 +132,12 @@ var AnalysisEngine = (() => {
       if (!counts.has(label)) counts.set(label, { label, total: 0, missing: 0 });
       const group = counts.get(label); group.total++; if (target.blanks[index]) group.missing++;
     }
-    if (counts.size < 2 || (comparison.type === "categorical" && counts.size > 30)) return null;
+    if (counts.size < 2 || (comparison.type === "categorical" && counts.size > 30)) return complete(null);
     const rates = [...counts.values()].map(group => ({ ...group, rate: group.missing / group.total, eligible: group.total >= 10 })).sort((a, b) => b.rate - a.rate || a.label.localeCompare(b.label));
     const eligible = rates.filter(group => group.eligible);
     const effectSize = Math.max(0, ...eligible.map(group => Math.abs(group.rate - overallMissing)));
     const direction = Object.fromEntries(eligible.map(group => [group.label, Math.sign(group.rate - overallMissing)]));
-    const groups = selected.map(index => target.blanks[index] ? "missing" : "present");
-    return { column, type: comparison.type, effectSize, direction, strength: effectSize >= .15 ? "strong" : effectSize >= .07 ? "moderate" : effectSize > 0 ? "weak" : "none", missingStats: { count: groups.filter(value => value === "missing").length }, presentStats: { count: groups.filter(value => value === "present").length }, [comparison.type === "date" ? "monthlyRates" : "categoryRates"]: rates, excludedBlankRows, excludedInvalidRows: invalid, summary: `${column}: ${rates.map(group => `${group.label} ${(group.rate * 100).toFixed(1)}% missing`).slice(0, 3).join("; ")}.` };
+    return complete({ column, type: comparison.type, effectSize, direction, strength: effectSize >= .15 ? "strong" : effectSize >= .07 ? "moderate" : effectSize > 0 ? "weak" : "none", missingStats: { count: cohort.nMissing }, presentStats: { count: selected.length-cohort.nMissing }, [comparison.type === "date" ? "monthlyRates" : "categoryRates"]: rates, excludedBlankRows, excludedInvalidRows: invalid, summary: `${column}: ${rates.map(group => `${group.label} ${(group.rate * 100).toFixed(1)}% missing`).slice(0, 3).join("; ")}.` });
   }
   function compare(headers, rows, targetColumn, options = {}) {
     if (!headers.includes(targetColumn)) throw new Error("Choose an existing target column.");
@@ -148,9 +154,11 @@ var AnalysisEngine = (() => {
     const entry = context.columns.get(column);
     if (!entry) throw new Error("Choose an existing hold column.");
     if (entry.type !== "numeric") {
+      const minimum = Number(banding.minCategoryCount ?? 10);
+      if (!Number.isInteger(minimum) || minimum < 1 || minimum > 1000) throw new Error("Category group minimum must be between 1 and 1000.");
       const counts = new Map();
       context.rows.forEach((row, index) => { if (entry.states[index] === "present") { const key = text(row[column]); counts.set(key, (counts.get(key) || 0) + 1); } });
-      return { labels: context.rows.map((row, index) => entry.states[index] !== "present" ? "Unknown" : counts.get(text(row[column])) < 10 ? "Other" : text(row[column])), numeric: false };
+      return { labels: context.rows.map((row, index) => entry.states[index] !== "present" ? "Unknown" : counts.get(text(row[column])) < minimum ? "Other" : text(row[column])), numeric: false };
     }
     const mode = banding.mode || "quantiles";
     let edges;

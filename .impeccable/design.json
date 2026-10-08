@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-05T00:00:00Z",
+  "generatedAt": "2026-10-08T00:00:00Z",
   "title": "Design System: ClearData",
   "extensions": {
     "colorMeta": {
@@ -32,10 +32,9 @@
       "success-text": { "displayName": "Success status label", "tonalRamp": ["oklch(15% .07 162)", "oklch(26% .07 162)", "oklch(38% .07 162)", "oklch(49% .07 162)", "oklch(61% .07 162)", "oklch(72% .07 162)", "oklch(84% .07 162)", "oklch(95% .07 162)"] },
       "field-line": { "role": "neutral", "displayName": "Field border", "tonalRamp": ["oklch(15% .02 255)", "oklch(26% .02 255)", "oklch(38% .02 255)", "oklch(49% .02 255)", "oklch(61% .02 255)", "oklch(72% .02 255)", "oklch(84% .02 255)", "oklch(95% .02 255)"] },
       "field-focus": { "displayName": "Field focus border", "tonalRamp": ["oklch(15% .06 263)", "oklch(26% .06 263)", "oklch(38% .06 263)", "oklch(49% .06 263)", "oklch(61% .06 263)", "oklch(72% .06 263)", "oklch(84% .06 263)", "oklch(95% .06 263)"] },
-      "queue-bg": { "role": "neutral", "displayName": "Findings queue", "tonalRamp": ["oklch(15% .008 255)", "oklch(26% .008 255)", "oklch(38% .008 255)", "oklch(49% .008 255)", "oklch(61% .008 255)", "oklch(72% .008 255)", "oklch(84% .008 255)", "oklch(95% .008 255)"] },
-      "queue-active": { "displayName": "Active finding surface", "tonalRamp": ["oklch(15% .03 263)", "oklch(26% .03 263)", "oklch(38% .03 263)", "oklch(49% .03 263)", "oklch(61% .03 263)", "oklch(72% .03 263)", "oklch(84% .03 263)", "oklch(95% .03 263)"] },
-      "queue-active-text": { "displayName": "Active finding title", "tonalRamp": ["oklch(15% .08 263)", "oklch(26% .08 263)", "oklch(38% .08 263)", "oklch(49% .08 263)", "oklch(61% .08 263)", "oklch(72% .08 263)", "oklch(84% .08 263)", "oklch(95% .08 263)"] },
-      "guided-line": { "role": "neutral", "displayName": "Task surface border", "tonalRamp": ["oklch(15% .02 255)", "oklch(26% .02 255)", "oklch(38% .02 255)", "oklch(49% .02 255)", "oklch(61% .02 255)", "oklch(72% .02 255)", "oklch(84% .02 255)", "oklch(95% .02 255)"] },
+      "review-before": { "displayName": "Review before / missing / flagged", "tonalRamp": ["oklch(15% .14 52)", "oklch(26% .14 52)", "oklch(38% .14 52)", "oklch(49% .14 52)", "oklch(61% .14 52)", "oklch(72% .14 52)", "oklch(84% .14 52)", "oklch(95% .14 52)"] },
+      "review-after": { "role": "primary", "displayName": "Review after / present / normal", "tonalRamp": ["oklch(15% .18 262)", "oklch(26% .18 262)", "oklch(38% .18 262)", "oklch(49% .18 262)", "oklch(61% .18 262)", "oklch(72% .18 262)", "oklch(84% .18 262)", "oklch(95% .18 262)"] },
+      "review-neutral": { "role": "neutral", "displayName": "Review neutral / unchanged", "tonalRamp": ["oklch(15% .018 256)", "oklch(26% .018 256)", "oklch(38% .018 256)", "oklch(49% .018 256)", "oklch(61% .018 256)", "oklch(72% .018 256)", "oklch(84% .018 256)", "oklch(95% .018 256)"] },
       "source-series": { "role": "neutral", "displayName": "Original distribution", "tonalRamp": ["oklch(15% .03 255)", "oklch(26% .03 255)", "oklch(38% .03 255)", "oklch(49% .03 255)", "oklch(61% .03 255)", "oklch(72% .03 255)", "oklch(84% .03 255)", "oklch(95% .03 255)"] },
       "proposed-series": { "displayName": "Proposed distribution", "tonalRamp": ["oklch(15% .1 162)", "oklch(26% .1 162)", "oklch(38% .1 162)", "oklch(49% .1 162)", "oklch(61% .1 162)", "oklch(72% .1 162)", "oklch(84% .1 162)", "oklch(95% .1 162)"] },
       "finding-missing": { "displayName": "Missing finding", "tonalRamp": ["oklch(15% .1 27)", "oklch(26% .1 27)", "oklch(38% .1 27)", "oklch(49% .1 27)", "oklch(61% .1 27)", "oklch(72% .1 27)", "oklch(84% .1 27)", "oklch(95% .1 27)"] },
@@ -61,16 +60,18 @@
     "typographyMeta": {
       "display": { "displayName": "Import heading", "purpose": "Empty-state heading; 29px at max-width 560px." },
       "headline": { "displayName": "Page heading", "purpose": "Screen heading; 26px at max-width 560px." },
-      "finding-title": { "displayName": "Finding heading", "purpose": "Active guided finding; 21px at max-width 560px." },
-      "title": { "displayName": "Stage heading", "purpose": "Guided review stage; 20px at max-width 560px." },
+      "finding-title": { "displayName": "Issue heading", "purpose": "Active Review issue; 23px, reduced to 21px at max-width 620px." },
+      "title": { "displayName": "Issue-list heading", "purpose": "Review Issues heading; 21px." },
       "body": { "displayName": "UI body", "purpose": "Global Source Sans 3 text, self-hosted at fonts/source-sans-3-latin.woff2." },
-      "review-body": { "displayName": "Review explanation", "purpose": "Guided-stage paragraphs, with direct paragraphs limited to 72ch." },
+      "review-body": { "displayName": "Review explanation", "purpose": "Tab paragraphs; 14px/1.55." },
+      "review-section": { "displayName": "Review section", "purpose": "Tab-content section headings; 18px, weight 600." },
+      "review-effect": { "displayName": "Reported-number effect", "purpose": "Consequence sentence; 16px, weight 600, maximum 74ch." },
+      "review-chart-mobile": { "displayName": "Mobile histogram labels", "purpose": "SVG text at max-width 620px; 12px with recomposed histogram geometry, not a global small-text role." },
       "label": { "displayName": "Compact label", "purpose": "Status badges and analytical labels." },
       "value": { "displayName": "Source value", "purpose": "Grouped raw values; monospace is confined to data representations." }
     },
     "shadows": [
-      { "name": "dialog", "value": "0 16px 36px #142c4d26", "purpose": "Native dialog elevation; backdrop is #142c4d66." },
-      { "name": "active-step", "value": "inset 0 -2px #245bc5", "purpose": "Current-step indicator, not raised surface elevation." }
+      { "name": "dialog", "value": "0 16px 36px #142c4d26", "purpose": "Native dialog elevation; backdrop is #142c4d66." }
     ],
     "motion": [
       { "name": "button-state", "value": "background-color 150ms ease, border-color 150ms ease", "purpose": "Primary, secondary, and ghost hover transitions." },
@@ -78,13 +79,12 @@
     ],
     "breakpoints": [
       { "name": "compact-desktop-max", "value": "1200px" },
-      { "name": "compatibility-panels-max", "value": "1100px" },
-      { "name": "stacked-review-max", "value": "1000px" },
+      { "name": "compact-review-columns-max", "value": "1100px" },
+      { "name": "stacked-review-max", "value": "900px" },
       { "name": "horizontal-navigation-max", "value": "800px" },
       { "name": "compact-spreadsheet-max", "value": "700px" },
-      { "name": "inherited-review-stack-max", "value": "620px" },
-      { "name": "narrow-max", "value": "560px" },
-      { "name": "compatibility-smallest-max", "value": "400px" }
+      { "name": "review-detail-stack-and-histogram-max", "value": "620px" },
+      { "name": "narrow-max", "value": "560px" }
     ]
   },
   "components": [
@@ -92,17 +92,17 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Blue progression action; contextual guided actions retain a 44px minimum instead of the general 40px minimum.",
-      "html": "<button class=\"ds-primary\">Continue →</button>",
+      "description": "Shared blue primary action; Review Apply uses this 40px-minimum native button after consequences, risk, preview, and acknowledgements.",
+      "html": "<button class=\"ds-primary\">Apply</button>",
       "css": ".ds-primary{font:600 14px var(--font-ui,\"Source Sans 3\",sans-serif);min-height:40px;padding:9px 15px;border:1px solid var(--blue,#245bc5);border-radius:var(--radius,6px);background:var(--blue,#245bc5);color:white;box-shadow:none;cursor:pointer;transition:background-color 150ms ease,border-color 150ms ease}.ds-primary:hover:not(:disabled){background:#1b49a4;border-color:#1b49a4}.ds-primary:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}.ds-primary:disabled{opacity:.5;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
     },
     {
-      "name": "Approval Button",
-      "kind": "button",
-      "refersTo": "button-approval",
-      "description": "Final guided approval; source selector #approveGuided overrides blue primary colors.",
-      "html": "<button class=\"ds-approval\">Approve this decision</button>",
-      "css": ".ds-approval{font:600 14px var(--font-ui,\"Source Sans 3\",sans-serif);min-height:44px;padding:9px 15px;border:1px solid var(--green,#176146);border-radius:var(--radius,6px);background:var(--green,#176146);color:white;box-shadow:none;cursor:pointer;transition:background-color 150ms ease,border-color 150ms ease}.ds-approval:hover{background:#104b35}.ds-approval:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}.ds-approval:disabled{opacity:.5;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-approval{transition:none}}"
+      "name": "Review Task and Tabs",
+      "kind": "custom",
+      "refersTo": "review-task",
+      "description": "White task surface with native Explore / Fix / Review tabs. Source uses a 280px grouped issue list beside it, independent desktop scrolling, and stacked layout at 900px. This snippet is a visual specimen, not executable review logic.",
+      "html": "<section class=\"ds-task\"><header><h1>delivery_days</h1><p>Missing values · 86 cells (8.6%)</p></header><nav class=\"ds-tabs\" role=\"tablist\" aria-label=\"Issue review\"><button role=\"tab\" aria-selected=\"true\">Explore</button><button role=\"tab\" aria-selected=\"false\" tabindex=\"-1\">Fix</button><button role=\"tab\" aria-selected=\"false\" tabindex=\"-1\" disabled title=\"Apply a fix to see changes\">Review</button></nav><p class=\"ds-task-copy\">Read the missing rows beside similar complete rows.</p></section>",
+      "css": ".ds-task{min-width:0;background:white;border-radius:8px;padding:22px 26px 20px;color:var(--ink,#182b43);font:15px/1.5 var(--font-ui,\"Source Sans 3\",sans-serif);font-variant-numeric:tabular-nums}.ds-task header{margin-bottom:18px}.ds-task h1{font-size:23px;font-weight:600;letter-spacing:-.35px;margin:0 0 4px}.ds-task header p{font-size:14px;color:var(--muted,#52647a);margin:0}.ds-tabs{display:flex;gap:28px;border-bottom:1px solid var(--line,#d9e1eb)}.ds-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:9px 0 11px;color:var(--muted,#52647a);font:600 14px var(--font-ui,\"Source Sans 3\",sans-serif);cursor:pointer}.ds-tabs button[aria-selected=true]{border-bottom-color:#2E6BD9;color:#245bc5}.ds-tabs button:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}.ds-tabs button:disabled{opacity:.5;cursor:not-allowed}.ds-task-copy{padding-top:18px;font-size:14px;line-height:1.55}@media(max-width:620px){.ds-task{padding:18px 14px}.ds-task h1{font-size:21px}}"
     },
     {
       "name": "Secondary Button",
@@ -116,17 +116,17 @@
       "name": "Ghost Button",
       "kind": "button",
       "refersTo": "button-ghost",
-      "description": "Low-emphasis supporting action such as leaving a finding open.",
-      "html": "<button class=\"ds-ghost\">Leave open</button>",
+      "description": "Incumbent low-emphasis shell action; Review uses separate compact text actions.",
+      "html": "<button class=\"ds-ghost\">Undo last change</button>",
       "css": ".ds-ghost{font:600 14px var(--font-ui,\"Source Sans 3\",sans-serif);min-height:40px;padding:9px 15px;border:0;border-radius:var(--radius,6px);background:transparent;color:var(--muted,#52647a);box-shadow:none;cursor:pointer;transition:background-color 150ms ease,border-color 150ms ease}.ds-ghost:hover:not(:disabled){background:#edf2f8;color:var(--ink,#182b43)}.ds-ghost:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}.ds-ghost:disabled{opacity:.5;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-ghost{transition:none}}"
     },
     {
       "name": "Review Field",
       "kind": "input",
       "refersTo": "input-review",
-      "description": "Native review input; retains the inherited review-specific placeholder and green caret as observed drift.",
+      "description": "Native Review input with root line border, 8px 10px padding, 36px minimum height, and inherited keyboard focus.",
       "html": "<label class=\"ds-field-label\">Replacement value<input class=\"ds-field\" placeholder=\"Replacement value\"></label>",
-      "css": ".ds-field-label{display:grid;gap:6px;font:14px/1.6 var(--font-ui,\"Source Sans 3\",sans-serif);color:#354e70}.ds-field{min-width:0;max-width:100%;border:1px solid #bac9dc;border-radius:var(--radius,6px);padding:10px 12px;font:14px var(--font-ui,\"Source Sans 3\",sans-serif);color:var(--ink,#182b43);background:white;caret-color:#216646}.ds-field::placeholder{color:#60746a;opacity:1}.ds-field:focus{border-color:#7395d3}.ds-field:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}"
+      "css": ".ds-field-label{display:grid;gap:6px;font:13px/1.5 var(--font-ui,\"Source Sans 3\",sans-serif);color:var(--ink,#182b43)}.ds-field{min-width:0;max-width:100%;min-height:36px;border:1px solid var(--line,#d9e1eb);border-radius:6px;padding:8px 10px;font:14px/1.5 var(--font-ui,\"Source Sans 3\",sans-serif);color:var(--ink,#182b43);background:white}.ds-field::placeholder{color:var(--muted,#52647a);opacity:1}.ds-field:focus-visible{outline:3px solid #83a9f1;outline-offset:3px}"
     },
     {
       "name": "Rail Navigation",
@@ -162,24 +162,24 @@
   ],
   "narrative": {
     "northStar": "The Analytical Review Desk",
-    "overview": "ClearData is a precise, daylight analytical workspace. An ink-navy navigation rail frames white task surfaces on cool paper; blue identifies actions and selection, green marks final approval, and amber calls attention to exceptions. The character is restrained and information-led: readable data, aligned labels, compact controls, and meaningful hairline divisions.\n\nThe system uses native browser controls, inline SVG icons, and a self-hosted typeface. Dataset evidence remains visually distinct from interpretation and approval. Review content stays in document flow, including its static, unobstructed action footer.",
+    "overview": "ClearData is a precise, daylight analytical workspace. An ink-navy navigation rail frames white task surfaces on cool paper; blue identifies actions and selection. Review evidence pairs orange before/missing/flagged values with blue after/present/normal values and grey neutral values. The character is restrained and information-led: readable data, aligned labels, compact controls, and meaningful hairline divisions.\n\nThe system uses native browser controls, inline SVG icons, and a self-hosted typeface. Review combines a column-grouped issue list with a bounded white task surface and Explore / Fix / Review tabs. Fix puts reported-number consequences and an explicitly named risk before its compact preview and common Apply action; Review exposes the recorded result and Undo.",
     "keyCharacteristics": [
       "Navy navigation, white task surfaces, and cool-paper surroundings.",
       "Source Sans 3 with tabular numerals for analytical comparisons.",
-      "Blue progression, green final approval, and amber contextual warnings.",
+      "Blue actions and selection; orange/blue Review evidence with grey neutral values.",
       "Restrained corners, hairline divisions, and SVG finding icons.",
-      "Native controls and a static review footer."
+      "Native controls, freely navigable issue tabs, and shared Apply / Undo actions."
     ],
     "rules": [
       { "name": "The Meaning Before Color Rule", "body": "Pair semantic color with visible labels, icons, counts, or evidence; a flagged value is a finding for review, not proof that it is invalid.", "section": "colors" },
-      { "name": "The Flow First Rule", "body": "Keep the guided action footer static and unobstructed; scrolling evidence and exceptions must not be covered by approval controls.", "section": "elevation" }
+      { "name": "The Evidence Before Apply Rule", "body": "Show the reported-number consequence and explicit risk before the compact preview. Keep Apply after evidence and acknowledgements, and Undo with the recorded result; action footers must not obscure scrolling content.", "section": "elevation" }
     ],
     "dos": [
       "Do use Source Sans 3 and tabular numerals for analytical data.",
-      "Do use blue for progression and selection, green for final guided approval, and amber for contextual exceptions.",
+      "Do use orange before/missing/flagged, blue after/present/normal, and grey neutral values in Review evidence; keep risk colors separately labeled.",
       "Do pair finding colors with SVG icons and textual descriptions.",
-      "Do preserve common bins and scales in original/working/proposed comparisons.",
-      "Do keep the review footer static, after the evidence and exceptions.",
+      "Do preserve common bins and scales in comparisons, including recomposed mobile histograms with legible labels.",
+      "Do put consequences and explicit risk before the preview and Apply; keep Undo with the recorded result.",
       "Do account for inherited responsive rules when extending the final visual layer."
     ],
     "donts": [
@@ -187,7 +187,7 @@
       "Don't equate a finding color with invalid data or automatic treatment.",
       "Don't replace SVG finding icons with glyph icons or raster images.",
       "Don't promote residual legacy fonts, kickers, or green-selection styling into new system rules.",
-      "Don't treat documentation completion as the pending finish-review verdict or as Playwright verification."
+      "Don't infer whole-spec acceptance or a whole-surface clean bill from documentation, captures, or a limited finish verdict."
     ]
   }
 }

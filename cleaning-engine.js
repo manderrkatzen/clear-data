@@ -5,7 +5,7 @@ var CleaningEngine = (() => {
   const missingPattern = /^(null|n\/?a|none|nil|unknown|not available|not applicable|missing|undefined|--?|\?)$/i;
   const decimalPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
   const text = value => String(value ?? "");
-  const isIdentifier = column => /(^id$|[_\s]id$|code$|postal|zip|phone|account|identifier)/i.test(column);
+  const isIdentifier = column => /(^id$|[_\s]id$|code$|postal|zip|phone|account|identifier|^ssn$|^aadhaar$|social[_\s]*security(?:[_\s]*(?:number|no))?$|(?:^|[_\s])(?:credit[_\s]*)?card(?:[_\s]*(?:number|num|no))?$)/i.test(column);
   function parseNumber(value, policy = {}) {
     let raw = text(value).trim();
     if (!raw) throw new Error("Blank is not a numerical value.");
@@ -138,12 +138,13 @@ var CleaningEngine = (() => {
   }
   function scopeRows(rows, eligibleIds, scope = {}, options = {}) {
     const eligible = new Set(eligibleIds);
+    const selectedIds = scope.mode === "selected" && Array.isArray(scope.rowIds) ? new Set(scope.rowIds) : null;
     if (scope.mode && !["all", "selected", "condition"].includes(scope.mode)) throw new Error("Choose a supported treatment scope.");
     if (scope.mode === "selected" && (!Array.isArray(scope.rowIds) || scope.rowIds.some(id => !eligible.has(id)))) throw new Error("Selection must contain only records belonging to this finding.");
     if (scope.mode === "condition" && (!scope.column || !["=", "!=", "contains", ">", ">=", "<", "<="].includes(scope.operator) || !text(scope.value).trim())) throw new Error("Choose a field, operator, and nonblank condition value.");
     return rows.filter(row => {
       if (!eligible.has(row._row)) return false;
-      if (scope.mode === "selected") return scope.rowIds.includes(row._row);
+      if (scope.mode === "selected") return selectedIds.has(row._row);
       if (scope.mode !== "condition") return true;
       if (!Object.hasOwn(row, scope.column)) throw new Error("Scope field is not present.");
       const left = text(row[scope.column]), right = text(scope.value);
@@ -160,6 +161,8 @@ var CleaningEngine = (() => {
     return value.toFixed(decimals);
   }
   function treatment(headers, rows, eligibleIds, column, draft, policy = defaultPolicy(column), classifications = [], options = {}) {
+    const extension = typeof ReviewPageEngine !== "undefined" ? ReviewPageEngine : typeof require === "function" ? require("./review-page-engine.js") : null;
+    if (extension?.extraOperations.includes(draft.operation)) return extension.treatment(headers, rows, eligibleIds, column, draft, policy, classifications, options);
     if (!headers.includes(column) || !operations.includes(draft.operation)) throw new Error("Choose a supported column and treatment.");
     const selected = scopeRows(rows, eligibleIds, draft.scope, { ...options, policies: options.policies || [policy], classifications });
     const patches = [], blocked = [], removedRows = [];
@@ -199,9 +202,10 @@ var CleaningEngine = (() => {
       if (!Array.isArray(keys) || !keys.length || keys.some(key => !headers.includes(key))) throw new Error("Choose valid duplicate key columns.");
       if (!["first", "last", "complete", "selected"].includes(draft.survivor || "first")) throw new Error("Choose a supported survivor policy.");
       const groups = new Map();
-      selected.forEach(row => { if (draft.keyMode && keys.some(key => !text(row[key]).trim())) return; const key = JSON.stringify(keys.map(field => row[field])); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(row); });
+      selected.forEach(row => { if (draft.keyMode && keys.some(key => !text(row[key]).trim())) return; const key = JSON.stringify(keys.map(field => draft.trimKeys ? text(row[field]).trim() : row[field])); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(row); });
       for (const group of groups.values()) {
         if (group.length < 2) continue;
+        if (draft.keepAllRows?.length && group.every(row=>draft.keepAllRows.includes(row._row))) continue;
         const complete = row => headers.filter(field => text(row[field]).trim()).length;
         const survivor = draft.survivor === "last" ? group.at(-1) : draft.survivor === "complete" ? [...group].sort((a, b) => complete(b) - complete(a) || a._row - b._row)[0] : draft.survivor === "selected" ? group.find(row => draft.survivorIds?.includes(row._row)) : group[0];
         if (!survivor || (draft.survivor === "selected" && group.filter(row => draft.survivorIds?.includes(row._row)).length !== 1)) throw new Error("Select exactly one survivor in every duplicate group.");
@@ -246,7 +250,8 @@ var CleaningEngine = (() => {
           if ([rule.left, rule.right].some(field => observationState(row, field, options.policies?.find(entry => entry.column === field) || defaultPolicy(field), classified) !== "present")) throw new Error("Missing or not-applicable metric input.");
           const a = parseNumber(row[rule.left], options.policies?.find(policy => policy.column === rule.left) || defaultPolicy(rule.left)), b = parseNumber(row[rule.right], options.policies?.find(policy => policy.column === rule.right) || defaultPolicy(rule.right));
           if (rule.operation === "ratio" && b === 0) throw new Error("Zero denominator.");
-          after = fixed(({ sum: a + b, difference: a - b, product: a * b, ratio: a / b })[rule.operation] * rule.factor, rule.decimals);
+          const calculated = rule.terms?.length ? rule.terms.reduce((sum, field) => { if (!headers.includes(field) || observationState(row, field, options.policies?.find(p => p.column === field) || defaultPolicy(field), classified) !== "present") throw new Error("Missing sum input."); return sum + parseNumber(row[field], options.policies?.find(p => p.column === field) || defaultPolicy(field)); }, 0) : ({ sum: a + b, difference: a - b, product: a * b, ratio: a / b })[rule.operation];
+          after = fixed(calculated * rule.factor, rule.decimals);
         }
         if (after !== before) patches.push({ rowId: row._row, column, before, after });
       } catch (error) { blocked.push({ rowId: row._row, reason: error.message }); }

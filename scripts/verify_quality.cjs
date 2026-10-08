@@ -86,11 +86,12 @@ test("record-level numerical previews exactly match approved values and keep sou
     w.load("order_id,amount\nA,1.234\nB,2.348\nC,3.459\nD,8.762\nE,\nF,");
     w.context.action = action;
     w.run('globalThis.item = state.issues.find(item => item.recommendation === "impute"); state.customProposals[item.id] = [{ id: "preview", revision: state.datasetRevision, operation: "fill", value: 1.237, interpretation: "test" }]; state.selectedFix = action;');
-    assert.ok(w.value("affectedColumnConfig(item, issueFilter(item))").some(column => column.key === "order_id"));
+    const identifiers = w.value("state.rows.map(row => [row._row,row.order_id])");
     const proposed = w.value('item.rows.map(row => affectedValue(item, row, "_proposedNumber"))');
     const ids = w.value("item.rows.map(row => row._row)");
     w.run("applyFix(item, action)");
     assert.deepEqual(w.value(`state.rows.filter(row => ${JSON.stringify(ids)}.includes(row._row)).map(row => row.amount)`), proposed);
+    assert.deepEqual(w.value("state.rows.map(row => [row._row,row.order_id])"),identifiers);
   }
   const w = workspace();
   w.load("id,click_through_rate\nA,2.34567\nB,0.3\nC,4\nD,0.1");
@@ -144,7 +145,7 @@ test("date application validates all dates before any mutation", () => {
   assert.equal(w.value("state.changes.length"), 0);
   assert.equal(w.value("state.rows[0].launch_date"), "3/7/2025");
   assert.equal(w.value("isoDate('2/29/2024')"), "2024-02-29");
-  assert.ok(w.value("affectedColumnConfig(item, issueFilter(item)).every(column => typeof column.key === 'string')"));
+   assert.deepEqual(w.value("state.rows.map(row => [row._row,row.id])"),[[1,"A"],[2,"B"]]);
 });
 
 test("cross-column rules and numeric filters do not equate missing values with zero", () => {
@@ -193,14 +194,10 @@ test("exact record navigation clears filters without substituting a text query",
   assert.equal(w.value("state.screen"), "view");
 });
 
-test("AI caveats render escaped and unsupported review classes hide AI controls", () => {
+test("dataset and AI-provided content is escaped before HTML interpolation", () => {
   const w = workspace();
-  w.run('state.customProposals[1] = [{ id: "p", instruction: "test", interpretation: "test", assumptions: ["<img src=x>"], warnings: ["Unknown may differ from zero"] }]');
-  const html = w.run('renderAiPanel({ id: 1, recommendation: "impute", column: "cost" })');
-  assert.match(html, /Assumptions/);
-  assert.match(html, /Warnings/);
-  assert.match(html, /&lt;img src=x&gt;/);
-  assert.equal(w.run('renderAiPanel({ id: 1, recommendation: "date" })'), "");
+  assert.equal(w.run('escapeHtml("<img src=x>")'), "&lt;img src=x&gt;");
+  assert.equal(w.run('escapeHtml(`"quoted" & <script>`)'), "&quot;quoted&quot; &amp; &lt;script&gt;");
 });
 
 test("a proposal response for a replaced dataset cannot enter the new workspace", async () => {

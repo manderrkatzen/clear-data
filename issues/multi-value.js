@@ -1,0 +1,57 @@
+// MULTI-D-01, MULTI-D-02: bounded separator evidence, never a free-text split by default.
+ReviewModules["multi-value"] = (() => {
+  const separators = [";", "|", ",", " / ", " & ", " + "];
+  const parts = (value, separator) => String(value ?? "").split(separator).map(part => part.trim()).filter(Boolean);
+  function facts(rows, column, separator) {
+    const selected = rows.filter(row => parts(row[column], separator).length >= 2), counts = new Map(), frequencies = new Map();
+    for (const row of selected) { const length = parts(row[column], separator).length; counts.set(length, (counts.get(length) || 0) + 1); }
+    for (const row of rows) for (const part of parts(row[column], separator)) frequencies.set(part, (frequencies.get(part) || 0) + 1);
+    return {selected, counts:[...counts].sort((a,b) => a[0]-b[0]), frequencies:[...frequencies].sort((a,b) => b[1]-a[1]), max:Math.max(0, ...counts.keys())};
+  }
+  function detect(dataset) {
+    return dataset.headers.flatMap(column => {
+      if (["number", "integer", "date"].includes(dataset.profile.columns.find(profile => profile.column === column)?.role)) return [];
+      const medianLength = CleaningEngine.stats(dataset.rows.map(row => String(row[column] ?? "").length)).median;
+      const candidates = separators.filter(separator => separator !== "," || medianLength <= 40).map(separator => ({separator, ...facts(dataset.rows, column, separator)})).filter(info => info.selected.length / dataset.rows.length >= .02 && info.selected.length / dataset.rows.length <= .6).sort((a,b) => b.selected.length-a.selected.length);
+      const detected = candidates[0];
+      return detected ? [{column, reviewType:"multi-value", type:"Multiple values in one cell", label:"Multiple values in one cell", rows:detected.selected, separator:detected.separator, recommendation:"manual", status:"open", severity:"medium", summary:"Several categories are packed into the same cell."}] : [];
+    });
+  }
+  function init(issue, session) { session.separator ??= issue.separator; }
+  function lockedRows(issue, session) { init(issue, session); return facts(state.rows, issue.column, session.separator).selected; }
+  function count(issue) { return lockedRows(issue, ReviewCore.data(issue)).length; }
+  function renderExplore(issue, session) { // MULTI-E-01, MULTI-E-02, MULTI-E-03, MULTI-E-04, MULTI-E-05
+    init(issue, session); const info = facts(state.rows, issue.column, session.separator);
+    return `<section class="multi-explore" data-ui="review.explore.multi"><h2 data-ui="review.explore.multi.summary">${ReviewCore.count(info.selected.length,"cells")} hold several values, separated by “${escapeHtml(session.separator)}” · up to ${info.max} per cell</h2><label data-ui="review.explore.multi.separator">Separator<select id="multiSeparator">${separators.map(separator => `<option value="${escapeHtml(separator)}" ${separator === session.separator ? "selected" : ""}>${escapeHtml(separator.trim())}</option>`).join("")}</select></label><p data-ui="review.explore.multi.parts">${info.counts.map(([length,count]) => `${length} values: ${count}`).join(" · ") || "No cells have two parts with this separator. Choose another separator."}</p><div class="review-table-scroll" data-ui="review.explore.multi.examples"><table><thead><tr><th>Row</th><th>Values in this cell</th></tr></thead><tbody>${info.selected.slice(0,10).map(row => `<tr><td>${row._row}</td><td>${parts(row[issue.column],session.separator).map(part => `<mark>${escapeHtml(part)}</mark>`).join(" ")}</td></tr>`).join("")}</tbody></table></div><p data-ui="review.explore.multi.distinct">After splitting: ${info.frequencies.length} distinct values${info.frequencies.length ? ` (top: ${escapeHtml(info.frequencies.slice(0,3).map(([value,count]) => `${value} ${count}`).join(", "))})` : ""}.</p>${separators.filter(separator => facts(state.rows,issue.column,separator).selected.length).length > 1 ? `<button class="secondary" id="multiAi">How should these split?</button>${session.aiRequested ? ReviewCore.aiStatus(issue) : ""}${session.ai ? `<p>AI · ${escapeHtml(session.aiProvider)}: ${escapeHtml(session.ai.note)}</p>` : ""}${session.ai?.separator ? `<button class="text-button" id="multiUseSeparator">Use suggested separator “${escapeHtml(session.ai.separator)}”</button>` : ""}` : ""}</section>`;
+  }
+  function getFixOptions(issue, session) {
+    init(issue, session); const info = facts(state.rows, issue.column, session.separator);
+    return [{key:"split-to-rows",label:"One row per value",risk:"Changes structure",compute:() => ({operation:"splitRows",separator:session.separator})}, {key:"split-to-columns",label:"One column per position",risk:"Changes structure",compute:() => ({operation:"splitColumns",separator:session.separator})}, {key:"to-flags",label:"One yes/no column per value",risk:"Changes structure",disabled:info.frequencies.length > 20 ? "Flags require at most 20 distinct values" : "",compute:() => ({operation:"splitFlags",separator:session.separator})}, {key:"keep-first",label:"Keep first value only",risk:"Removes data",compute:() => ({operation:"firstValue",separator:session.separator})}, {key:"keep",label:"Keep as is",risk:"Doesn't change values",more:true,compute:() => ({operation:"retain",interpretation:"legitimate"})}];
+  }
+  function reminder(issue, session) { return `Fixing: ${lockedRows(issue,session).length} cells in ${issue.column} · separated by “${session.separator}”`; }
+  function consequence(issue, session, preview, option) { // MULTI-F-01
+    const added = (preview.addedRows || []).length, addedColumns = (preview.addedColumns || []).length, metric = ReviewCore.metricColumn(), extra = ReviewCore.total(preview.addedRows || [],metric);
+    return {sentence:option.key === "split-to-rows" ? `Rows ${state.rows.length.toLocaleString()} → ${(state.rows.length+added).toLocaleString()}. ${added} copied rows let each value be counted separately.` : option.key === "keep-first" ? `${preview.patches.length} cells keep their first value; every later part is discarded.` : option.key === "keep" ? "Keeps the combined values and the dataset structure." : `Adds ${addedColumns} columns; original ${issue.column} cells are preserved.`, figures:[{label:"Rows",before:state.rows.length,after:preview.after.length},{label:"Columns",before:state.headers.length,after:state.headers.length+addedColumns}], reason:option.key === "split-to-rows" ? "Other columns are copied into each new row." : option.key === "keep-first" ? "The discarded categories will no longer be counted." : "Source values remain available.", detail:option.key === "split-to-rows" ? metric ? `Warning: totals of ${metric} will double-count for split rows (${ReviewCore.money(extra,metric)} counted extra) — use for counting categories, not for summing money.` : "Warning: copied rows increase record counts. Use for counting categories, not for counting original records." : ""};
+  }
+  function sample(issue, session, beforeRows, afterRows, structure = {}) { // MULTI-F-02, MULTI-R-03
+    const examples = beforeRows.filter(row => parts(row[issue.column],session.separator).length >= 2).slice(0,3), columns = structure.addedColumns || [], lineage = structure.rowLineage || [];
+    return `<div class="review-table-scroll" data-ui="review.review.sample"><table><thead><tr><th>Row</th><th>Before</th><th>After</th></tr></thead><tbody>${examples.map(row => { const after = afterRows.find(record => record._row === row._row); const children = lineage.filter(trace => trace.sourceRowId === row._row).map(trace => afterRows.find(record => record._row === trace.rowId)?.[issue.column]); const result = columns.length ? columns.map(column => `${column}: ${after?.[column] ?? "(blank)"}`).join(" · ") : [after?.[issue.column], ...children].join(" · "); return `<tr><td>${row._row}</td><td>${escapeHtml(row[issue.column])}</td><td>${escapeHtml(result)}</td></tr>`; }).join("")}</tbody></table></div>`;
+  }
+  function renderPreview(issue, session, preview) { return sample(issue,session,state.rows,preview.after,preview); }
+  function renderReview(issue, decision) { // MULTI-R-01, MULTI-R-02
+    const impact = decision.reviewImpact, separator = decision.treatment.separator, counts = new Map(), columns = decision.structure.addedColumns;
+    for (const row of impact.afterRows) {
+      const values = decision.treatment.operation === "splitColumns" ? columns.map(column => row[column]).filter(Boolean) : decision.treatment.operation === "splitFlags" ? columns.filter(column => row[column] === "1").map(column => column.slice(issue.column.length+1)) : parts(row[issue.column],separator);
+      for (const value of values) counts.set(value,(counts.get(value) || 0)+1);
+    }
+    const top = [...counts].sort((a,b) => b[1]-a[1]).slice(0,10), max = Math.max(1,...top.map(([,count]) => count));
+    return `${ReviewCore.metricStrip([{label:"Cells changed",value:decision.patches.length},{label:"Rows removed",value:decision.removedRows.length},{label:"Columns added / removed",value:`${columns.length} / ${decision.structure.removedColumns.length}`},{label:"Rows",value:`${impact.beforeRows.length} → ${impact.afterRows.length}`},{label:"Cells treated",value:decision.rows.length}])}<figure class="review-chart" data-ui="review.review.chart"><figcaption>${counts.size} distinct values after treatment · top ${top.length} shown</figcaption><div class="review-category-bars">${top.map(([value,count]) => `<div><span>${escapeHtml(value)}</span><div><i class="after" style="width:${count/max*100}%"></i></div><b>${count}</b></div>`).join("")}</div></figure>${sample(issue,{separator},impact.beforeRows,impact.afterRows,decision.structure)}`;
+  }
+  async function aiExplore(issue, session) { // MULTI-A-01: on-request, bounded examples; suggestions never change the separator automatically.
+    const result = await ReviewCore.requestAi(issue,"explore",{column:issue.column,type:"multi-value",role:"text",headers:state.headers,meaning:columnPolicy(issue.column).meaning,allowedFixes:getFixOptions(issue,session).filter(option=>!option.disabled).map(option => option.key),count:state.rows.length,affected:lockedRows(issue,session).length,values:ReviewPageEngine.frequencies(lockedRows(issue,session),issue.column).slice(0,20).map(group => ({value:group.value,count:group.rows.length,locked:true})),samples:lockedRows(issue,session).slice(0,30).map(row=>String(row[issue.column]).slice(0,500)),groups:[],statistics:{}});
+    if (result) renderPreservingReviewFocus();
+  }
+  function changeSeparator(issue, session, separator) { const before = lockedRows(issue,session).length; session.separator = separator; issue.rows = lockedRows(issue,session); ReviewCore.lockChanged(issue,before); renderPreservingReviewFocus(); }
+  function bind(issue, session) { document.getElementById("multiSeparator")?.addEventListener("change",event => changeSeparator(issue,session,event.target.value)); document.getElementById("multiAi")?.addEventListener("click",() => aiExplore(issue,session)); document.getElementById("multiUseSeparator")?.addEventListener("click",() => changeSeparator(issue,session,session.ai.separator)); }
+  return {detect,init,lockedRows,count,unit:"cells",renderExplore,getFixOptions,reminder,consequence,renderPreview,renderReview,aiExplore,bind,facts};
+})();

@@ -88,14 +88,17 @@ function detectIssues() {
   });
   appendReviewFindings(issues, id);
   appendCleaningCandidates(issues);
-  state.issues = issues;
+  state.issues = typeof ReviewCore !== "undefined" ? ReviewCore.detect(state.headers,rows,cleaningProfile(),issues) : typeof ReviewPageEngine !== "undefined" ? ReviewPageEngine.detect(state.headers, rows, cleaningProfile(), issues, effectiveClassifications(), state.changes.map(change => change.treatment?.repeatableColumn).filter(Boolean), Object.fromEntries(state.issues.filter(item => item.rangeEdited).map(item => [item.column,item.range])),reviewDateFormats()) : issues;
 }
 function loadData(text, name) {
   let data;
   try { data = parseCsv(text); } catch (error) { notify(`Could not import CSV: ${error.message}`); return false; }
+  Object.values(state.reviewPage || {}).forEach(data => data.aiController?.abort());
   Object.assign(state, { screen: "data", headers: data.headers, original: data.rows.map((row) => ({ ...row })), allRows: data.rows, rows: data.rows, fileName: name, changes: [], selectedIssue: null, selectedRecord: null, locateRow: null, query: "", flaggedOnly: false, outlierDrafts: {}, customProposals: {}, aiMessage: "", proposalPending: false, scatter: {}, issueFilters: {}, datasetRevision: (state.datasetRevision || 0) + 1, ruleConfig: emptyRuleConfig(), auditEvents: [], decisionNotes: {}, projectId: null, projectName: "", projectDirty: true });
   state.aiInstructions = {};
   state.inspectionFiltersOpen = {};
+  state.originalHeaders = [...data.headers];
+  state.reviewPage = {};
   resetGuidedReview();
   detectIssues(); enableWorkspace(); render();
   startAutomaticReview();
@@ -108,11 +111,12 @@ function metrics() {
   const original = new Map(state.original.map((row) => [row._row, row]));
   let changedCells = 0, changedRows = 0;
   state.rows.forEach((row) => {
-    const count = state.headers.filter((header) => row[header] !== original.get(row._row)?.[header]).length;
+    const source = original.get(row._row);
+    const count = source ? state.headers.filter((header) => String(row[header] ?? "") !== String(source[header] ?? "")).length : 0;
     changedCells += count;
     if (count) changedRows++;
   });
-  return { rows: state.rows.length, columns: state.headers.length, removedRows: state.original.length - state.rows.length, blanks: state.rows.reduce((total, row) => total + state.headers.filter((header) => !String(row[header] ?? "").trim()).length, 0), resolved: state.issues.filter((item) => item.status !== "open").length, changes: changedRows, changedRows, changedCells, decisions: state.changes.length };
+  return { rows: state.rows.length, columns: state.headers.length, removedRows: state.original.filter(source => !state.rows.some(row => row._row === source._row)).length, addedRows: state.rows.filter(row => !original.has(row._row)).length, blanks: state.rows.reduce((total, row) => total + state.headers.filter((header) => !String(row[header] ?? "").trim()).length, 0), resolved: state.issues.filter((item) => item.status !== "open").length, changes: changedRows, changedRows, changedCells, decisions: state.changes.length };
 }
 function refreshChrome() {
   $("#datasetName").textContent = state.fileName || "No dataset loaded";
@@ -165,7 +169,7 @@ function renderData() {
 }
 async function updateAiStatus() { const status = $("#aiStatus"); if (!status) return; try { const response = await fetch("/api/ai/status", { cache: "no-store" }); if (!response.ok) throw new Error("Status request failed."); const result = await response.json(); status.textContent = result.available ? `AI configured: ${result.provider} · ${result.model} (provider health not tested)` : "AI proposals are not configured on this server."; status.classList.toggle("available", Boolean(result.available)); } catch { status.textContent = "AI status check could not reach the server"; } }
 function renderIssues() {
-  return renderSimpleReview();
+  return renderReviewPage();
 }
 function categoryProfile(item) { const counts = state.rows.map((row) => String(row[item.column] ?? "")).filter((value) => value.trim()).reduce((all, value) => ((all[value] = (all[value] || 0) + 1, all)), Object.create(null)); return { counts, total: Object.values(counts).reduce((sum, value) => sum + value, 0), variants: Object.entries(counts).filter(([value]) => value.replace(/[ _-]/g, "").toLowerCase() === "paidsocial") }; }
 function categoryImpact(item, action) {
@@ -195,26 +199,7 @@ function numericSimulation(item, action) {
   const after = ["imputeMedian", "imputeMean"].includes(action) || proposal?.operation === "fill" ? [...before, ...item.rows.filter((row) => !String(row[item.column] ?? "").trim()).map(() => fill)] : before;
   return { before, after, beforeStats: stats, afterStats: numericStats(after), fill };
 }
-function histogramChart(item, action) {
-  const sim = numericSimulation(item, action);
-  const observed = [...sim.before].sort((a, b) => a - b);
-  if (!observed.length) return '<p class="hist-empty">No observed numerical values to plot.</p>';
-  const min = quantile(observed, .01), max = quantile(observed, .99);
-  const before = histogram(sim.before, min, max), after = histogram(sim.after, min, max);
-  const scale = Math.max(...before.counts, ...after.counts, before.below, before.above, after.below, after.above, 1);
-  const format = (value) => Number(value).toLocaleString(undefined, { maximumSignificantDigits: 6 });
-  const bars = (original, simulated, label) => `<span aria-label="${escapeHtml(`${label}: Before ${original}, simulated after ${simulated}`)}"><i class="before" style="height:${original / scale * 100}%;${original ? "" : "display:none"}" title="Before: ${original}"></i><i class="after" style="height:${simulated / scale * 100}%;${simulated ? "" : "display:none"}" title="Simulated after: ${simulated}"></i></span>`;
-  const edge = (key, symbol, bound) => {
-    if (!before[key] && !after[key]) return "";
-    const label = `${symbol} ${format(bound)}`;
-    const countLabel = (count) => `${count.toLocaleString()} ${count === 1 ? "value" : "values"} ${label}`;
-    return `<div class="hist-edge" data-edge="${key}"><div class="hist-bars overlay">${bars(before[key], after[key], label)}</div><div class="hist-edge-label"><b>${escapeHtml(label)}</b><span>Before: ${escapeHtml(countLabel(before[key]))}</span><span>After: ${escapeHtml(countLabel(after[key]))}</span></div></div>`;
-  };
-  const trueMin = observed[0], trueMax = observed.at(-1);
-  const afterMin = sim.afterStats.min, afterMax = sim.afterStats.max;
-  return `<div class="histogram"><small>OVERLAPPING DISTRIBUTIONS <i class="legend-before"></i> Before <i class="legend-after"></i> Simulated after</small><p class="hist-range-note">Observed 1st–99th percentile · 24 bins · edge buckets share the count scale</p><div class="hist-layout">${edge("below", "<", min)}<div class="hist-center"><div class="hist-bars overlay">${before.counts.map((count, index) => bars(count, after.counts[index], `${format(min + (max - min) * index / 24)} to ${format(min + (max - min) * (index + 1) / 24)}`)).join("")}</div><p class="hist-axis"><span>${format(min)}</span><span>${escapeHtml(item.column)}</span><span>${format(max)}</span></p></div>${edge("above", ">", max)}</div><p class="hist-extrema">True observed min: <b>${format(trueMin)}</b> · max: <b>${format(trueMax)}</b>${afterMin !== trueMin || afterMax !== trueMax ? `<br>True simulated min: <b>${format(afterMin)}</b> · max: <b>${format(afterMax)}</b>` : ""}</p></div>`;
-}
-function issueKey(item) { return item.recommendation === "duplicates" ? "dataset:duplicates" : JSON.stringify([item.column, item.recommendation, item.candidateId || item.ruleId || ""]); }
+function issueKey(item) { return item.reviewType ? `${item.column}:${item.reviewType}${item.reviewType==="cross-column"&&item.ruleId?`:${item.ruleId}`:""}` : item.recommendation === "duplicates" ? "dataset:duplicates" : JSON.stringify([item.column, item.recommendation, item.candidateId || item.ruleId || ""]); }
 function reviewFingerprint(item, rows = item.rows) {
   const columns = item.recommendation === "duplicates" ? state.headers : item.rule ? [...new Set([item.column, item.rule.left, item.rule.right].filter(Boolean))] : item.type === "Cross-column violation" ? [item.column, "impressions"] : [item.column];
   return JSON.stringify([item.rule || item.duplicateDefinition || null, rows.map((row) => [row._row, ...columns.map((column) => row[column])])]);
@@ -228,12 +213,12 @@ function refreshIssues() {
   state.issues = previous.map((item) => {
     let fresh = detected.get(issueKey(item));
     detected.delete(issueKey(item));
-    if (item.recommendation === "outlier") {
+    if (item.recommendation === "outlier" && state.headers.includes(item.column)) {
       const profile = evaluateOutlier(item, item.outlierDefinition || defaultOutlierDefinition(item));
       fresh = { ...item, rows: profile.rows, outlier: profile, summary: `${profile.rows.length} values match the saved rule. ${profile.note}` };
     }
     const decision = state.changes.find((change) => change.issue.id === item.id);
-    if (fresh) fresh.rows = fresh.rows.filter(row => !state.changes.some(change => change.issue.id === item.id && change.disposition === "valid" && change.reviewedFingerprints?.[row._row] === reviewFingerprint(fresh, [row])));
+    if (fresh) fresh.rows = fresh.rows.filter(row => !state.changes.some(change => change.issue.id === item.id && (change.disposition === "valid" || ["log","splitColumns","toText"].includes(change.treatment?.operation)) && change.reviewedFingerprints?.[row._row] === reviewFingerprint(fresh, [row])));
     if (!fresh || !fresh.rows.length) {
       item.status = decision ? decision.disposition : "resolved";
       item.currentRows = [];
@@ -331,6 +316,14 @@ function rollbackChange(id) {
   if (!change) return false;
   const beforeRows = state.rows.map((row) => ({ ...row }));
   state.changes = state.changes.filter((entry) => entry !== change);
+  if (typeof ReviewPageEngine !== "undefined" && state.originalHeaders) {
+    const replayed = ReviewPageEngine.replay(state.originalHeaders, state.original, state.changes);
+    state.headers = replayed.headers;
+    state.rows = replayed.rows;
+    state.allRows = ReviewPageEngine.identityPool(state.original,state.rows,state.changes,state.auditEvents);
+    recordRollbackEvent(change, beforeRows, state.rows);
+    refreshIssues(); state.selectedIssue = null; return true;
+  }
   const original = new Map(state.original.map((row) => [row._row, row]));
   const working = new Map(state.allRows.map((row) => [row._row, row]));
   state.allRows.forEach((row) => state.headers.forEach((header) => { row[header] = original.get(row._row)[header]; }));
@@ -416,66 +409,7 @@ function scatterData(item) {
   const [minX, maxX] = range("x"), [minY, maxY] = range("y");
   return { columns, selected, points, minX, maxX, minY, maxY };
 }
-function scatterChart(item) {
-  const { columns, selected } = scatterData(item);
-  return `<div class="scatter-panel" data-scatter-panel="${item.id}"><div class="scatter-controls"><label>X axis<select data-scatter-axis="x" data-issue="${item.id}">${columns.map((column) => `<option ${column === selected.x ? "selected" : ""}>${escapeHtml(column)}</option>`).join("")}</select></label><label>Y axis<select data-scatter-axis="y" data-issue="${item.id}">${columns.map((column) => `<option ${column === selected.y ? "selected" : ""}>${escapeHtml(column)}</option>`).join("")}</select></label><button class="secondary scatter-reset" type="button" data-scatter-reset="${item.id}">Reset view</button></div><svg class="scatter-plot" data-scatter-plot="${item.id}" viewBox="0 0 100 100" role="img"></svg><p class="scatter-hint">Scroll to zoom · drag to pan</p><p class="scatter-note"><b>●</b> Matches the displayed rule · axes only change the view</p></div>`;
-}
-function formatScale(value, span) { return Number(value).toLocaleString(undefined, { maximumFractionDigits: span >= 100 ? 0 : span >= 10 ? 1 : span >= 1 ? 2 : 3 }); }
-function renderScatterPlot(item) {
-  const svg = document.querySelector(`[data-scatter-plot="${item.id}"]`); if (!svg) return;
-  const data = scatterData(item); const { selected, points, minX, maxX, minY, maxY } = data;
-  if (!points.length) { svg.innerHTML = `<text x="50" y="48" text-anchor="middle">No paired numeric values</text>`; return; }
-  const fullX = maxX - minX || 1, fullY = maxY - minY || 1, view = selected.viewport ||= { minX, maxX, minY, maxY }, xSpan = view.maxX - view.minX || fullX, ySpan = view.maxY - view.minY || fullY;
-  const left = 18, right = 96, top = 5, bottom = 82, px = (value) => left + (value - view.minX) / xSpan * (right - left), py = (value) => bottom - (value - view.minY) / ySpan * (bottom - top);
-  const ticks = (min, max, axis) => Array.from({ length: 5 }, (_, index) => { const value = min + (max - min) * index / 4, position = axis === "x" ? px(value) : py(value); return axis === "x" ? `<line x1="${position}" y1="${top}" x2="${position}" y2="${bottom}"/><text x="${position}" y="90" text-anchor="middle">${formatScale(value, max - min)}</text>` : `<line x1="${left}" y1="${position}" x2="${right}" y2="${position}"/><text x="15" y="${position + 1.8}" text-anchor="end">${formatScale(value, max - min)}</text>`; }).join("");
-  const flagged = new Set(activeRows(item).map((row) => row._row)); const plot = points.map((point) => `<circle class="${flagged.has(point.row._row) ? `outlier-point ${state.selectedRecord === point.row._row ? "selected-point" : ""}` : "normal-point"}" cx="${px(point.x)}" cy="${py(point.y)}" r="${state.selectedRecord === point.row._row ? 3.8 : flagged.has(point.row._row) ? 2.5 : 1.6}"><title>Row ${point.row._row}: ${escapeHtml(selected.x)} ${point.x}, ${escapeHtml(selected.y)} ${point.y}</title></circle>`).join("");
-  svg.setAttribute("aria-label", `Scatter plot of ${selected.x} by ${selected.y}`); svg.innerHTML = `<defs><clipPath id="scatter-clip-${item.id}"><rect x="${left}" y="${top}" width="${right - left}" height="${bottom - top}"/></clipPath></defs><g class="scatter-grid">${ticks(view.minX, view.maxX, "x")}${ticks(view.minY, view.maxY, "y")}</g><path class="scatter-axis" d="M${left} ${top}V${bottom}H${right}"/><g clip-path="url(#scatter-clip-${item.id})">${plot}</g><text class="scatter-axis-title" x="${(left + right) / 2}" y="98" text-anchor="middle">${escapeHtml(selected.x)}</text><text class="scatter-axis-title" x="4" y="${(top + bottom) / 2}" text-anchor="middle" transform="rotate(-90 4 ${(top + bottom) / 2})">${escapeHtml(selected.y)}</text>`;
-}
-function bindScatterNavigation(item) {
-  const svg = document.querySelector(`[data-scatter-plot="${item.id}"]`); if (!svg) return;
-  const position = (event) => { const box = svg.getBoundingClientRect(); return { x: (event.clientX - box.left) / box.width * 100, y: (event.clientY - box.top) / box.height * 100 }; };
-  const constrain = (view, data) => { const spanX = view.maxX - view.minX, spanY = view.maxY - view.minY, fullX = data.maxX - data.minX || 1, fullY = data.maxY - data.minY || 1; if (spanX >= fullX) [view.minX, view.maxX] = [data.minX, data.maxX]; else if (view.minX < data.minX) { view.maxX += data.minX - view.minX; view.minX = data.minX; } else if (view.maxX > data.maxX) { view.minX -= view.maxX - data.maxX; view.maxX = data.maxX; } if (spanY >= fullY) [view.minY, view.maxY] = [data.minY, data.maxY]; else if (view.minY < data.minY) { view.maxY += data.minY - view.minY; view.minY = data.minY; } else if (view.maxY > data.maxY) { view.minY -= view.maxY - data.maxY; view.maxY = data.maxY; } };
-  svg.addEventListener("wheel", (event) => { event.preventDefault(); const data = scatterData(item), view = data.selected.viewport ||= { minX: data.minX, maxX: data.maxX, minY: data.minY, maxY: data.maxY }, cursor = position(event), factor = event.deltaY < 0 ? .8 : 1.25, oldX = view.maxX - view.minX, oldY = view.maxY - view.minY, nextX = Math.max((data.maxX - data.minX || 1) / 10000, oldX * factor), nextY = Math.max((data.maxY - data.minY || 1) / 10000, oldY * factor), xRatio = Math.max(0, Math.min(1, (cursor.x - 18) / 78)), yRatio = Math.max(0, Math.min(1, (82 - cursor.y) / 77)); view.minX += (oldX - nextX) * xRatio; view.maxX = view.minX + nextX; view.minY += (oldY - nextY) * yRatio; view.maxY = view.minY + nextY; constrain(view, data); renderScatterPlot(item); }, { passive: false });
-  const stopDragging = () => { dragging = null; svg.classList.remove("is-panning"); document.body.classList.remove("scatter-panning"); };
-  let dragging; svg.addEventListener("pointerdown", (event) => { event.preventDefault(); event.stopPropagation(); dragging = position(event); svg.classList.add("is-panning"); document.body.classList.add("scatter-panning"); svg.setPointerCapture(event.pointerId); }); svg.addEventListener("pointermove", (event) => { if (!dragging) return; event.preventDefault(); const current = position(event), data = scatterData(item), view = data.selected.viewport, dx = (current.x - dragging.x) / 78 * (view.maxX - view.minX), dy = (current.y - dragging.y) / 77 * (view.maxY - view.minY); view.minX -= dx; view.maxX -= dx; view.minY += dy; view.maxY += dy; dragging = current; constrain(view, data); renderScatterPlot(item); }); svg.addEventListener("pointerup", stopDragging); svg.addEventListener("pointercancel", stopDragging); svg.addEventListener("lostpointercapture", stopDragging);
-}
 
-function renderOutlierWorkspace(item) {
-  const profile = previewOutlier(item);
-  const choices = [["valid", "Accept as legitimate", "I reviewed the matching values; keep them unchanged."], ["keep", "Keep unchanged with a note", "Record why these observations should be retained."]];
-  if (!choices.some(([id]) => id === state.selectedFix)) state.selectedFix = choices[0][0];
-  return `<div class="review-workspace outlier-review"><div class="review-top"><div class="analysis-panel"><p class="eyebrow">1 · EVIDENCE & DEFINITION</p><h3>What makes these values unusual?</h3><p>Calculated locally on <b>${escapeHtml(item.column)}</b>. Change the definition to inspect a different matching set.</p>${outlierControls(item)}</div><div class="fix-panel"><p class="eyebrow">2 · YOUR DECISION</p><h3>Unusual does not mean incorrect.</h3><p>These controls define a finding and record a no-change decision. They do not cap, replace, or remove outliers.</p>${choices.map(([id, title, detail]) => `<label class="fix-option ${state.selectedFix === id ? "selected" : ""}"><input type="radio" name="fix" value="${id}" ${state.selectedFix === id ? "checked" : ""}><span><b>${title}</b><small>${detail}</small></span></label>`).join("")}<p class="review-scope">If the source needs correction, leave this finding open while you investigate.</p></div><div class="impact-panel"><p class="eyebrow">3 · REVIEW THE IMPACT</p><h3>${profile.rows.length.toLocaleString()} matching values · 0 cells changed</h3>${scatterChart(item)}<p>Highlighted points match the displayed definition. No data changes until an approved treatment supports them.</p></div></div>${affectedRecords(item)}<footer class="decision-bar"><span>Approve review of <b>${profile.rows.length.toLocaleString()} matching records</b><small>Source values stay unchanged. The displayed definition is saved with your decision.</small></span><button class="ghost" data-defer>Decide later</button><button class="primary" data-finalize="${item.id}">Approve no-change decision</button></footer></div>`;
-}
-function bindReviewControls() {
-  document.querySelectorAll("[data-open-issue]").forEach((button) => button.onclick = () => {
-    const item = state.issues.find((entry) => entry.id === Number(button.dataset.openIssue));
-    if (item.status !== "open") return notify("This finding is closed. Use Decisions to roll back an approved decision.");
-    openIssue(item.id);
-  });
-  document.querySelectorAll("input[name=fix]").forEach((input) => input.onchange = () => { state.selectedFix = input.value; renderIssues(); });
-  const changeFilter = (el, key) => { const [id, index] = el.dataset[key].split(":").map(Number); issueFilter(state.issues.find((x) => x.id === id)).conditions[index][key.replace("filter", "").toLowerCase()] = el.value; renderIssues(); };
-  document.querySelectorAll("[data-filter-field]").forEach((el) => el.onchange = () => changeFilter(el, "filterField"));
-  document.querySelectorAll("[data-filter-operator]").forEach((el) => el.onchange = () => changeFilter(el, "filterOperator"));
-  document.querySelectorAll("[data-filter-value]").forEach((el) => el.onchange = () => changeFilter(el, "filterValue"));
-  document.querySelectorAll("[data-filter-join]").forEach((el) => el.onchange = () => { issueFilter(state.issues.find((x) => x.id === Number(el.dataset.filterJoin))).join = el.value; renderIssues(); });
-  document.querySelectorAll("[data-add-filter]").forEach((el) => el.onclick = () => { issueFilter(state.issues.find((x) => x.id === Number(el.dataset.addFilter))).conditions.push({ column: state.headers[0], operator: "contains", value: "" }); renderIssues(); });
-  document.querySelectorAll("[data-remove-filter]").forEach((el) => el.onclick = () => { const [id, index] = el.dataset.removeFilter.split(":").map(Number); const filter = issueFilter(state.issues.find((x) => x.id === id)); if (filter.conditions.length > 1) filter.conditions.splice(index, 1); renderIssues(); });
-  document.querySelectorAll("[data-clear-filters]").forEach((el) => el.onclick = () => { Object.assign(issueFilter(state.issues.find((x) => x.id === Number(el.dataset.clearFilters))), { join: "AND", conditions: [{ column: state.headers[0], operator: "contains", value: "" }] }); renderIssues(); });
-  document.querySelectorAll("[data-outlier-method]").forEach((el) => el.onchange = () => { outlierDraft(state.issues.find((x) => x.id === Number(el.dataset.outlierMethod))).method = el.value; renderIssues(); });
-  document.querySelectorAll("[data-outlier-input]").forEach((el) => el.onchange = () => { const [id, key] = el.dataset.outlierInput.split(":"); outlierDraft(state.issues.find((x) => x.id === Number(id)))[key] = el.value; renderIssues(); });
-  document.querySelectorAll("[data-save-outlier]").forEach((el) => el.onclick = () => { saveOutlierRule(state.issues.find((x) => x.id === Number(el.dataset.saveOutlier))); renderIssues(); });
-  document.querySelectorAll("[data-select-record]").forEach((el) => el.onclick = (event) => { if (!event.target.closest("button")) { state.selectedRecord = Number(el.dataset.selectRecord.split(":")[1]); renderIssues(); } });
-  document.querySelectorAll("[data-locate-row]").forEach((el) => el.onclick = () => locateRecord(Number(el.dataset.locateRow)));
-  document.querySelectorAll("[data-finalize]").forEach((el) => {
-    const item = state.issues.find((x) => x.id === Number(el.dataset.finalize));
-    el.disabled = state.proposalPending || (item.recommendation === "outlier" && (!!previewOutlier(item).error || !activeRows(item).length));
-    el.onclick = () => applyFix(item, state.selectedFix);
-  });
-  document.querySelectorAll("[data-scatter-axis]").forEach((el) => el.onchange = () => { const item = state.issues.find((x) => x.id === Number(el.dataset.issue)); const selected = scatterData(item).selected; selected[el.dataset.scatterAxis] = el.value; delete selected.viewport; renderIssues(); });
-  document.querySelectorAll("[data-scatter-reset]").forEach((el) => el.onclick = () => { const item = state.issues.find((x) => x.id === Number(el.dataset.scatterReset)); delete scatterData(item).selected.viewport; renderScatterPlot(item); });
-  document.querySelectorAll("[data-scatter-plot]").forEach((el) => { const item = state.issues.find((x) => x.id === Number(el.dataset.scatterPlot)); renderScatterPlot(item); bindScatterNavigation(item); });
-  document.querySelectorAll("[data-defer]").forEach((el) => el.onclick = () => { state.selectedIssue = null; renderIssues(); });
-}
 function locateRecord(rowId) {
   if (!state.rows.some((row) => row._row === rowId)) return notify("Record not found in the current dataset.");
   state.selectedRecord = rowId;
@@ -516,6 +450,7 @@ function evaluateOutlier(item, d) {
     if (!finite(d.zScore) || Number(d.zScore) <= 0) return fail("Z-score threshold must be greater than zero.");
     sd = Math.sqrt(values.reduce((sum, entry) => sum + (entry.value - stats.mean) ** 2, 0) / values.length);
     rows = values.filter((entry) => sd && Math.abs((entry.value - stats.mean) / sd) >= Number(d.zScore)).map((entry) => entry.row);
+    lower = stats.mean - Number(d.zScore) * sd; upper = stats.mean + Number(d.zScore) * sd;
     note = `Absolute Z-score >= ${d.zScore}; mean ${stats.mean.toFixed(2)}, population SD ${sd.toFixed(2)}`;
   } else if (d.method === "percentile") {
     if (!finite(d.low) || !finite(d.high) || Number(d.low) < 0 || Number(d.high) > 100 || Number(d.low) >= Number(d.high)) return fail("Percentiles must satisfy 0 <= lower < upper <= 100.");
@@ -548,13 +483,6 @@ function saveOutlierRule(item, announce = true) {
   markProjectDirty();
   if (announce) notify("Outlier rule saved. No data changed.");
   return true;
-}
-function outlierControls(item) {
-  const d = outlierDraft(item), profile = previewOutlier(item);
-  const input = (label, key, type = "number") => `<label>${label}<input type="${type}" ${type === "number" ? 'step="any"' : ""} ${["low", "high"].includes(key) ? 'min="0" max="100"' : ""} value="${escapeHtml(d[key])}" data-outlier-input="${item.id}:${key}" ${profile.error ? 'aria-invalid="true"' : ""}></label>`;
-  const controls = d.method === "iqr" ? input("IQR multiplier", "multiplier") : d.method === "zscore" ? input("Absolute Z-score", "zScore") : d.method === "percentile" ? input("Lower percentile (%)", "low") + input("Upper percentile (%)", "high") : d.method === "threshold" ? input("Lower bound", "lower") + input("Upper bound", "upper") : `<label>Field<select data-outlier-input="${item.id}:field">${state.headers.map((column) => `<option ${d.field === column ? "selected" : ""}>${escapeHtml(column)}</option>`).join("")}</select></label><label>Operator<select data-outlier-input="${item.id}:operator">${[">=", ">", "<", "<=", "=", "!=", "contains"].map((operator) => `<option ${d.operator === operator ? "selected" : ""}>${escapeHtml(operator)}</option>`).join("")}</select></label>${input("Value", "value", "text")}`;
-  const guidance = { iqr: "Flags values outside the fences. Lower multipliers flag more observations.", zscore: "Measures distance from the mean in population standard deviations; review skewed data carefully.", percentile: "Flags values at or beyond these percentile bounds, including ties.", threshold: "Flags values outside your business bounds. Leave either bound blank for an open end.", custom: "Flags records matching this condition; this is a business filter, not a statistical test." };
-  return `<div class="outlier-definition"><label>Detection method<select data-outlier-method="${item.id}">${[["iqr", "Interquartile range (IQR)"], ["zscore", "Standard deviation / Z-score"], ["percentile", "Percentile bounds"], ["threshold", "Business bounds"], ["custom", "Custom condition"]].map(([value, label]) => `<option value="${value}" ${d.method === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><div class="outlier-controls">${controls}</div><p class="review-scope">${guidance[d.method] || ""}</p><div class="outlier-preview ${profile.error ? "workspace-error" : ""}" role="status"><b>${profile.error ? "Check your definition" : `${profile.rows.length.toLocaleString()} matching records`}</b><p>${escapeHtml(profile.note)}</p></div><button class="secondary" data-save-outlier="${item.id}" ${profile.error ? "disabled" : ""}>Save definition only</button><small class="review-scope">Saving updates the finding; it does not approve a decision or change data.</small></div>`;
 }
 
 
@@ -595,6 +523,8 @@ async function requestProposal(item) {
   const observed = numeric ? numericValues(item.column) : [];
   const stats = numeric ? numericStats(observed) : null;
   const context = { column: item.column, type: numeric ? "numeric" : "categorical", issueType: item.type, affectedRecords: item.rows.length, statistics: stats && { mean: stats.mean, median: stats.median, min: stats.min, max: stats.max }, categoryValues: numeric ? undefined : Object.fromEntries(categoryProfile(item).variants), allowedOperations: numeric ? ["fill_missing"] : ["map_categories"] };
+  // SENS-D-02: compatibility proposal requests must respect the same local-only boundary.
+  if (typeof ReviewCore!=="undefined" && (ReviewModules.sensitive?.isSensitiveColumn(item.column) || ReviewCore.containsSensitiveText({instruction,context}))) {state.aiMessage="Sensitive values stay local; use the local review choices.";return renderIssues();}
   state.proposalPending = true;
   state.aiMessage = "";
   renderIssues();
@@ -624,47 +554,11 @@ async function requestProposal(item) {
 }
 
 fetch("/api/ai/proposals").then((response) => response.ok ? response.json() : {}).then((config) => { turnstileSiteKey = config.turnstileSiteKey || ""; }).catch(() => {});
-function renderTreatmentWorkspace(item) {
-  const category = item.recommendation === "standardize"; const custom = proposals(item);
-  let options = item.recommendation === "convert" ? [["convert", "Convert values to decimals", "Divide values above 1 by 100."], ["valid", "Keep unchanged and mark valid", "Retain current source values."]] : item.recommendation === "impute" ? [["imputeMedian", "Fill with column median", "Use the median of observed values."], ["imputeMean", "Fill with column mean", "Use the mean of observed values."], ["keep", "Leave missing and document", "Do not estimate unknown values."]] : category ? [["standardize", "Standardize confirmed variants", "Map Paid Social formatting variants."], ["mapOnly", "Map underscore values only", "Map paid_social only."], ["valid", "Keep labels unchanged", "Retain each source label."]] : item.recommendation === "date" ? [["date", "Convert to ISO dates", "Use YYYY-MM-DD."], ["valid", "Keep current dates", "Retain source formats."]] : [["valid", "Mark values as valid", "Accept the current values."], ["keep", "Leave unchanged and document", "No source values change."]];
-  options = [...options, ...custom.map((proposal) => [`custom:${proposal.id}`, "Custom AI proposal", proposal.interpretation])]; if (!options.some(([value]) => value === state.selectedFix)) state.selectedFix = options[0][0];
-  const selected = state.selectedFix; const selectedOption = options.find(([value]) => value === selected); const impact = category ? categoryImpact(item, selected) : null;
-  const evidence = item.recommendation === "outlier" ? `<div class="evidence"><b>IQR fences</b><br>${item.outlier.lower.toFixed(2)} to ${item.outlier.upper.toFixed(2)} · Q1 ${item.outlier.stats.q1.toFixed(2)} · Q3 ${item.outlier.stats.q3.toFixed(2)}</div><label class="iqr-control"><span>IQR multiplier <output>${item.outlier.multiplier.toFixed(1)}</output></span><input type="range" min="0.5" max="3" step="0.1" value="${item.outlier.multiplier}" data-iqr-multiplier="${item.id}" aria-label="IQR multiplier"></label><p class="iqr-guidance">Lower multipliers flag more values; higher multipliers flag fewer.</p>` : `<div class="evidence"><b>Evidence</b><br>${item.rows.slice(0, 4).map((row) => `Row ${row._row}: ${escapeHtml(row[item.column])}`).join(" · ")}</div>`;
-  const preview = item.recommendation === "impute" ? (() => { const sim = numericSimulation(item, selected); return `<h3>${selected === "keep" ? "Missing values retained" : `${item.rows.length} missing values simulated`}</h3><div class="impact-stats"><span><small>Mean</small><b>${sim.beforeStats.mean.toFixed(2)} → ${sim.afterStats.mean.toFixed(2)}</b></span><span><small>Median</small><b>${sim.beforeStats.median.toFixed(2)} → ${sim.afterStats.median.toFixed(2)}</b></span></div>${histogramChart(item, selected)}<p>The after distribution is a temporary simulation.</p>`; })() : item.recommendation === "outlier" ? `<h3>${item.rows.length} statistically unusual values</h3>${scatterChart(item)}<p>Flagging is based on the selected issue column; change either axis to inspect relationships.</p>` : category ? `<h3>${selected === "valid" ? "No cells will change" : `${impact.modified} records will be remapped`}</h3><div class="impact-stats"><span><small>Unique labels</small><b>${Object.keys(impact.profile.counts).length}</b></span><span><small>Changed</small><b>${impact.modified}</b></span></div>` : `<h3>${["valid", "keep"].includes(selected) ? "No values will change" : `${item.rows.length} records affected`}</h3>`;
-  const primary = ["valid", "keep"].includes(selected) ? "Approve no-change decision" : "Approve change";
-  return `<div class="review-workspace"><div class="review-top"><div class="analysis-panel"><p class="eyebrow">1 · UNDERSTAND THE FINDING</p><h3>${escapeHtml(item.label)}</h3><p>${escapeHtml(item.summary)}</p>${evidence}<small class="review-scope">Rule-based finding · calculated locally, not AI-generated</small></div><div class="fix-panel"><p class="eyebrow">2 · CHOOSE A TREATMENT</p>${options.map(([value, title, detail]) => `<label class="fix-option ${selected === value ? "selected" : ""}"><input type="radio" name="fix" value="${escapeHtml(value)}" ${selected === value ? "checked" : ""}><span><b>${escapeHtml(title)}</b><small>${escapeHtml(detail)}</small></span></label>`).join("")}${renderAiPanel(item)}</div><div class="impact-panel"><p class="eyebrow">3 · REVIEW THE IMPACT</p>${preview}</div></div>${affectedRecords(item)}<footer class="decision-bar"><span>Selected: <b>${escapeHtml(selectedOption?.[1] || "Select a fix")}</b><small>Preview only until you approve · reversible in Changes</small></span><button class="ghost" data-defer>Decide later</button><button class="primary" data-finalize="${item.id}">${primary}</button></footer></div>`;
-}
-function renderAiPanel(item) {
-  if (!["impute", "standardize"].includes(item.recommendation)) return "";
-  const example = item.recommendation === "impute" ? `Suggest a constant fill for missing ${item.column}.` : "Map paid_social to Paid Social.";
-  const caveats = (label, values) => values?.length ? `<div class="proposal-caveats"><b>${label}</b><ul>${values.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}</ul></div>` : "";
-  return `<div class="ask-ai"><p class="eyebrow">AI COPILOT · ON REQUEST</p><label for="aiInstruction"><b>Need another approach?</b><small>${item.recommendation === "impute" ? "Request a constant numerical fill for these blanks." : "Request a mapping of the reviewed category labels."}</small></label><textarea id="aiInstruction" maxlength="300" placeholder="${escapeHtml(example)}" ${state.proposalPending ? "disabled" : ""}>${escapeHtml(state.aiInstructions?.[item.id] || "")}</textarea><button class="secondary" data-generate-proposal="${item.id}" ${state.proposalPending ? "disabled" : ""}>${state.proposalPending ? "Generating proposal…" : "Ask AI for a proposal"}</button><small class="review-scope">Sends this column's bounded issue context to the configured AI provider. The response is validated; you approve any change.</small>${state.proposalPending ? '<span class="proposal-pending" role="status"><i></i> Waiting for the AI service</span>' : ""}${state.aiMessage ? `<p class="ai-message" role="status">${escapeHtml(state.aiMessage)}</p>` : ""}${proposals(item).length ? `<div class="proposal-cards">${proposals(item).map((proposal) => `<article class="proposal-card"><b>AI-generated proposal</b><p>${escapeHtml(proposal.instruction)}</p><small>${escapeHtml(proposal.interpretation)}</small>${caveats("Assumptions", proposal.assumptions)}${caveats("Warnings", proposal.warnings)}<button class="ghost" data-remove-proposal="${proposal.id}" data-issue="${item.id}">Remove proposal</button></article>`).join("")}</div>` : ""}</div>`;
-}
-function bindIssueLinks() {
-  bindReviewControls();
-  bindDuplicateControls();
-  bindDecisionNote();
-  const instruction = document.querySelector("#aiInstruction");
-  if (instruction) instruction.oninput = () => { (state.aiInstructions ||= {})[state.selectedIssue] = instruction.value; };
-  const filters = document.querySelector("[data-record-filters]");
-  if (filters) filters.ontoggle = () => { (state.inspectionFiltersOpen ||= {})[state.selectedIssue] = filters.open; };
-  document.querySelectorAll("[data-generate-proposal]").forEach((button) => button.onclick = () => requestProposal(state.issues.find((item) => item.id === Number(button.dataset.generateProposal))));
-  document.querySelectorAll("[data-remove-proposal]").forEach((button) => button.onclick = () => { const list = proposals({ id: button.dataset.issue }); state.customProposals[button.dataset.issue] = list.filter((proposal) => proposal.id !== button.dataset.removeProposal); state.selectedFix = ""; renderIssues(); });
-}
 
 // The active definitions keep one reusable, issue-scoped record subview below the analytical row.
 function issueFilter(item) { return state.issueFilters[item.id] ||= { join: "AND", conditions: [{ column: state.headers[0], operator: "contains", value: "" }] }; }
 function filteredIssueRows(item) { const filter = issueFilter(item), conditions = filter.conditions.filter((entry) => String(entry.value).trim()); return !conditions.length ? activeRows(item) : activeRows(item).filter((row) => filter.join === "OR" ? conditions.some((entry) => match(row, entry)) : conditions.every((entry) => match(row, entry))); }
 
-function affectedColumnConfig(item, filter) {
-  const identifiers = [...new Set([...state.headers.filter((column) => /(^id$|_id$|name$|^city$|^channel$)/i.test(column)), ...state.headers.filter((column) => !numericColumns().includes(column))])].filter((column) => column !== item.column).slice(0, 2);
-  const identifierConfig = identifiers.map((column) => ({ key: column, label: column }));
-  if (["impute", "convert"].includes(item.recommendation)) return [{ key: item.column, label: "Current value" }, { key: "_proposedNumber", label: "Proposed value" }, ...identifierConfig];
-  if (item.recommendation === "date") return [{ key: item.column, label: "Original value" }, { key: "_parsedDate", label: "Parsed value" }, { key: "_proposedDate", label: "Proposed value" }, ...identifierConfig];
-  if (item.recommendation === "standardize") return [{ key: item.column, label: "Original label" }, { key: "_proposedCategory", label: "Proposed mapping" }, ...identifierConfig];
-  const related = item.rule ? [item.rule.left, item.rule.right] : item.type === "Cross-column violation" ? ["impressions"] : item.recommendation === "outlier" ? numericColumns().filter((column) => column !== item.column).slice(0, 2) : [];
-  return [...new Set([item.column, ...identifiers, ...related, ...filter.conditions.map((entry) => entry.column)].filter((column) => state.headers.includes(column)))].slice(0, 7).map((column) => ({ key: column, label: column }));
-}
 function affectedValue(item, row, key, simulation) {
   if (key === "_proposedNumber") {
     if (item.recommendation === "convert") return state.selectedFix === "convert" && Number(row[item.column]) > 1 ? (Number(row[item.column]) / 100).toFixed(4) : row[item.column];
@@ -680,14 +574,5 @@ function affectedValue(item, row, key, simulation) {
     return Object.hasOwn(mapping, row[item.column]) ? mapping[row[item.column]] : row[item.column];
   }
   return row[key];
-}
-// Keep record previews focused; outlier review additionally supports inspection filters.
-function affectedRecords(item) {
-  const filter = issueFilter(item);
-  const rows = filteredIssueRows(item);
-  const columns = affectedColumnConfig(item, filter);
-  const simulation = item.recommendation === "impute" ? numericSimulation(item, state.selectedFix) : null;
-  const filterControls = item.recommendation === "outlier" ? `<details class="inspection-filters" data-record-filters ${state.inspectionFiltersOpen?.[item.id] ? "open" : ""}><summary>Filter records for inspection</summary><div class="filter-builder"><label>Match<select data-filter-join="${item.id}"><option ${filter.join === "AND" ? "selected" : ""}>AND</option><option ${filter.join === "OR" ? "selected" : ""}>OR</option></select></label>${filter.conditions.map((entry, index) => `<div class="affected-filter"><select aria-label="Filter column" data-filter-field="${item.id}:${index}">${state.headers.map((column) => `<option ${entry.column === column ? "selected" : ""}>${escapeHtml(column)}</option>`).join("")}</select><select aria-label="Comparison operator" data-filter-operator="${item.id}:${index}">${["contains", "=", "!=", ">", "<", ">=", "<="].map((operator) => `<option ${entry.operator === operator ? "selected" : ""}>${escapeHtml(operator)}</option>`).join("")}</select><input aria-label="Filter value" data-filter-value="${item.id}:${index}" value="${escapeHtml(entry.value)}" placeholder="Value"><button class="ghost" data-remove-filter="${item.id}:${index}" ${filter.conditions.length === 1 ? "disabled" : ""}>Remove</button></div>`).join("")}<button class="secondary" data-add-filter="${item.id}">Add filter</button><button class="ghost" data-clear-filters="${item.id}">Clear</button></div></details>` : "";
-  return `<section class="affected-records"><div class="affected-toolbar"><div><p class="eyebrow">RECORD-LEVEL EVIDENCE</p><h3>${rows.length.toLocaleString()} <small>of ${activeRows(item).length.toLocaleString()} matching records</small></h3></div></div>${filterControls}${item.recommendation === "outlier" ? `<p class="review-scope">Inspection filters do not change approval scope: your decision covers all ${activeRows(item).length.toLocaleString()} records matching the displayed definition.</p>` : ""}${rows.length ? `<div class="affected-table-wrap"><table class="affected-table"><thead><tr><th>Source row</th>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}${item.rule ? "<th>Rule evidence</th>" : ""}<th>Inspect</th></tr></thead><tbody>${rows.map((row) => `<tr class="${state.selectedRecord === row._row ? "selected-record" : ""}" data-select-record="${item.id}:${row._row}"><td>${row._row}</td>${columns.map((column) => { const value = affectedValue(item, row, column.key, simulation); return `<td title="${escapeHtml(value)}">${String(value ?? "").trim() ? escapeHtml(value) : '<span class="cell-empty">Blank</span>'}</td>`; }).join("")}${item.rule ? `<td>${escapeHtml(ruleEvidence(item, row))}</td>` : ""}<td><button class="ghost" data-locate-row="${row._row}">View row →</button></td></tr>`).join("")}</tbody></table></div>` : '<p class="affected-empty">No records match the displayed definition and inspection filters.</p>'}</section>`;
 }
 initializeWorkspaceFeatures();

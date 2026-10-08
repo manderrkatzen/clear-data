@@ -16,7 +16,7 @@ Turn suspicious values into explainable, human-finalized cleaning decisions. Cal
 
 ## Operating Context
 
-Users import CSVs or bundled samples, inspect column profiles and highlighted records, review Find / Compare / Fix on one page, examine the selected treatment's before/after effect, and revisit decisions through reversible history. Desktop is the principal analytical workspace; mobile must remain functional and legible.
+Users import CSVs or bundled samples, inspect column profiles and highlighted records, review issues through Explore / Fix / Review tabs, examine the selected treatment's before/after effect, and revisit decisions through reversible history. Desktop is the principal analytical workspace; mobile must remain functional and legible.
 
 ## Capabilities and Constraints
 

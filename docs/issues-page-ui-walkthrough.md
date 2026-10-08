@@ -1,529 +1,127 @@
-# Issues Page: UI Walkthrough and Terminology Guide
+# Review page: Issue list + Explore · Fix · Review
 
-The page called **Issues** is currently labeled **Review** in the sidebar, with the page heading **Review findings**. Internally, it remains the `issues` screen, so either name works when requesting fixes.
+This is the implementation walkthrough for `review_spec/README.md`, `00_shared.md`, and the numbered issue specifications. Those files supersede `review_three_sections.md` and all earlier stepper / Find · Compare · Fix briefs. The application navigation still calls the screen **Review**; its internal name is `issues`.
 
-This walkthrough describes the current interface from the repository implementation. Some panels appear only for particular findings or after running a comparison.
-
-## 1. Page orientation
-
-On desktop, the page is arranged roughly like this:
+## Page layout
 
 ```text
-┌───────────────┬─────────────────────────────────────────────┐
-│               │ Dataset name + working-version controls    │
-│ Main          ├─────────────────────────────────────────────┤
-│ navigation    │ Review findings                             │
-│ sidebar       │ AI analysis status banner                   │
-│               │ Definitions, business checks & corrections  │
-│               ├──────────────┬──────────────────────────────┤
-│ Dataset       │ Findings     │ Selected finding header      │
-│ Explore       │ queue        │                              │
-│ Review        │              │ Five-step review navigation  │
-│ Decisions     │ Search       ├──────────────────────────────┤
-│ Report        │ Type filter  │                              │
-│               │              │ Current review step          │
-│               │ Finding A    │ Evidence / interpretation /  │
-│               │ Finding B    │ treatment / preview          │
-│               │ Finding C    │                              │
-│               │              ├──────────────────────────────┤
-│               │ Closed       │ Back · Step count · Continue │
-│               │ findings     │ or Approve                   │
-└───────────────┴──────────────┴──────────────────────────────┘
+Issue list                          Selected column · issue · affected count
+All types · search                  Accept as is
+Column
+  Missing values · 86               Explore | Fix | Review
+  Outliers · 12                     Selected section content
+Next column
+Resolved (collapsed)
 ```
 
-The most useful distinction is:
+The left panel groups every column/issue pair. Type and column-name filters narrow the list. Status dots and text distinguish open, fixed, and accepted findings. Resolved items open their Review tab. On narrow screens the bounded issue list sits above the main surface.
 
-- **Navigation sidebar:** switches between application pages.
-- **Findings queue:** chooses which issue you are reviewing.
-- **Review workspace:** contains the selected issue and its workflow.
+The tabs are freely navigable. **Fix** is enabled when Explore has a locked scope; **Review** becomes available after a decision. These are sections, not sequential wizard steps. There are no three-card review screens or Advanced panels.
 
-On smaller screens, the findings queue moves **above** the review workspace.
-
-## 2. Far-left sidebar: Primary navigation
-
-This is the dark navigation area containing:
-
-- **Dataset**
-- **Explore**
-- **Review**, with an open-finding count
-- **Decisions**, with a decision count when available
-- **Report**
-
-A **Continue review** shortcut appears near the bottom on desktop.
-
-| What you see | Useful terminology |
+| Region | Exact `data-ui` |
 | --- | --- |
-| Whole dark sidebar | Primary navigation sidebar |
-| Review button | Review navigation item |
-| Number beside Review | Open-findings count badge |
-| Highlighted page button | Active navigation state |
-| Continue review shortcut | Continue-review shortcut |
+| Issue list | `review.issues` |
+| Type dropdown and column search | `review.issues.filter` |
+| Column group (`data-column`) | `review.issues.column` |
+| Issue item (`data-column`, `data-issue`) | `review.issues.item` |
+| Resolved disclosure | `review.issues.done` |
+| Main surface | `review.main` |
+| Selected issue and Accept as is | `review.issue-header` |
+| Explore / Fix / Review | `review.tabs` |
 
-**Example request:**
+## Explore: choose the exact scope
 
-> The open-findings count badge in the primary navigation is not updating after approval.
+### Missing values
 
-## 3. Top horizontal bar: Dataset topbar
+The frequency list contains each exact blank, null-like token, and suspicious sentinel representation. Rows show the percentage of the column and the count. **Blank starts locked**; other representations require an explicit lock. A lock defines what the subsequent treatment may touch without changing the stored source value.
 
-Above the page content, this identifies the dataset you are working on.
+The automatic AI micro report receives the column name, inferred/declared type, defined meaning, bounded frequencies, and at most 20 present samples. Its recommendations appear as a suggestion and **Lock AI picks**; failure shows **AI unavailable**. AI never changes locks or data by itself.
 
-It contains the dataset name and, depending on state and screen width, working-version information and actions such as undo. This bar belongs to the overall application shell rather than to one particular finding.
+**Go to Fix** uses the locked total. The inspection sheet is separate: its up-to-three lock columns arrange rows but never expand the treatment scope. Numeric locks use quantiles (five bands), fixed width, or explicit edges. Text groups below five records collapse into Other. Groups are ordered by missing rate, with zero-missing groups hidden unless requested. Each header shows the group population, missing count/rate, a rate bar, and an overall-rate marker. Nested locks can be reordered. Missing rows come first; each group initially shows 50 rows, with Show more.
 
-**Useful terms:**
-
-- Dataset topbar
-- Dataset name
-- Working-version badge
-- Unresolved-findings badge
-- Undo-last-change action
-
-**Example request:**
-
-> Keep the dataset name visible in the topbar when I scroll through a long review.
-
-## 4. Under “Review findings”: AI analysis status banner
-
-This horizontal banner explains what the AI is currently doing. Its heading changes with the analysis state, for example:
-
-- **AI interpretation in progress**
-- **AI suggestions ready**
-- **AI-assisted interpretation**
-
-It may show a progress count such as `12 / 20 findings interpreted`.
-
-The action changes between **Cancel AI review** and **Refresh AI analysis**.
-
-This area reports the status of the broader AI interpretation process. It is separate from the AI explanation shown inside an individual finding.
-
-**Example request:**
-
-> In the AI analysis status banner, show which findings failed instead of only showing the overall progress count.
-
-## 5. Expandable setup row: Definitions and checks disclosure
-
-The visible heading is **Definitions, business checks & manual corrections**. Clicking it expands a toolbar of configuration actions.
-
-“Disclosure” means an area you can expand and collapse. “Expandable setup section” is also clear terminology.
-
-| Control | What it opens or does |
+| Element | Exact `data-ui` |
 | --- | --- |
-| **Column definitions** | Defines column meaning, analytical role, units, missing tokens, and parsing policies |
-| **Business relationships** | Defines comparisons between fields or conditional requirements |
-| **Schema / metric rules** | Defines types, required values, bounds, allowed categories, and derived calculations |
-| **Duplicate keys** | Configures how duplicate records are identified |
-| **Manual correction** | Starts a review for an analyst-selected column and source rows |
-| **Dataset context →** | Takes you to Dataset to describe the dataset’s purpose |
+| Missing Explore section | `review.explore.missing` |
+| Frequencies / individual representation (`data-value`) | `review.explore.missing.values`, `review.explore.missing.value` |
+| AI micro report | `review.explore.missing.ai` |
+| Locked count and Go to Fix | `review.explore.missing.total` |
+| Inspection sheet | `review.explore.missing.sheet` |
+| Ordered lock-column controls | `review.explore.missing.locks` |
+| Include groups without missing values | `review.explore.missing.show-all` |
 
-These definitions influence checks and interpretation. Changing a definition does not itself rewrite cells.
+### Other issue types
 
-**Example request:**
+| Issue | Explore behavior | Exact `data-ui` |
+| --- | --- | --- |
+| Outliers | Live IQR, Z-score, percentile, or fixed-range rule; count; scatter with rule bounds; histogram; point/box unlocking; zoom and Shift-drag pan; on-request AI error assessment | `review.explore.outlier`, `.rule`, `.threshold`, `.count`, `.scatter`, `.x`, `.hist`, `.points`, `.ai` |
+| Repeated ID values | Count, Yes/No repeatability question, identical/conflicting group metrics, expandable rows | `review.explore.dup-values`, `.count`, `.question`, `.metrics`, `.groups` |
+| Exact duplicate rows | Dataset-level All columns finding, groups, Remove all exact copies shortcut | `review.explore.dup-rows` |
+| Format, type, or scale | Pattern frequencies, lockable patterns, editable target, ambiguous-date note, unreadable values | `review.explore.format`, `.patterns`, `.pattern`, `.ambiguous`, `.unparseable` |
+| Inconsistent labels | Normalization clusters, editable canonical labels, requested AI synonym pass, complete frequencies | `review.explore.labels`, `.clusters`, `.cluster`, `.ai`, `.all` |
+| Hidden characters | Lockable problem types and visible-space examples | `review.explore.whitespace` |
+| Impossible values | Suggested/editable valid range, count, histogram, offending rows | `review.explore.invalid` |
+| Conflicting columns | Suggested or declared relationship, editable calculation, violating rows and differences | `review.explore.cross` |
+| Empty or constant column | Missing/dominant-value proportions and top values | `review.explore.constant` |
+| Lost leading zeros | Digit-length distribution and examples | `review.explore.zeros` |
+| Multiple values in a cell | Separator, proportion, examples, per-cell value counts | `review.explore.multi` |
+| Sensitive data | Detected type and count with masked examples | `review.explore.sensitive` |
 
-> Inside the definitions and checks disclosure, make Column definitions and Schema / metric rules easier to distinguish.
+Suffix notation in the table expands the full preceding ID, for example `.rule` means `review.explore.outlier.rule`.
 
-## 6. Narrow list beside the main panel: Findings queue
+Answering **Yes** to repeated values records a reversible no-change decision and remembers that the column may repeat. **Undo** removes that permission. No turns on the comparison metrics and survivor review.
 
-This list is headed **[number] open findings**. It is your issue-selection panel.
+## Fix: exact preview before Apply
 
-### 6.1 Queue header
+Ready-made fixes cover all issue families in the brief. Numerical missing values offer median, mean, grouped median when inspection locks exist, KNN, a constant, ordered previous/next fills and interpolation when a date column exists, retention, and row removal. Text missing values add global/grouped mode; dates use explicit constants or ordered neighbours. Other issues expose their corresponding conversion, mapping, character-cleaning, capping, duplicate-survivor, structural, and privacy treatments.
 
-The header contains:
+Choosing an option computes a pure preview. A scope reminder comes first; then the selected choices, a plain-language **reported-number consequence**, up to three before → after figures, and an explicitly named **risk** before the compact chart or row preview. **See affected rows** opens a side panel of current → proposed values. An optional note is saved with the decision; sensitive-data retention requires a note.
 
-- Total open-findings count
-- A note about recommendation-rank sorting
-- **Search columns or findings**
-- **All finding types** dropdown
+Multi-value cells support split rows, positional columns, yes/no flags (at most 20 distinct parts), keep-first and retention. Splitting rows shows the extra primary-metric total that copied records would double-count. Sensitive detection is local; Explore, previews and affected-row panels mask source examples. Masking, deterministic SHA-256 codes and column removal remain reversible through the preserved local source. These values are excluded from AI context, including related issue flows.
 
-Search matches column names, finding labels, and finding types. The type dropdown filters which findings appear in the queue.
+**Ask AI** accepts an instruction or requests a suggestion. Parsed leftovers and likely outlier typos use bounded source strings and confidence filtering. Suggestions are validated against the submitted columns, source values, and allowed operations; they become a selectable AI option and follow the same preview and Apply path.
 
-These are **queue filters**. They do not define which dataset rows a treatment changes.
+Blocked records are not applied silently. **N can’t be fixed · Apply to the rest** must be explicitly selected. Conflicting duplicate survivor values and newly introduced declared-constraint violations also require acknowledgement. Approval checks the exact preview fingerprint and runs the existing approval function against current working data.
 
-### 6.2 Finding items
-
-Each clickable item shows:
-
-- Column name
-- Finding label
-- Matching-record count
-- **AI alternatives ready** or **Local evidence**
-
-The selected item gets a highlighted background. Call these **finding items**, **queue items**, or **finding cards**.
-
-### 6.3 Closed findings
-
-An expandable section below the open list summarizes closed findings and provides a route to **Decisions** for inspection or rollback.
-
-Closed does not necessarily mean cells were corrected: a finding can be reviewed and accepted without changing its values.
-
-**Example requests:**
-
-> In the findings queue, keep the selected finding visible when the list reorders.
-
-> The queue’s finding-type filter should use clearer labels.
-
-> The matching-record count on each finding item is hard to scan.
-
-## 7. Large panel: Selected-finding review workspace
-
-After selecting a finding, the main panel becomes its review workspace.
-
-### 7.1 Selected-finding header
-
-At the top, you see:
-
-- Finding title
-- Column name
-- Matching-record count
-- **Leave open** action
-
-**Leave open** exits the active review while keeping the finding unresolved. Call this the **selected-finding header**, distinct from the page header.
-
-### 7.2 Five-step navigation
-
-Immediately below is the **review stepper**:
-
-```text
-1 Understand → 2 Interpret → 3 Treat & scope → 4 Preview → 5 Approve
-```
-
-A **stepper** is navigation through a multi-step workflow. The current step is highlighted.
-
-### 7.3 Current-step content
-
-The body underneath changes as you move between steps. Call this the **review stage** or **current-step panel**.
-
-**Example requests:**
-
-> In the selected-finding header, make the column name more prominent.
-
-> The review stepper should explain why I cannot advance to Preview.
-
-## 8. Step 1: Understand — inspect the evidence
-
-For ordinary findings, this starts with **Finding details**.
-
-### 8.1 Finding summary
-
-A short explanation describes what was detected and why it needs review.
-
-**Term:** finding summary.
-
-### 8.2 Source-value groups
-
-The page groups matching records by their stored value. Each group shows:
-
-- Exact value, or `(blank)`
-- Number of records with that representation
-- **Scope to this group**
-
-For example:
-
-```text
-"N/A"       18 records       Scope to this group
-"NULL"       9 records       Scope to this group
-```
-
-**Terms:** source-value groups or value-representation groups.
-
-Selecting **Scope to this group** narrows the review draft to those records and moves into interpretation.
-
-### 8.3 Original-versus-working distribution
-
-For numerical columns, a histogram compares **Original source** and **Cumulative working**. Supporting metrics include mean, median, and parsed-value counts.
-
-For nonnumerical columns, the comparison can show label and blank counts instead of a numerical histogram.
-
-**Terms:** distribution comparison, histogram, chart legend, comparison metrics.
-
-### 8.4 Matching source records
-
-The expandable **Inspect matching source records** section shows record-level evidence, including source row IDs and **View row** actions.
-
-**Term:** matching-source-records table.
-
-### 8.5 Finding-specific evidence
-
-Some issue types add controls here:
-
-- **Outliers:** outlier-definition controls and **Inspect numerical relationships**
-- **Duplicates:** comparison mode and business-key fields
-- **Configured rules:** row-level rule evidence
-
-**Example requests:**
-
-> In Understand, place the source-value groups above the finding summary.
-
-> The original-versus-working histogram needs clearer axis labels.
-
-## 9. Missing-value findings: Missing vs present
-
-For applicable missing-value findings, Understand adds a dedicated analytical section called **Missing vs present**.
-
-This investigates whether rows with missing target values differ from rows where the target is present.
-
-### Walk through it
-
-1. Click **Compare columns**.
-2. Inspect the ranked comparison table.
-3. Select a comparison column.
-4. Review its detailed statistics or category rates.
-5. Use the held-comparison controls to compare within groups.
-6. Request an AI explanation of the computed evidence if needed.
-
-| Area | Useful terminology |
+| Element | Exact `data-ui` |
 | --- | --- |
-| Whole section | Missingness comparison panel |
-| Ranked list of other columns | Ranked comparison table |
-| Selected column’s results | Comparison detail panel |
-| Missing/present bars | Missing-versus-present histogram |
-| Comparing inside groups | Held comparison or stratified comparison |
-| Numeric grouping ranges | Numeric bands |
-| AI explanation of results | Analytical AI explanation |
+| Fix choices / individual choice (`data-fix`) | `review.fix.options`, `review.fix.option` |
+| Locked scope reminder | `review.fix.reminder` |
+| Reporting effect and risk | `review.fix.consequence`, `review.fix.risk` |
+| AI instruction and suggestions | `review.fix.ai` |
+| Shared-scale chart and exact impact counts | `review.fix.preview` |
+| Affected-row side-panel opener | `review.fix.rows` |
+| Optional decision note | `review.fix.note` |
+| Explicit approval | `review.fix.apply` |
 
-For numerical comparisons, the current UI uses **Cliff’s delta** for ranking and direction, with additional statistical evidence.
+## Review: impact, examples, Undo
 
-**Example requests:**
+After Apply, the selected issue stays visible and switches to Review. The metric strip shows changed cells, removed rows, column additions/removals, missing counts/rates, and mean/median or distinct-label changes. One before/after chart follows, then five example patches, Undo, and Next issue.
 
-> In Missing vs present, explain the effect-size column in plain language.
+Numeric histograms overlap on common 1st–99th percentile bins, include edge counts and mean/median lines, and distinguish the filled-value segment. Labels compare top frequencies plus blanks. Dates compare representation patterns. Duplicates compare row totals; outliers use paired before/after scatter plots. By group is available when the decision used lock columns.
 
-> The held-comparison controls should make the comparison column and grouping column easier to distinguish.
+Undo uses history replay from the preserved source and reopens the finding. The current session’s Explore locks remain available. Column and row structure changes are included in portable project validation and rollback.
 
-## 10. Step 2: Interpret — decide what the finding means
-
-The ordinary interpretation screen has four main areas.
-
-### 10.1 Top AI suggestion
-
-Shows the highest-ranked interpretation, including:
-
-- Suggested meaning
-- AI provider attribution
-- Model confidence
-- Explanation
-- Assumptions
-- Recommendation rank
-
-**Term:** top AI interpretation card.
-
-The rank is model-assessed, not a calibrated probability.
-
-### 10.2 Alternative interpretations
-
-An expandable section lets you compare other explanations.
-
-**Term:** alternative-interpretations disclosure.
-
-### 10.3 Your interpretation
-
-Radio buttons let you record your own judgment about the scoped records. Available meanings depend on the finding.
-
-**Term:** analyst interpretation selector.
-
-### 10.4 Copilot follow-up
-
-The **Ask the copilot about this finding** disclosure contains a question input and an action to request an interpretation.
-
-**Term:** finding-level copilot follow-up.
-
-**Example request:**
-
-> In Interpret, visually separate the AI suggestion from my interpretation selector.
-
-## 11. Special flow: Review value meanings
-
-For possible missing tokens and sentinel values—such as `NULL`, `N/A`, or suspicious zero/negative representations—the first two steps use a specialized interface headed **Review value meanings**.
-
-### Walk through it
-
-1. Pick a value from the horizontal **representation strip**.
-2. Inspect its record count and AI missingness assessment.
-3. Choose **Missing observation**, **Keep as a valid value**, or **Not applicable**.
-4. Click **Confirm & next value**, or **Skip for now**.
-5. Continue to comparison and treatment for confirmed missing observations.
-
-**Useful terms:**
-
-- Value-meaning review panel
-- Representation strip
-- Selected representation
-- Per-value AI assessment
-- Value-meaning radio group
-- Confirm-and-next action
-- Skip-value action
-
-This confirmation records meaning while preserving the stored value: **zero cells are rewritten by the classification itself**.
-
-**Example request:**
-
-> In the representation strip, keep skipped values visible but clearly distinguish them from unreviewed values.
-
-## 12. Step 3: Treat & scope — choose the operation and affected rows
-
-This step answers two separate questions: **What should happen?** and **Which matching records should it happen to?**
-
-### 12.1 Treatment selector
-
-The **Treatment** dropdown chooses the operation. Depending on the finding and interpretation, options may include retaining values, replacement, numerical fills, normalization, parsing, mapping, capping, duplicate handling, or row removal.
-
-**Term:** treatment selector.
-
-### 12.2 Treatment parameters
-
-Additional inputs appear for the selected operation, for example:
-
-- Replacement value
-- Decimal places
-- Conversion factor
-- Date format
-- Number format
-- Bounds
-- Grouping field
-- Duplicate survivor policy
-
-**Term:** treatment-parameter fields.
-
-### 12.3 Treatment scope
-
-Under **Apply only to these matching records**, choose:
-
-- All records belonging to this finding
-- Selected source row IDs
-- Records matching a condition
-
-Conditional scope adds a field, operator, and condition value.
-
-**Terms:** treatment-scope selector and conditional-scope builder.
-
-### 12.4 Similar-row fill controls
-
-Group-wise or KNN fills add:
-
-- Hold or similarity columns
-- Reference statistic
-- Minimum reference count or neighbour count
-- Numeric bands where applicable
-
-**Term:** similar-row treatment controls.
-
-### 12.5 Candidate treatment comparison
-
-For supported findings, **Compare candidate treatments (2–4)** lets you compare alternative drafts on the same scope.
-
-**Term:** candidate-treatment comparison panel.
-
-**Example request:**
-
-> In Treat & scope, make the treatment parameters and scope controls look like separate sections.
-
-## 13. Step 4: Preview — inspect the exact proposed impact
-
-### 13.1 Preview summary strip
-
-Four counters summarize:
-
-- **Scoped records**
-- **Cells changing**
-- **Whole rows removed**
-- **Blocked records**
-
-**Term:** preview summary strip.
-
-### 13.2 Exceptions
-
-Conditional warning sections show records that cannot be treated and new configured-constraint violations. They may include explicit acknowledgement or valid-subset controls.
-
-**Terms:** blocked-record exceptions and constraint-violation warnings.
-
-### 13.3 Three-way distribution comparison
-
-The chart now compares **Original source**, **Cumulative working**, and **Proposed preview**.
-
-**Term:** original/working/proposed distribution comparison.
-
-### 13.4 Exact record-level preview
-
-A table shows scoped source rows, current values, and proposed values.
-
-**Term:** exact record-level preview table.
-
-### 13.5 Supporting impact panels
-
-Depending on the treatment and configuration, you may also see:
-
-- **Fill sources:** provenance for proposed fills
-- **Impact by band:** effects within groups
-- **Business KPI impact:** changes to configured business measures
-- **Dependent metric follow-ups:** calculations needing a separate review
-- **Inspect affected and present records:** a broader inspection lens
-
-The affected-and-present record lens also appears in other review steps for supported findings. Its inspection settings do not broaden treatment scope.
-
-**Example requests:**
-
-> In Preview, show the current and proposed values side by side more clearly.
-
-> In Fill sources, make global-median fallbacks easier to identify.
-
-## 14. Step 5: Approve — finalize the decision
-
-The approval stage retains the proposed-impact information for final review and provides an analyst-rationale field.
-
-The main action is **Approve this decision**.
-
-**Useful terms:**
-
-- Approval stage
-- Analyst rationale field
-- Final approval button
-- Approved-decision confirmation banner
-
-After approval, the decision can be inspected or rolled back in **Decisions**.
-
-**Example request:**
-
-> In Approve, put the rationale field closer to the final approval button.
-
-## 15. Bottom of the workspace: Review action footer
-
-This contains:
-
-- **← Back**
-- **Step X of 5**
-- **Continue →**
-- **Review approval →** at Preview
-- **Approve this decision** at the final step
-
-The footer sits after the content in normal page flow.
-
-**Terms:** review action footer or step-navigation footer.
-
-**Example request:**
-
-> The review action footer is too far below the evidence on long findings.
-
-## 16. A simple format for requesting fixes
-
-Use:
-
-> On Review → [step] → [section], when [action/state], [problem]. I want [expected result].
-
-For example:
-
-> On Review → Understand → Missing vs present, after I select a comparison column, the results take up too much vertical space. I want the statistics and histogram arranged side by side on desktop.
-
-Or:
-
-> On Review → Treat & scope → Treatment scope, selecting source row IDs is cumbersome. I want to select rows from the record table.
-
-The core vocabulary to remember is **findings queue**, **selected-finding header**, **review stepper**, **review stage**, **treatment scope**, **preview summary**, **record-level preview**, and **review action footer**. Those names identify the major areas unambiguously.
-
-## Implementation reference
-
-| File | Relevant responsibility |
+| Element | Exact `data-ui` |
 | --- | --- |
-| `index.html` | Navigation sidebar and dataset topbar |
-| `review-ui.js` | Findings queue, review workspace, five-step content, and configuration dialogs |
-| `review.js` | Review steps, drafts, interpretations, and approval logic |
-| `value-review.js` | Per-representation value-meaning review |
-| `analytics.js` | Missingness comparisons, similar-row controls, and fill provenance |
-| `capabilities.js` | Record lenses, candidate comparisons, band impact, and KPI/dependency impact |
-| `review.css` and `design-system.css` | Review layout and visual styling |
+| Impact metric strip | `review.review.metrics` |
+| Before/after visualization | `review.review.chart` |
+| Group breakdown | `review.review.by-group` |
+| Five example changes | `review.review.sample` |
+| Reversible history replay | `review.review.undo` |
+| Next open column/issue pair | `review.review.next` |
+
+Dataset purpose, parsing definitions, schema/metric rules, reusable projects, and KPI definitions remain under **Dataset → Definitions, business checks & manual corrections** (`dataset.setup`). Dataset-wide cumulative changes remain on Report.
+
+## Verification and screenshots
+
+- `scripts/verify_review_page_ui.cjs`: all numbered `verify_spec_*` acceptance suites at desktop/mobile widths, followed by the shared cross-module suite.
+- `scripts/verify_review_page_extended_ui.cjs`: shared behavior, all multi-value structural variants, sensitive code equality, required-note gating, project round trips, network checks and source restoration.
+- `scripts/verify_review_page.cjs`: pure new treatments, new detection families, and AI input/output validation.
+- `scripts/verify_review_release_ui.cjs`: bundled CSV highlights/rail, grouped exact preview, Apply/history/Undo, real downloaded export, structural/private-code flows, console checks and responsive widths. `BASE_URL` targets local or the permanent hosted application.
+- Earlier UI runner names forward to the current suite.
+
+Use `?debug=ui` to display region IDs. Each issue's three-tab desktop/mobile screenshots are saved locally under `docs/screenshots/review-spec/01-missing/` through `12-sensitive/`. Non-debug release captures live in `.impeccable/review/`. AI responses are explicitly mocked; detection, statistics, treatments, approval, history, restore, rollback and CSV export are real. `docs/review-spec-progress.md` records stage results and the release checkpoint.
+
+The sales file has no repeated order IDs, so that path uses a named derived fixture. The marketing file has ISO dates and consistent channel names, so format/label paths likewise use a named derived fixture. Bundled source CSVs are preserved.
+
+**Example change request:** “On Review → Fix → `review.fix.preview`, after choosing constant 0 for discount_pct, make the filled-value segment easier to distinguish.”

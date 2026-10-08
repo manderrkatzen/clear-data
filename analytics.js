@@ -80,6 +80,8 @@ async function requestPatternExplanation(item, data) {
   const store = analyticalStore(), controller = new AbortController(); store.controllers.add(controller);
   const summary = buildPatternSummary(item.column, data), fingerprint = JSON.stringify(summary);
   try {
+    // SENS-D-02: a categorical comparison can contain private group labels, even for a numerical target.
+    if (typeof ReviewCore!=="undefined" && ReviewCore.containsSensitiveText(summary)) throw new Error("Sensitive values stay local; the deterministic comparison is still available.");
     const configResponse = await fetch("/api/ai/pattern", { signal: controller.signal });
     if (!configResponse.ok) throw new Error("AI pattern explanations are unavailable. Local comparisons remain available.");
     const config = await configResponse.json(); turnstileSiteKey = config.turnstileSiteKey || "";

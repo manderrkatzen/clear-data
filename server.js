@@ -2,13 +2,17 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const ai = require("./src/ai.cjs");
+const reviewAi = require("./src/review-ai.cjs");
 
 const root = __dirname;
 const config = { ...process.env, AI_MODE: process.env.AI_MODE || "local" };
 const mimeTypes = { ".css": "text/css", ".csv": "text/csv", ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".woff2": "font/woff2", ".txt": "text/plain" };
-const assets = new Set(["index.html", "app.js", "spreadsheet.js", "workspace.js", "cleaning-engine.js", "profile-worker.js", "review.js", "review-ui.js", "review.css", "design-system.css", "fonts/source-sans-3-latin.woff2", "fonts/OFL.txt", "styles.css", "spreadsheet.css", "workspace.css", "healthcare_patient_visits.csv", "sales_orders.csv", "marketing_campaigns.csv"]);
+const assets = new Set(["index.html", "app.js", "spreadsheet.js", "workspace.js", "cleaning-engine.js", "profile-worker.js", "review.js", "review-ui.js", "design-system.css", "fonts/source-sans-3-latin.woff2", "fonts/OFL.txt", "styles.css", "spreadsheet.css", "workspace.css", "healthcare_patient_visits.csv", "sales_orders.csv", "marketing_campaigns.csv"]);
 for (const asset of ["analysis-engine.js", "analysis-worker.js", "analytics.js", "value-review.js"]) assets.add(asset);
-for (const asset of ["capabilities-engine.js", "capabilities.js", "review-simple.js", "review-bands.js"]) assets.add(asset);
+for (const asset of ["capabilities-engine.js", "capabilities.js", "review-page.js", "review-page-engine.js", "review-page.css", "review-bands.js"]) assets.add(asset);
+for (const asset of ["review-core.js", "review-charts.js", "issues/missing.js", "issues/outliers.js", "issues/duplicates.js", "issues/format.js", "issues/labels.js", "issues/whitespace.js", "issues/invalid.js", "issues/cross-column.js", "issues/constant.js", "issues/leading-zeros.js"]) assets.add(asset);
+assets.add("issues/multi-value.js");
+assets.add("issues/sensitive.js");
 
 async function sendWebResponse(response, result) {
   response.writeHead(result.status, Object.fromEntries(result.headers));
@@ -37,12 +41,12 @@ http.createServer(async (request, response) => {
       if (request.method !== "GET") return sendWebResponse(response, new Response("Method not allowed", { status: 405 }));
       return sendWebResponse(response, ai.json({ ...ai.providerConfig(config), mode: config.AI_MODE }));
     }
-    if (["/api/ai/proposals", "/api/ai/interpretations", "/api/ai/pattern"].includes(url.pathname)) {
+    if (["/api/ai/proposals", "/api/ai/interpretations", "/api/ai/pattern", "/api/ai/review"].includes(url.pathname)) {
       if (Number(request.headers["content-length"]) > ai.MAX_BODY_BYTES) return sendWebResponse(response, ai.json({ error: "Request too large." }, 413));
       const body = request.method === "POST" ? await readBody(request) : undefined;
       const headers = new Headers({ "content-type": "application/json", "cf-connecting-ip": request.socket.remoteAddress || "unknown" });
       const webRequest = new Request(url, { method: request.method, headers, body });
-      const handler = url.pathname === "/api/ai/pattern" ? ai.handlePattern : url.pathname === "/api/ai/interpretations" ? ai.handleInterpretations : ai.handleProposal;
+      const handler = url.pathname === "/api/ai/review" ? reviewAi.handleReview : url.pathname === "/api/ai/pattern" ? ai.handlePattern : url.pathname === "/api/ai/interpretations" ? ai.handleInterpretations : ai.handleProposal;
       return sendWebResponse(response, await handler(webRequest, config));
     }
     if (url.pathname.startsWith("/api/")) return sendWebResponse(response, ai.json({ error: "Not found" }, 404));

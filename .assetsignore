@@ -16,10 +16,15 @@
 !profile-worker.js
 !review.js
 !review-ui.js
-!review-simple.js
+!review-page.js
+!review-page-engine.js
+!review-core.js
+!review-charts.js
+!issues/
+!issues/*.js
+!review-page.css
 !review-bands.js
 !value-review.js
-!review.css
 !design-system.css
 !fonts/
 !fonts/source-sans-3-latin.woff2

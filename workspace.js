@@ -20,7 +20,9 @@ function recordDecisionEvent(change) {
     reviewedFingerprints: cloneReview(change.reviewedFingerprints || {}),
     interpretationValues: cloneReview(change.interpretationValues || []),
     assumptions: change.proposalCaveats?.assumptions || [], warnings: change.proposalCaveats?.warnings || [],
-    patches: cloneReview(change.patches), removedRows: cloneReview(change.removedRows || []),
+     patches: cloneReview(change.patches), removedRows: cloneReview(change.removedRows || []),
+     structure: cloneReview(change.structure || { addedRows: [], addedColumns: [], removedColumns: [] }),
+     reviewImpact: cloneReview(change.reviewImpact || null),
   };
   change.snapshot = snapshot;
   state.auditEvents ||= [];
@@ -90,14 +92,6 @@ function bindReportExports() {
   $("#downloadDecisionJson").onclick = () => downloadArtifact(JSON.stringify({ format: "cleardata-decision-log", version: 1, dataset: state.fileName, generatedAt: new Date().toISOString(), activeDecisionIds: state.changes.map((change) => change.id), events: state.auditEvents || [] }, null, 2), artifactName("decision-log", "json"), "application/json");
   $("#downloadDecisionCsv").onclick = () => downloadArtifact(decisionLogCsv(), artifactName("decision-log", "csv"), "text/csv");
 }
-function bindDecisionNote() {
-  const bar = document.querySelector(".decision-bar");
-  const item = state.issues.find((entry) => entry.id === state.selectedIssue);
-  if (!bar?.insertAdjacentHTML || !item || document.querySelector("#decisionNote")) return;
-  state.decisionNotes ||= {};
-  bar.insertAdjacentHTML("beforebegin", `<details class="rationale-details" ${state.decisionNotes[item.id] ? "open" : ""}><summary>Add your rationale <span>Optional · included in the decision log</span></summary><label class="decision-note" for="decisionNote">Business basis for this decision<textarea id="decisionNote" maxlength="2000" placeholder="What makes this treatment appropriate, or why should these values stay unchanged?">${escapeHtml(state.decisionNotes[item.id] || "")}</textarea></label></details>`);
-  $("#decisionNote").oninput = (event) => { state.decisionNotes[item.id] = event.target.value; markProjectDirty(); };
-}
 
 function duplicateProfile(definition = state.ruleConfig?.duplicates || { mode: "exact", columns: [...state.headers] }) {
   const columns = definition.mode === "exact" ? state.headers : definition.columns;
@@ -139,35 +133,10 @@ function appendReviewFindings(issues, nextId) {
   });
 }
 function configureDuplicates() {
-  const profile = duplicateProfile();
-  let item = state.issues.find((entry) => entry.recommendation === "duplicates");
-  if (!item) {
-    item = issue(Math.max(0, ...state.issues.map((entry) => entry.id)) + 1, state.headers[0], "Duplicate records", "Repeated records / business keys", profile.rows, "high", "Configure exact-row or business-key duplicate review.", "duplicates", { duplicateProfile: profile });
-    state.issues.push(item);
-  }
-  item.status = "open"; item.acknowledged = false;
-  state.selectedIssue = item.id; state.selectedFix = "valid";
-  go("issues");
-}
-function renderDuplicateWorkspace(item) {
-  const profile = duplicateProfile();
-  item.rows = profile.rows; item.duplicateProfile = profile;
   const definition = state.ruleConfig.duplicates || { mode: "exact", columns: [...state.headers] };
-  if (!["removeDuplicates", "valid"].includes(state.selectedFix)) state.selectedFix = "valid";
-  const removing = state.selectedFix === "removeDuplicates";
-  return `<div class="review-workspace"><div class="review-top"><div class="analysis-panel"><p class="eyebrow">DUPLICATE DEFINITION</p><label>Comparison<select id="duplicateMode"><option value="exact" ${definition.mode === "exact" ? "selected" : ""}>Exact full-row match</option><option value="key" ${definition.mode === "key" ? "selected" : ""}>Selected business key</option></select></label>${definition.mode === "key" ? `<fieldset class="key-columns"><legend>Key columns (exact, case-sensitive values)</legend>${state.headers.map((column, index) => `<label><input type="checkbox" data-duplicate-key="${index}" ${definition.columns.includes(column) ? "checked" : ""}> ${escapeHtml(column)}</label>`).join("")}</fieldset>` : ""}<p>${escapeHtml(profile.error || `${profile.groups.length} repeated groups. ${profile.skipped} rows with blank key components excluded.`)}</p></div><div class="fix-panel"><p class="eyebrow">POSSIBLE FIXES</p><label class="fix-option"><input name="fix" type="radio" value="valid" ${removing ? "" : "checked"}><span><b>Retain repeated records</b><small>Record an accepted no-change decision.</small></span></label><label class="fix-option"><input name="fix" type="radio" value="removeDuplicates" ${removing ? "checked" : ""}><span><b>Keep first record in each group</b><small>Remove later matching records; preserve original row identity and rollback.</small></span></label>${profile.conflicts ? `<p>${profile.conflicts} groups share keys but have different values.</p><label class="check"><input id="duplicateConflictAck" type="checkbox" ${item.acknowledged ? "checked" : ""}> I reviewed conflicting records and confirm keeping the first.</label>` : ""}</div><div class="impact-panel"><p class="eyebrow">IMPACT PREVIEW</p><h3>${removing ? profile.removeRows.length : 0} records will be removed</h3><p>${state.rows.length} → ${state.rows.length - (removing ? profile.removeRows.length : 0)} working rows. No cells are merged or rewritten.</p><p>First means earliest record in source order, not newest or most complete.</p></div></div><section class="affected-records"><p class="eyebrow">DUPLICATE GROUPS · ${profile.rows.length} RECORDS</p><div class="affected-table-wrap"><table class="affected-table"><thead><tr><th>Group</th><th>Row</th><th>Comparison</th><th>Proposed action</th>${state.headers.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}<th>View</th></tr></thead><tbody>${profile.groups.map((group, index) => group.rows.map((row) => `<tr><td>${index + 1}</td><td>${row._row}</td><td>${group.conflict ? "Conflicting key" : "Identical"}</td><td>${removing && row !== group.survivor ? "Remove" : "Keep"}</td>${state.headers.map((column) => `<td>${escapeHtml(row[column])}</td>`).join("")}<td><button class="ghost" data-locate-row="${row._row}">View</button></td></tr>`).join("")).join("")}</tbody></table></div></section><footer class="decision-bar"><span>All matching groups are reviewed together.</span><button class="ghost" data-defer>Decide later</button><button class="primary" data-finalize="${item.id}" ${profile.error || !profile.rows.length || (removing && profile.conflicts && !item.acknowledged) ? "disabled" : ""}>${removing ? "Approve record removal" : "Mark repeated records valid"}</button></footer></div>`;
-}
-function bindDuplicateControls() {
-  const item = state.issues.find((entry) => entry.id === state.selectedIssue && entry.recommendation === "duplicates");
-  if (!item) return;
-  const update = (definition) => { state.ruleConfig.duplicates = definition; item.acknowledged = false; item.duplicateDefinition = cloneReview(definition); markProjectDirty(); renderIssues(); };
-  $("#duplicateMode").onchange = (event) => update({ mode: event.target.value, columns: event.target.value === "key" ? [state.headers[0]] : [...state.headers] });
-  document.querySelectorAll("[data-duplicate-key]").forEach((element) => element.onchange = () => update({ mode: "key", columns: [...document.querySelectorAll("[data-duplicate-key]:checked")].map((input) => state.headers[Number(input.dataset.duplicateKey)]) }));
-  const acknowledge = document.querySelector("#duplicateConflictAck");
-  if (acknowledge) acknowledge.onchange = (event) => { item.acknowledged = event.target.checked; renderIssues(); };
-  const approve = document.querySelector(`[data-finalize="${item.id}"]`);
-  const profile = duplicateProfile();
-  if (approve) approve.disabled = !!profile.error || !profile.rows.length || (state.selectedFix === "removeDuplicates" && !!profile.conflicts && !item.acknowledged);
+  $("#dialogContent").innerHTML = `<h2>Duplicate key definition</h2><p>Definitions run checks; they never remove rows automatically.</p>${selectHtml("duplicateMode","Compare rows by",[["exact","All columns"],["key","Selected business key"]],definition.mode)}<fieldset><legend>Key columns</legend>${state.headers.map(column => `<label class="rp-check"><input type="checkbox" data-dataset-key="${escapeHtml(column)}" ${definition.columns.includes(column) ? "checked" : ""}>${escapeHtml(column)}</label>`).join("")}</fieldset><p id="duplicateDefinitionError" role="status"></p><div class="dialog-actions"><button class="secondary" id="closeDuplicateDefinition">Cancel</button><button class="primary" id="saveDuplicateDefinition">Save definition</button></div>`;
+  $("#confirmDialog").showModal(); $("#closeDuplicateDefinition").onclick = () => $("#confirmDialog").close();
+  $("#saveDuplicateDefinition").onclick = () => { try { const mode = $("#duplicateMode").value, columns = mode === "exact" ? [...state.headers] : [...document.querySelectorAll("[data-dataset-key]:checked")].map(input => input.dataset.datasetKey); applyRuleConfig({...exportRuleConfig(),duplicates:{mode,columns}}); $("#confirmDialog").close(); render(); } catch (error) { $("#duplicateDefinitionError").textContent = error.message; } };
 }
 function approveDuplicateDecision(item, action) {
   const profile = duplicateProfile();
@@ -292,11 +261,6 @@ function metricProfile(rule) {
   });
   return { rows, blocked };
 }
-function renderMetricWorkspace(item) {
-  if (!["recalculateMetric", "valid", "keep"].includes(state.selectedFix)) state.selectedFix = "keep";
-  const recalculate = state.selectedFix === "recalculateMetric";
-  return `<div class="review-workspace"><div class="review-top"><div class="analysis-panel"><p class="eyebrow">CONFIGURED METRIC RULE</p><h3>${escapeHtml(item.rule.name)}</h3><p>${escapeHtml(metricFormula(item.rule))}</p><p>Inputs use current working values. Recalculation is never automatic, and each dependent rule must be reviewed separately.</p></div><div class="fix-panel"><p class="eyebrow">POSSIBLE FIXES</p>${[["keep", "Retain current values"], ["recalculateMetric", "Recalculate the target from these sources"]].map(([value, label]) => `<label class="fix-option"><input name="fix" type="radio" value="${value}" ${state.selectedFix === value ? "checked" : ""}><span><b>${label}</b></span></label>`).join("")}</div><div class="impact-panel"><p class="eyebrow">IMPACT PREVIEW</p><h3>${recalculate ? item.rows.length : 0} target cells will change</h3><p>Only ${escapeHtml(item.column)} is changed. Source inputs and uncalculable rows are retained.</p></div></div><section class="affected-records"><div class="affected-table-wrap"><table class="affected-table"><thead><tr><th>Row</th><th>${escapeHtml(item.rule.left)}</th><th>${escapeHtml(item.rule.right)}</th><th>Current ${escapeHtml(item.column)}</th><th>Calculated value</th><th>Proposed value</th><th>View</th></tr></thead><tbody>${item.rows.map((row) => `<tr><td>${row._row}</td><td>${escapeHtml(row[item.rule.left])}</td><td>${escapeHtml(row[item.rule.right])}</td><td>${escapeHtml(row[item.column])}</td><td>${escapeHtml(metricResult(row, item.rule).value)}</td><td>${escapeHtml(recalculate ? metricResult(row, item.rule).value : row[item.column])}</td><td><button class="ghost" data-locate-row="${row._row}">View</button></td></tr>`).join("")}</tbody></table></div></section><footer class="decision-bar"><span>${escapeHtml(metricFormula(item.rule))}</span><button class="ghost" data-defer>Decide later</button><button class="primary" data-finalize="${item.id}">${recalculate ? "Approve recalculation" : "Record retention decision"}</button></footer></div>`;
-}
 function ruleEvidence(item, row) {
   if (item.recommendation === "schema") return schemaProblems(row, item.rule).join("; ");
   const result = metricResult(row, item.rule);
@@ -353,47 +317,69 @@ function renderRuleEditor() {
 }
 
 function serializeProject(name = state.projectName || state.fileName) {
-  const serializeIssue = (item) => ({ id: item.id, column: item.column, type: item.type, label: item.label, severity: item.severity, summary: item.summary, recommendation: item.recommendation, status: item.status, rowIds: item.rows.map((row) => row._row), ruleId: item.ruleId || null, rule: item.rule || null, candidateId: item.candidateId || null, candidate: item.candidate || null, outlierDefinition: item.outlierDefinition || null, duplicateDefinition: item.duplicateDefinition || null });
+  const serializeIssue = (item) => ({ id: item.id, column: item.column, type: item.type, label: item.label, severity: item.severity, summary: item.summary, recommendation: item.recommendation, status: item.status, rowIds: item.rows.map((row) => row._row), ruleId: item.ruleId || null, rule: item.rule || null, candidateId: item.candidateId || null, candidate: item.candidate || null, outlierDefinition: item.outlierDefinition || null, duplicateDefinition: item.duplicateDefinition || null, reviewType: item.reviewType || null, displayColumn: item.displayColumn || null, range: item.range || null, date: item.date || false, width: item.width || null, separator: item.separator || null });
   return {
     format: "cleardata-project", version: 1, id: state.projectId || newReviewId(), name: String(name || "Untitled project").slice(0, 200), updatedAt: new Date().toISOString(), fileName: state.fileName,
-    headers: [...state.headers], original: cloneReview(state.original), rows: cloneReview(state.rows), rules: exportRuleConfig(),
-    issues: state.issues.map(serializeIssue), changes: state.changes.map((change) => ({ ...cloneReview(change.snapshot), issueId: change.issue.id, before: change.before, after: change.after, fingerprint: change.fingerprint })),
+    headers: [...state.headers], originalHeaders: [...(state.originalHeaders || state.headers)], original: cloneReview(state.original), rows: cloneReview(state.rows), rules: exportRuleConfig(),
+    issues: state.issues.map(item => ({...serializeIssue(item),columnRole:item.columnRole || null,rangeEdited:Boolean(item.rangeEdited),crossRule:cloneReview(item.crossRule || null)})), changes: state.changes.map((change) => ({ ...cloneReview(change.snapshot), issueId: change.issue.id, before: change.before, after: change.after, fingerprint: change.fingerprint })),
     auditEvents: cloneReview(state.auditEvents || []), customProposals: cloneReview(state.customProposals),
     outlierDrafts: cloneReview(state.outlierDrafts), issueFilters: cloneReview(state.issueFilters), decisionNotes: cloneReview(state.decisionNotes || {}),
     datasetPurpose: state.datasetPurpose || "",
+    primaryReviewMetric: state.primaryReviewMetric || "",
+    reviewPage: Object.fromEntries(Object.entries(state.reviewPage || {}).map(([key,data]) => [key,{locked:data.locked,unlocked:data.unlocked,locks:data.locks,banding:data.banding,showAll:data.showAll,sheetOpen:data.sheetOpen,aiClusters:data.aiClusters || [],whitespaceInitialized:Boolean(data.whitespaceInitialized),fix:data.fix,note:data.note,value:data.value,separator:data.separator,targetLength:data.targetLength,tolerance:data.tolerance,range:data.range,canonical:data.canonical,mapping:data.mapping,memberOverrides:data.memberOverrides,detached:data.detached,blankMeansValue:data.blankMeansValue}])),
     view: { screen: state.screen, query: state.query, flaggedOnly: state.flaggedOnly, selectedIssue: state.selectedIssue, selectedRecord: state.selectedRecord, selectedFix: state.selectedFix }, revision: state.datasetRevision,
   };
 }
 function validateProject(data) {
   if (!data || data.format !== "cleardata-project" || data.version !== 1 || !Array.isArray(data.headers) || !data.headers.length || data.headers.some((column) => typeof column !== "string" || !column.trim() || column === "_row") || new Set(data.headers).size !== data.headers.length || !Array.isArray(data.original) || !data.original.length || !Array.isArray(data.rows) || !Array.isArray(data.issues) || !Array.isArray(data.changes) || !Array.isArray(data.auditEvents)) throw new Error("Unsupported or incomplete ClearData project file.");
+  const originalHeaders = data.originalHeaders || data.headers;
+  if (!Array.isArray(originalHeaders) || !originalHeaders.length || new Set(originalHeaders).size !== originalHeaders.length || originalHeaders.some(c => typeof c !== "string" || !c.trim() || c === "_row")) throw new Error("Invalid original columns.");
+  const allHeaders = [...new Set([...originalHeaders,...data.headers,...data.auditEvents.flatMap(e => e.decision?.structure?.addedColumns || []),...data.changes.flatMap(c => c.structure?.addedColumns || [])])];
+  if (allHeaders.some(c => typeof c !== "string" || !c.trim() || c === "_row")) throw new Error("Invalid structural column.");
   const ids = new Set();
-  data.original.forEach((row) => { if (!row || !Number.isInteger(row._row) || row._row < 1 || ids.has(row._row) || data.headers.some((column) => typeof row[column] !== "string")) throw new Error("Invalid source records in project."); ids.add(row._row); });
+  data.original.forEach((row) => { if (!row || !Number.isInteger(row._row) || row._row < 1 || ids.has(row._row) || originalHeaders.some((column) => typeof row[column] !== "string")) throw new Error("Invalid source records in project."); ids.add(row._row); });
+  for (const entry of [...data.auditEvents.map(e => e.decision),...data.changes]) for (const row of entry?.structure?.addedRows || []) { if (!row || !Number.isInteger(row._row) || row._row < 1 || data.original.some(r => r._row === row._row) || Object.entries(row).some(([c,v]) => c !== "_row" && (!allHeaders.includes(c) || typeof v !== "string"))) throw new Error("Invalid added row."); ids.add(row._row); }
   const workingIds = new Set();
   data.rows.forEach((row) => { if (!row || !ids.has(row._row) || workingIds.has(row._row) || data.headers.some((column) => typeof row[column] !== "string")) throw new Error("Invalid working records in project."); workingIds.add(row._row); });
-  const rules = normalizeRuleConfig(data.rules, data.headers);
+  const rules = normalizeRuleConfig(data.rules, allHeaders);
   const issueIds = new Set();
   const recommendations = ["impute", "keep", "convert", "standardize", "date", "valid", "outlier", "duplicates", "schema", "metric", "metricBlocked", "candidate", "relation", "manual"];
   data.issues.forEach((item) => {
-    if (!item || !Number.isInteger(item.id) || issueIds.has(item.id) || !data.headers.includes(item.column) || !recommendations.includes(item.recommendation) || !["open", "valid", "finalized", "resolved"].includes(item.status) || !Array.isArray(item.rowIds) || item.rowIds.some((id) => !ids.has(id)) || [item.type, item.label, item.summary, item.severity].some((value) => typeof value !== "string")) throw new Error("Invalid finding reference in project.");
+    if (!item || !Number.isInteger(item.id) || issueIds.has(item.id) || !allHeaders.includes(item.column) || !recommendations.includes(item.recommendation) || !["open", "valid", "finalized", "resolved"].includes(item.status) || !Array.isArray(item.rowIds) || item.rowIds.some((id) => !ids.has(id)) || [item.type, item.label, item.summary, item.severity].some((value) => typeof value !== "string")) throw new Error("Invalid finding reference in project.");
+    if (item.range) { const range = item.range; if (!["number","date","email"].includes(range.type) || [range.min,range.max].some(value => value !== "" && (range.type === "number" ? typeof value !== "number" || !Number.isFinite(value) : range.type === "email" || typeof value !== "string" || !validIsoDate(value))) || range.min !== "" && range.max !== "" && range.min > range.max) throw new Error("Invalid saved valid-range rule."); }
+    if (item.crossRule && (item.reviewType !== "cross-column" || item.crossRule.id !== item.ruleId || item.crossRule.column !== item.column || !Array.isArray(item.crossRule.inputs) || item.crossRule.inputs.some(column => !allHeaders.includes(column)) || typeof item.crossRule.label !== "string" || !["difference","product","sum","discount-product","ratio","less-equal","less","date-order","relation"].includes(item.crossRule.operation) || !Number.isFinite(item.crossRule.tolerance) || item.crossRule.tolerance < 0)) throw new Error("Invalid saved relationship rule.");
     if (["schema", "metric", "metricBlocked"].includes(item.recommendation)) {
       const input = emptyRuleConfig();
       input[item.recommendation === "schema" ? "schema" : "metrics"] = [item.rule];
-      const normalized = normalizeRuleConfig(input, data.headers);
+      const normalized = normalizeRuleConfig(input, allHeaders);
       const rule = (item.recommendation === "schema" ? normalized.schema : normalized.metrics)[0];
       if (item.ruleId !== rule.id || item.column !== (rule.column || rule.target)) throw new Error("Finding rule does not match its target.");
     }
-    if (item.outlierDefinition) normalizeRuleConfig({ ...emptyRuleConfig(), outliers: [{ column: item.column, definition: item.outlierDefinition }] }, data.headers);
+    if (item.outlierDefinition) normalizeRuleConfig({ ...emptyRuleConfig(), outliers: [{ column: item.column, definition: item.outlierDefinition }] }, allHeaders);
     if (item.recommendation === "candidate" && (!item.candidate || typeof item.candidateId !== "string" || item.candidate.column !== item.column || item.candidate.id !== item.candidateId)) throw new Error("Invalid candidate reference.");
-    if (item.recommendation === "relation") normalizeRelationRules([item.rule], data.headers);
+    if (item.recommendation === "relation") normalizeRelationRules([item.rule], allHeaders);
     issueIds.add(item.id);
   });
   const changeIds = new Set();
+  if (data.primaryReviewMetric && data.primaryReviewMetric !== "__rows__" && !allHeaders.includes(data.primaryReviewMetric)) throw new Error("Invalid Review primary metric.");
+  for (const [key,prefs] of Object.entries(data.reviewPage || {})) {
+    if (!data.issues.some(item => issueKey(item) === key) || !prefs || prefs.locked !== null && (!Array.isArray(prefs.locked) || prefs.locked.some(v => typeof v !== "string")) || !Array.isArray(prefs.locks) || prefs.locks.length > 3 || new Set(prefs.locks).size !== prefs.locks.length || prefs.locks.some(c => !allHeaders.includes(c)) || !Array.isArray(prefs.unlocked) || prefs.unlocked.some(id => !ids.has(id))) throw new Error("Invalid saved Explore locks.");
+    for (const [column,band] of Object.entries(prefs.banding || {})) { if (!allHeaders.includes(column) || !["quantiles","fixedWidth","custom"].includes(band?.mode) || band.mode === "fixedWidth" && (!Number.isFinite(band.width) || band.width <= 0) || band.mode === "custom" && (!Array.isArray(band.edges) || !band.edges.length || band.edges.some((v,i) => !Number.isFinite(v) || i && v <= band.edges[i-1]))) throw new Error("Invalid saved group bands."); }
+    if (prefs.aiClusters && (!Array.isArray(prefs.aiClusters) || prefs.aiClusters.length > 100 || prefs.aiClusters.some(cluster => !Array.isArray(cluster) || cluster.length < 2 || cluster.length > 300 || cluster.some(value => typeof value !== "string")))) throw new Error("Invalid saved label suggestions.");
+    if (["fix","note","value"].some(key => prefs[key] !== undefined && (typeof prefs[key] !== "string" || prefs[key].length > 2000)) || prefs.separator !== undefined && ![";","|",","," / "," & "," + "].includes(prefs.separator) || prefs.targetLength !== undefined && (!Number.isInteger(prefs.targetLength) || prefs.targetLength < 1 || prefs.targetLength > 100) || prefs.tolerance !== undefined && (!Number.isFinite(prefs.tolerance) || prefs.tolerance < 0)) throw new Error("Invalid saved fix parameters.");
+    for (const key of ["mapping","canonical","memberOverrides"]) if (prefs[key] !== undefined && (!prefs[key] || typeof prefs[key] !== "object" || Array.isArray(prefs[key]) || Object.entries(prefs[key]).some(([source,value]) => source.length > 1000 || typeof value !== "string" || value.length > 2000))) throw new Error("Invalid saved label mapping.");
+    if (prefs.detached !== undefined && (!Array.isArray(prefs.detached) || prefs.detached.some(value => typeof value !== "string"))) throw new Error("Invalid saved label exclusions.");
+    if (prefs.range && (!["number","date","email"].includes(prefs.range.type) || [prefs.range.min,prefs.range.max].some(value=>value!=="" && (prefs.range.type==="number" ? !Number.isFinite(value) : prefs.range.type==="email" || typeof value!=="string" || !validIsoDate(value))) || prefs.range.min!==""&&prefs.range.max!==""&&prefs.range.min>prefs.range.max)) throw new Error("Invalid saved Explore range.");
+  }
   const validateSnapshot = (change, validateProvenance = true) => {
-    if (!change || typeof change.id !== "string" || !change.issue || !data.headers.includes(change.issue.column) || !Array.isArray(change.rowIds) || change.rowIds.some((id) => !ids.has(id)) || !Array.isArray(change.patches) || !Array.isArray(change.removedRows) || typeof change.title !== "string" || typeof change.reason !== "string" || typeof change.note !== "string" || !["valid", "finalized"].includes(change.disposition)) throw new Error("Invalid decision in project.");
-    change.patches.forEach((patch) => { if (!ids.has(patch.rowId) || !data.headers.includes(patch.column) || typeof patch.before !== "string" || typeof patch.after !== "string") throw new Error("Invalid decision patch in project."); });
-    change.removedRows.forEach((row) => { if (!ids.has(row._row) || data.headers.some((column) => typeof row[column] !== "string")) throw new Error("Invalid removed record in project."); });
-    if (change.interpretationValues && (!Array.isArray(change.interpretationValues) || change.interpretationValues.some(entry => !ids.has(entry.rowId) || !data.headers.includes(entry.column) || typeof entry.value !== "string" || !["legitimate", "missing", "not_applicable", "format", "error", "resolved"].includes(entry.meaning)))) throw new Error("Invalid cell interpretation in project.");
+    if (!change || typeof change.id !== "string" || !change.issue || !allHeaders.includes(change.issue.column) || !Array.isArray(change.rowIds) || change.rowIds.some((id) => !ids.has(id)) || !Array.isArray(change.patches) || !Array.isArray(change.removedRows) || typeof change.title !== "string" || typeof change.reason !== "string" || typeof change.note !== "string" || !["valid", "finalized"].includes(change.disposition)) throw new Error("Invalid decision in project.");
+    change.patches.forEach((patch) => { if (!ids.has(patch.rowId) || !allHeaders.includes(patch.column) || typeof patch.before !== "string" || typeof patch.after !== "string") throw new Error("Invalid decision patch in project."); });
+    change.removedRows.forEach((row) => { if (!ids.has(row._row) || originalHeaders.some((column) => typeof row[column] !== "string")) throw new Error("Invalid removed record in project."); });
+    if (change.structure && (!Array.isArray(change.structure.addedRows) || !Array.isArray(change.structure.addedColumns) || !Array.isArray(change.structure.removedColumns) || [...change.structure.addedColumns,...change.structure.removedColumns].some(c => !allHeaders.includes(c)))) throw new Error("Invalid column structure decision.");
+    if (change.structure?.rowLineage && (!Array.isArray(change.structure.rowLineage) || change.structure.rowLineage.length !== change.structure.addedRows.length || change.structure.rowLineage.some(trace => !change.structure.addedRows.some(row => row._row === trace.rowId) || !change.rowIds.includes(trace.sourceRowId) || !allHeaders.includes(trace.column) || !Number.isInteger(trace.part) || trace.part < 2))) throw new Error("Invalid split-row source lineage.");
+    if (change.interpretationValues && (!Array.isArray(change.interpretationValues) || change.interpretationValues.some(entry => !ids.has(entry.rowId) || !allHeaders.includes(entry.column) || typeof entry.value !== "string" || !["legitimate", "missing", "not_applicable", "format", "error", "resolved"].includes(entry.meaning)))) throw new Error("Invalid cell interpretation in project.");
     const assessment = change.treatment?.valueAssessment;
+    if (validateProvenance && change.treatment?.extraProvenance && (!Array.isArray(change.treatment.extraProvenance) || change.treatment.extraProvenance.some(trace => !ids.has(trace.rowId) || !change.rowIds.includes(trace.rowId) || trace.column !== change.issue.column || !["mode","groupMode","previous","next","interpolate"].includes(trace.method) || !Array.isArray(trace.sourceRowIds) || !trace.sourceRowIds.length || trace.sourceRowIds.some(id => !ids.has(id) || id === trace.rowId) || trace.orderColumn && !allHeaders.includes(trace.orderColumn)))) throw new Error("Invalid ordered or grouped-fill provenance.");
     if (assessment && (typeof assessment.evidenceId !== "string" || !Number.isFinite(assessment.missingScore) || assessment.missingScore < 0 || assessment.missingScore > 1 || !["missing", "legitimate", "not_applicable", "unresolved", "error", "format"].includes(assessment.meaning) || typeof assessment.explanation !== "string" || assessment.explanation.length > 600 || typeof assessment.value !== "string" || !change.interpretationValues?.every(entry => entry.value === assessment.value))) throw new Error("Invalid reviewed representation assessment.");
     const metadata = change.treatment?.fillMetadata;
     if (validateProvenance && ["groupwise", "knn"].includes(change.treatment?.operation) && !metadata) throw new Error("Similar-row fills require a source trace.");
@@ -421,6 +407,13 @@ function validateProject(data) {
     }
   });
   if (data.decisionNotes && (typeof data.decisionNotes !== "object" || Array.isArray(data.decisionNotes) || Object.entries(data.decisionNotes).some(([id, value]) => !issueIds.has(Number(id)) || typeof value !== "string" || value.length > 2000))) throw new Error("Invalid analyst notes in project.");
+  const structural = typeof ReviewPageEngine !== "undefined" && (data.originalHeaders || data.changes.some(c => c.structure?.addedColumns.length || c.structure?.removedColumns.length || c.structure?.addedRows.length));
+  if (structural) {
+    const replayed = ReviewPageEngine.replay(originalHeaders,data.original,data.changes);
+    if (JSON.stringify(replayed.headers) !== JSON.stringify(data.headers) || JSON.stringify(replayed.rows.map(r => [r._row,...data.headers.map(c => r[c])])) !== JSON.stringify(data.rows.map(r => [r._row,...data.headers.map(c => r[c])]))) throw new Error("Project working data does not match its approved decision history.");
+    const pool = ReviewPageEngine.identityPool(data.original,replayed.rows,data.changes,data.auditEvents);
+    return {data:cloneReview(data),rules,pool,byId:new Map(pool.map(r => [r._row,r]))};
+  }
   const pool = data.original.map((row) => ({ ...row })), byId = new Map(pool.map((row) => [row._row, row]));
   let active = new Set(ids);
   [...data.changes].reverse().forEach((change) => {
@@ -441,7 +434,11 @@ function restoreProject(input) {
   Object.assign(state, { headers: [...data.headers], original: data.original, allRows: pool, rows: data.rows.map((row) => byId.get(row._row)), fileName: String(data.fileName || "dataset.csv"), issues, changes, ruleConfig: rules, auditEvents: data.auditEvents, customProposals: {}, outlierDrafts: {}, issueFilters: {}, decisionNotes: data.decisionNotes && typeof data.decisionNotes === "object" ? data.decisionNotes : {}, scatter: {}, screen: "data", selectedIssue: null, selectedRecord: null, selectedFix: "", query: "", flaggedOnly: false, locateRow: null, proposalPending: false, aiMessage: "", projectId: typeof data.id === "string" ? data.id : newReviewId(), projectName: String(data.name || data.fileName || "Project"), projectDirty: false });
   state.aiInstructions = {};
   state.inspectionFiltersOpen = {};
+  state.originalHeaders = [...(data.originalHeaders || data.headers)];
+  state.reviewPage = {};
   resetGuidedReview();
+  if (typeof ReviewCore !== "undefined") for (const item of state.issues) { const prefs = data.reviewPage?.[issueKey(item)]; if (prefs) Object.assign(ReviewCore.data(item),prefs,{locks:prefs.locks.filter(column => state.headers.includes(column))}); }
+  state.primaryReviewMetric = data.primaryReviewMetric || "";
   state.datasetPurpose = typeof data.datasetPurpose === "string" ? data.datasetPurpose.slice(0, 1000) : "";
   refreshIssues();
   if (["data", "view", "issues", "changes", "report"].includes(view.screen)) state.screen = view.screen;

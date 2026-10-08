@@ -20,6 +20,7 @@ function sheetSvgIcon(type) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths[type]}</svg>`;
 }
 function sheetIssueType(item) {
+  if (item.reviewType) return ({missing:"missing",outlier:"outlier","duplicate-rows":"duplicate","duplicate-values":"duplicate","category-variants":"category",whitespace:"format",format:"format","type-mismatch":"format",scale:"format","leading-zeros":"format","multi-value":"format",invalid:"schema",constant:"schema",sensitive:"schema","cross-column":"conflict"})[item.reviewType] || "schema";
   if (item.recommendation === "candidate") return ["missing_token", "sentinel"].includes(item.candidate?.kind) ? "missing" : item.candidate?.kind === "category" || item.candidate?.kind === "spacing" ? "category" : "format";
   if (item.recommendation === "relation") return "schema";
   if (item.recommendation === "duplicates") return "duplicate";
@@ -36,6 +37,16 @@ function sheetInspection(item, row) {
   const format = (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: /_usd$/.test(column) ? 2 : 0, ...(/_usd$/.test(column) ? { style: "currency", currency: "USD" } : {}) });
   const evidence = [["Current value", raw.trim() ? raw : "Empty"]];
   let title, explanation, action = "Review treatments →";
+  if (item.reviewType && item.reviewType !== "outlier") {
+    title = `${column} · ${item.type}`; explanation = item.summary;
+    if (item.reviewType === "missing") { explanation = "This representation needs contextual review. Only values explicitly locked in Explore can be filled; zero and null-like tokens are not automatically missing."; evidence.push(["Current observation meaning",observationState(row,column).replaceAll("_"," ")]); }
+    if (type === "duplicate") { const profile = duplicateProfile(item.duplicateDefinition), group = profile.groups.find(group => group.rows.some(record => record._row === row._row)); evidence.push(["Compared columns",profile.columns?.join(", ") || ""],["Group row IDs",group?.rows.map(record => record._row).join(", ") || ""],["Comparison",group?.conflict ? "Other columns differ" : "Identical records"]); }
+    if (item.range) evidence.push(["Valid range",`${item.range.min === "" ? "No minimum" : item.range.min} to ${item.range.max === "" ? "No maximum" : item.range.max}`]);
+    if (item.rule) evidence.push(["Rule",item.rule.name || item.summary]);
+    if (type === "format") evidence.push(["Representation",ReviewPageEngine.pattern(raw,Boolean(item.date))]);
+    if (item.reviewType === "sensitive") { evidence[0][1] = ReviewPageEngine.mask(raw); explanation = "Potentially sensitive information. Review local masking, hashing, or column removal with a preview before applying."; }
+    return {title,explanation,evidence,action};
+  }
   if (item.recommendation === "candidate") {
     title = item.label;
     explanation = item.summary;

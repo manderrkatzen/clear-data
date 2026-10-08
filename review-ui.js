@@ -2,12 +2,12 @@
 function renderPreservingReviewFocus() {
   const active = document.activeElement, id = active?.id;
   const start = active?.selectionStart, end = active?.selectionEnd;
-  const queue = document.querySelector(".candidate-list"), top = queue?.scrollTop, left = queue?.scrollLeft;
+  const queue = document.querySelector(".review-issue-list"), top = queue?.scrollTop, left = queue?.scrollLeft;
   render();
   const replacement = id && document.getElementById(id);
   replacement?.focus?.({ preventScroll: true });
   if (typeof start === "number" && replacement?.setSelectionRange && ["text", "search", "textarea"].includes(replacement.type)) replacement.setSelectionRange(start, end);
-  const nextQueue = document.querySelector(".candidate-list");
+  const nextQueue = document.querySelector(".review-issue-list");
   if (nextQueue && queue) { nextQueue.scrollTop = top; nextQueue.scrollLeft = left; }
 }
 function selectHtml(id, label, options, value) {
@@ -35,6 +35,7 @@ function cleaningOverviewHtml() {
   return `<details class="workspace-card dataset-setup" data-ui="dataset.setup" ${state.datasetSetupOpen ? "open" : ""}><summary>Definitions, business checks & manual corrections</summary><label for="datasetPurpose">Dataset purpose<textarea id="datasetPurpose" maxlength="1000" placeholder="Describe what the dataset measures.">${escapeHtml(state.datasetPurpose || "")}</textarea></label><div class="workspace-actions"><button class="secondary" id="columnPolicies">Column definitions</button><button class="secondary" id="relationshipRules">Business relationships</button><button class="secondary" id="datasetSchema">Schema / metric rules</button><button class="secondary" id="datasetDuplicates">Duplicate keys</button><button class="secondary" id="manualCorrection">Manual correction</button></div><button class="ghost" id="refreshInterpretation">Refresh AI analysis</button></details><section class="workspace-card cumulative-view"><div class="workspace-heading"><h2>Working distribution</h2><label>Column<select id="cumulativeColumn">${columnOptions(column)}</select></label></div>${reviewDistribution(column, state.rows)}</section>`;
 }
 function bindCleaningOverview() {
+  if (typeof ReviewCore !== "undefined") ReviewCore.bindDatasetSettings();
   document.querySelector('[data-ui="dataset.setup"]')?.addEventListener("toggle", event => { if (event.target.isConnected) state.datasetSetupOpen = event.target.open; });
   $("#datasetPurpose")?.addEventListener("input", event => {
     state.datasetPurpose = event.target.value; state.interpretations = {}; cancelAutomaticReview(false);

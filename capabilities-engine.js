@@ -146,6 +146,11 @@ var CapabilitiesEngine = (() => {
     const current = new Map(original.map(row => [row._row, { ...row }])), meanings = new Map(), methods = new Map();
     const policy = column => (rules.columns || []).find(entry => entry.column === column) || cleaning.defaultPolicy(column);
     for (const change of [...changes].reverse()) {
+      for (const row of change.structure?.addedRows || []) {
+        current.set(row._row,{...row});
+        const lineage = change.structure.rowLineage?.find(trace => trace.rowId === row._row);
+        if (lineage) for (const column of headers) { const inherited = methods.get(`${lineage.sourceRowId}:${column}`); if (inherited) methods.set(`${row._row}:${column}`,inherited); }
+      }
       const operation = change.treatment?.operation || ({ imputeMean: "mean", imputeMedian: "median", recalculateMetric: "recalculate" })[change.title];
       const fills = new Map((change.treatment?.fillMetadata?.fills || []).map(fill => [fill.row, fill]));
       const patchedKeys = new Set((change.patches || []).map(patch => `${patch.rowId}:${patch.column}`));
@@ -156,6 +161,10 @@ var CapabilitiesEngine = (() => {
         if (["mean", "median", "groupMedian", "groupwise", "knn"].includes(operation)) method = fills.get(patch.rowId)?.source === "global" ? "global_fallback" : ["groupMedian", "groupwise"].includes(operation) ? "group" : operation;
         if (operation === "constant" && (["missing", "blank_unreviewed"].includes(status) || change.interpretation === "missing")) method = "constant";
         if (operation === "recalculate") method = "recalculated";
+        if (["mode","groupMode","previous","next","interpolate"].includes(operation)) method = ({mode:"mode",groupMode:"group_mode",previous:"previous_value",next:"next_value",interpolate:"interpolated"})[operation];
+        const representation = ["trim","lowercase","uppercase","titlecase","collapseSpaces","removeHidden","fixEncoding","cleanCharacters","parseNumber","parseDate","dateFormat","scale","cap","dateCap","padZeros","toText","mask","hash","splitRows","firstValue","map"].includes(operation);
+        if (!method && representation) method = methods.get(key) || null;
+        if (!method && ["log","splitColumns"].includes(operation)) method = methods.get(`${patch.rowId}:${change.issue?.column}`) || null;
         if (method) methods.set(key, method); else methods.delete(key);
         row[patch.column] = patch.after;
       }
@@ -170,6 +179,7 @@ var CapabilitiesEngine = (() => {
         if (eligible && ["mean", "median", "groupMedian", "groupwise", "knn"].includes(operation)) method = fills.get(entry.rowId)?.source === "global" ? "global_fallback" : ["groupMedian", "groupwise"].includes(operation) ? "group" : operation;
         if (operation === "constant" && (eligible || change.interpretation === "missing")) method = "constant";
         if (operation === "recalculate") method = "recalculated";
+        if (eligible && ["mode","groupMode","previous","next","interpolate"].includes(operation)) method = ({mode:"mode",groupMode:"group_mode",previous:"previous_value",next:"next_value",interpolate:"interpolated"})[operation];
         if (method) methods.set(`${entry.rowId}:${entry.column}`, method);
       }
       for (const entry of change.interpretationValues || []) meanings.set(`${entry.rowId}:${entry.column}`, entry);

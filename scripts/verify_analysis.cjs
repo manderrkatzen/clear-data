@@ -105,6 +105,15 @@ test("numeric bands accept explicit edges, keep unknowns separate, and caches up
   const unreliable = rows.map(row => ({ ...row, hold: row.target ? row.hold : "" }));
   assert.ok(analysis.holdSimilar(headers, unreliable, "target", "comparison", "hold").warning.includes("unreliable"));
 });
+test("cached observation masks invalidate when a classification starts matching its source value", () => {
+  const rows=[{_row:1,value:"10",group:"North"},{_row:2,value:"20",group:"South"}],headers=["value","group"];
+  const stale=analysis.prepare(headers,rows,{revision:1,classifications:[{rowId:1,column:"value",value:"old",meaning:"missing"}]});
+  assert.equal(stale.columns.get("value").states[0],"present");
+  const current=analysis.prepare(headers,rows,{revision:2,classifications:[{rowId:1,column:"value",value:"10",meaning:"missing"}]});
+  assert.equal(current.columns.get("value").states[0],"missing");
+  assert.equal(current.columns.get("value").numbers[0],null);
+  assert.equal(current.columns.get("group"),stale.columns.get("group"));
+});
 test("analytical comparisons stay below the 200ms sample-size budget", () => {
   const { headers, rows } = sample("sales_orders.csv");
   const options = { revision: 1 };

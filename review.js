@@ -6,6 +6,14 @@ let profileWorker = null;
 let reviewController = null;
 let automaticReviewRun = 0;
 const interpretationCache = new Map();
+let dateFormatCache = null;
+function reviewDateFormats() {
+  const key = `${state.datasetRevision}:${state.changes.length}:${state.changes[0]?.id || ""}`;
+  if (dateFormatCache?.key === key) return dateFormatCache.entries;
+  const entries = {};
+  for (const change of [...state.changes].reverse()) if (["dateFormat","dateCap","parseDate"].includes(change.treatment?.operation)) for (const patch of change.patches) entries[JSON.stringify([patch.rowId,patch.column,patch.after])] = change.treatment.operation === "dateFormat" ? change.treatment.targetFormat || "iso" : "iso";
+  dateFormatCache = {key,entries}; return entries;
+}
 function invalidateCleaningProfile() { cleaningCache = null; classificationCache = null; }
 function cleaningProfile() {
   const key = JSON.stringify([state.datasetRevision, state.rows.length, state.ruleConfig?.columns, state.ruleConfig?.schema]);
@@ -96,7 +104,7 @@ function relationProblem(row, rule) {
   if (rule.kind === "requiredIf") return row[rule.left] === rule.value && ["missing", "blank_unreviewed"].includes(observationState(row, rule.column)) ? `${rule.column} is required when ${rule.left} = ${rule.value}` : "";
   try {
     if ([rule.left, rule.right].some(column => observationState(row, column) !== "present")) return "Cannot compare unavailable observations; review the input meanings.";
-    const convert = (value, column) => rule.comparisonType === "number" ? CleaningEngine.parseNumber(value, columnPolicy(column)) : rule.comparisonType === "date" ? CleaningEngine.parseDate(value) : value;
+    const convert = (value, column) => rule.comparisonType === "number" ? CleaningEngine.parseNumber(value, columnPolicy(column)) : rule.comparisonType === "date" ? typeof ReviewPageEngine !== "undefined" ? ReviewPageEngine.dateValue(value,reviewDateFormats()[JSON.stringify([row._row,column,value])] || columnPolicy(column).dateFormat) : CleaningEngine.parseDate(value) : value;
     const a = convert(row[rule.left], rule.left), b = convert(row[rule.right], rule.right);
     return ({ "=": a === b, "!=": a !== b, ">": a > b, ">=": a >= b, "<": a < b, "<=": a <= b })[rule.operator] ? "" : `${rule.left} (${row[rule.left]}) must be ${rule.operator} ${rule.right} (${row[rule.right]})`;
   } catch (error) { return error.message; }
@@ -117,19 +125,25 @@ function guidedPreview(item, draft = reviewDraft(item)) {
     treatment.mapping = Object.fromEntries(Object.entries(draft.mapping).filter(([source]) => scoped.has(source)));
   }
   if (item.recommendation === "duplicates") {
-    const definition = state.ruleConfig.duplicates || { mode: "exact", columns: state.headers };
+    const definition = item.duplicateDefinition || state.ruleConfig.duplicates || { mode: "exact", columns: state.headers };
     treatment.keys = definition.columns; treatment.keyMode = definition.mode === "key";
   }
   if (draft.operation === "recalculate") treatment.rule = item.rule;
-  const options = { policies: state.ruleConfig.columns || [], ...(typeof analyticalTreatmentOptions === "function" ? analyticalTreatmentOptions(item, draft) : {}) };
-  const preview = CleaningEngine.treatment(state.headers, state.rows, reviewRows(item).map(row => row._row), item.column, treatment, policy, effectiveClassifications(), options);
+  const options = { policies: state.ruleConfig.columns || [], identityIds: state.allRows.map(row => row._row), dateFormats: reviewDateFormats(), ...(draft.similarResult ? { similarResult: draft.similarResult } : typeof analyticalTreatmentOptions === "function" ? analyticalTreatmentOptions(item, draft) : {}) };
+  const selectedIds = new Set(draft.scope.rowIds || []);
+  const meanings = draft.lockedMissing ? effectiveClassifications().concat(reviewRows(item).filter(row => selectedIds.has(row._row)).map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: "missing" }))) : effectiveClassifications();
+  const preview = CleaningEngine.treatment(state.headers, state.rows, reviewRows(item).map(row => row._row), item.column, treatment, policy, meanings, options);
   if (preview.fillMetadata) treatment.fillMetadata = preview.fillMetadata;
+  if (preview.provenance?.length) treatment.extraProvenance = preview.provenance;
   const proposed = state.rows.map(row => ({ ...row })), byId = new Map(proposed.map(row => [row._row, row]));
   preview.patches.forEach(patch => { byId.get(patch.rowId)[patch.column] = patch.after; });
   const removed = new Set(preview.removedRows.map(row => row._row));
-  const after = proposed.filter(row => !removed.has(row._row));
+  const after = proposed.filter(row => !removed.has(row._row)).concat((preview.addedRows || []).map(row => ({ ...row })));
   const beforeById = new Map(state.rows.map(row => [row._row, row]));
   const constraints = [];
+  for (const column of preview.removedColumns || []) {
+    for (const rule of [...state.ruleConfig.schema,...state.ruleConfig.metrics,...(state.ruleConfig.relations || [])]) if ([rule.column,rule.target,rule.left,rule.right,...(rule.terms || [])].includes(column)) constraints.push({rowId:null,column,reason:`Removing ${column} disables the declared check ${rule.name || rule.id}.`});
+  }
   const changed = new Set(preview.patches.map(patch => patch.rowId));
   for (const row of after.filter(row => changed.has(row._row))) {
     const original = beforeById.get(row._row);
@@ -142,8 +156,14 @@ function guidedPreview(item, draft = reviewDraft(item)) {
       if (problem && problem !== relationProblem(original, rule)) constraints.push({ rowId: row._row, column: rule.column, reason: problem });
     }
   }
-  const classification = { rowIds: preview.selectedIds.filter(id => !preview.blocked.some(entry => entry.rowId === id)), meaning: ["retain", "leaveMissing", "classify", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" };
-  const result = { ...preview, after, constraints, classification, beforeStats: CleaningEngine.stats(interpretedNumericValues(state.rows, item.column)), afterStats: CleaningEngine.stats(interpretedNumericValues(after, item.column, classification)), fingerprint: guidedFingerprint(item, draft), treatment };
+  const blockedIds = new Set(preview.blocked.map(entry => entry.rowId));
+  const classification = { rowIds: preview.selectedIds.filter(id => !blockedIds.has(id)), meaning: ["retain", "leaveMissing", "classify", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" };
+   const toIndex = entries => new Map(entries.map(entry => [`${entry.rowId}:${entry.column}`,entry]));
+   const missingCount = (rows, entries) => { const index = toIndex(entries); return rows.filter(row => ["missing", "blank_unreviewed"].includes(CleaningEngine.observationState(row, item.column, policy, index))).length; };
+   const classifiedIds = new Set(classification.rowIds), afterMeanings = meanings.concat(after.filter(row => classifiedIds.has(row._row)).map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: classification.meaning })));
+   const numericFor = (rows, entries) => { const index = toIndex(entries); return rows.flatMap(row => { if (CleaningEngine.observationState(row,item.column,policy,index) !== "present") return []; try { return [CleaningEngine.parseNumber(row[item.column],policy)]; } catch { return []; } }); };
+   const removedTarget = preview.removedColumns?.includes(item.column);
+   const result = { ...preview, after, constraints, classification, beforeMissing: missingCount(state.rows, meanings), afterMissing: removedTarget ? 0 : missingCount(after, afterMeanings), beforeStats: CleaningEngine.stats(numericFor(state.rows,meanings)), afterStats: CleaningEngine.stats(removedTarget ? [] : numericFor(after,afterMeanings)), fingerprint: guidedFingerprint(item, draft), treatment };
   if (typeof enrichCapabilityPreview === "function") enrichCapabilityPreview(item, draft, result);
   return result;
 }
@@ -158,19 +178,26 @@ function approveGuidedDecision(item) {
     if (!preview.selectedIds.length) throw new Error("Choose at least one matching record.");
     if (preview.blocked.length && !draft.skipBlocked) throw new Error("Resolve blocked records or explicitly approve only the valid subset.");
     if (preview.constraints.length && !draft.acknowledgeConstraints) throw new Error("Review the new constraint violations before approving.");
-    const blocked = new Set(preview.blocked.map(entry => entry.rowId));
-    const reviewedRows = state.rows.filter(row => preview.selectedIds.includes(row._row) && !blocked.has(row._row));
+     const blocked = new Set(preview.blocked.map(entry => entry.rowId));
+     const selectedIds = new Set(preview.selectedIds);
+     const reviewedRows = state.rows.filter(row => selectedIds.has(row._row) && !blocked.has(row._row));
     if (!reviewedRows.length) throw new Error("No eligible records can be approved.");
-    if (item.recommendation === "outlier" && !saveOutlierRule(item, false)) return;
+     if (item.recommendation === "outlier" && !saveOutlierRule(item, false)) return;
     const fingerprints = Object.fromEntries(reviewedRows.map(row => [row._row, reviewFingerprint(item, [row])]));
     const rowById = new Map(state.rows.map(row => [row._row, row]));
-    preview.patches.forEach(patch => { rowById.get(patch.rowId)[patch.column] = patch.after; });
+     const beforeReview = state.rows.map(row => ({ ...row }));
+     const beforeHeaders = [...state.headers];
+     preview.patches.forEach(patch => { rowById.get(patch.rowId)[patch.column] = patch.after; });
     const removedIds = new Set(preview.removedRows.map(row => row._row));
-    state.rows = state.rows.filter(row => !removedIds.has(row._row));
+     state.rows = state.rows.filter(row => !removedIds.has(row._row));
+     if (preview.addedRows?.length) { state.rows.push(...preview.addedRows.map(row => ({ ...row }))); state.allRows.push(...state.rows.filter(row => preview.addedRows.some(added => added._row === row._row))); }
+     state.headers = state.headers.concat(preview.addedColumns || []).filter(column => !(preview.removedColumns || []).includes(column));
     const interpretationValues = reviewedRows.map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: ["retain", "leaveMissing", "classify", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" }));
     const sample = (patches, key) => patches.slice(0, 3).map(patch => String(patch[key]).trim() ? patch[key] : "Blank").join(", ");
     const change = { id: newReviewId(), createdAt: new Date().toISOString(), issue: item, title: treatmentLabel(draft.operation), disposition: draft.operation === "retain" ? "valid" : "finalized", rows: reviewedRows, before: preview.patches.length ? sample(preview.patches, "before") : "Values retained", after: preview.patches.length ? sample(preview.patches, "after") : removedIds.size ? `${removedIds.size} records removed` : "Values retained", reason: item.summary, note: draft.note || "", interpretation: draft.interpretation, interpretationValues, treatment: { ...preview.treatment, previewFingerprint: undefined }, originals: [], patches: preview.patches, removedRows: preview.removedRows, reviewedFingerprints: fingerprints, fingerprint: reviewFingerprint(item, reviewedRows) };
-    state.changes.unshift(change);
+     state.changes.unshift(change);
+     change.structure = { addedRows: preview.addedRows || [], addedColumns: preview.addedColumns || [], removedColumns: preview.removedColumns || [], rowLineage: preview.rowLineage || [] };
+     change.reviewImpact = { beforeRows: beforeReview, afterRows: state.rows.map(row => ({ ...row })), beforeHeaders, afterHeaders: [...state.headers], beforeMissing: preview.beforeMissing, afterMissing: preview.afterMissing, beforeStats: preview.beforeStats, afterStats: preview.afterStats, groups: draft.groupColumns || draft.similar?.columns || [] };
     if (draft.operation === "leaveMissing") change.disposition = "valid";
     recordDecisionEvent(change);
     refreshIssues();
@@ -183,6 +210,8 @@ function approveGuidedDecision(item) {
   } catch (error) { notify(error.message); }
 }
 function treatmentLabel(operation) {
+  const extended = {mode:"Fill with the most common label",groupMode:"Fill with the most common label by group",previous:"Fill from the previous dated value",next:"Fill from the next dated value",interpolate:"Interpolate between dated observations",log:"Add a log-transformed column",dateFormat:"Convert the reviewed date representation",dateCap:"Cap dates to the reviewed range",titlecase:"Convert labels to title case",collapseSpaces:"Collapse repeated spaces",removeHidden:"Remove hidden characters",fixEncoding:"Repair recognized broken encoding",cleanCharacters:"Clean spaces and hidden characters",dropColumn:"Remove the reviewed column",padZeros:"Pad identifiers with leading zeros",toText:"Keep identifiers as text",splitColumns:"Split values into new columns",splitRows:"Split values into new rows",splitFlags:"Encode values as yes/no columns",firstValue:"Keep the first value in each cell",mask:"Mask sensitive values",hash:"Hash sensitive values with SHA-256",valueMap:"Apply reviewed AI value corrections"};
+  if (extended[operation]) return extended[operation];
   if (operation === "groupMedian") return "Fill with group median (strict single-group)";
   if (operation === "current") return "Use current draft / AI proposal";
   if (operation === "leaveMissing") return "Leave missing observations unchanged";
@@ -258,6 +287,8 @@ async function startAutomaticReview(onlyIssue = null, question = "", representat
     turnstileSiteKey = config.turnstileSiteKey || "";
     const candidates = buildAnalysisCandidates(onlyIssue, representationValue);
     if (question) candidates.forEach(candidate => { candidate.meaning = `Analyst question: ${question}. Column context: ${candidate.meaning}`.slice(0, 300); });
+    // SENS-D-02: dataset purpose and analyst instructions follow the same local-only guard.
+    if (typeof ReviewCore!=="undefined" && ReviewCore.containsSensitiveText({purpose:state.datasetPurpose || "",candidates})) throw new Error("Sensitive values stay local. Remove identifiers from the AI context before retrying.");
     state.analysisTotal = candidates.length;
     state.analysisStatus = "running"; state.analysisMessage = "AI is ranking possible interpretations. Source values stay unchanged."; refreshReviewScreen();
     const batchSize = 6;
@@ -298,7 +329,8 @@ function evidenceValueId(column, value) {
   return original ? `value:${original._row}` : `working:${state.rows.find(row => String(row[column] ?? "") === value)?._row}`;
 }
 function buildAnalysisCandidates(onlyIssue = null, representationValue = undefined) {
-  return state.issues.filter(item => item.status === "open" && (!onlyIssue || item.id === onlyIssue)).flatMap(item => {
+  const sensitiveColumns = new Set(state.issues.filter(item => item.reviewType === "sensitive").map(item => item.column));
+  return state.issues.filter(item => item.status === "open" && !sensitiveColumns.has(item.column) && (!onlyIssue || item.id === onlyIssue)).flatMap(item => {
     const rows = reviewRows(item), counts = new Map();
     rows.forEach(row => { const value = String(row[item.column] ?? ""); counts.set(value, (counts.get(value) || 0) + 1); });
     const representations = [...counts].sort((a, b) => b[1] - a[1]).filter(([value]) => representationValue === undefined || value === representationValue).map(([value, count]) => ({ id: evidenceValueId(item.column, value), value: value.slice(0, 160), count }));

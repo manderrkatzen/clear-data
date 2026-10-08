@@ -292,4 +292,4 @@ async function handlePattern(request, env) {
     return json({ error: timeout ? "AI explanation timed out. Local comparisons remain available." : error.message || "Could not explain the pattern." }, timeout ? 504 : error.status || 422);
   }
 }
-module.exports = { MAX_BODY_BYTES, PROVIDER_TIMEOUT_MS, json, providerConfig, readPayload, validateRequest, parsePlan, responseText, validatePlan, handleProposal, validateInterpretationRequest, validateInterpretations, handleInterpretations, validatePatternRequest, validatePatternPlan, handlePattern };
+module.exports = { MAX_BODY_BYTES, PROVIDER_TIMEOUT_MS, json, providerConfig, readPayload, validateRequest, parsePlan, responseText, validatePlan, handleProposal, validateInterpretationRequest, validateInterpretations, handleInterpretations, validatePatternRequest, validatePatternPlan, handlePattern, rateLimit, verifyTurnstile, askProvider };
