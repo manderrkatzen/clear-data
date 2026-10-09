@@ -259,6 +259,15 @@ const results = [];
         assert.equal(await page.locator("#reviewTab-explore").getAttribute("aria-selected"),"true");
         const prior=await page.evaluate(()=>state.selectedIssue);await page.keyboard.press("j");assert.notEqual(await page.evaluate(()=>state.selectedIssue),prior);
       });
+      await check("shared: background render commits a focused edit without nested DOM replacement",["CORE-17","CORE-22"],async()=>{
+        await fixture("missing","amount");await choose("constant");
+        await page.locator("#missingConstant").fill("123");
+        await page.evaluate(()=>renderPreservingReviewFocus());await ready();
+        assert.equal(await page.locator("#missingConstant").inputValue(),"123");
+        assert.equal(await page.evaluate(()=>ReviewCore.data(ReviewCore.current()).preview.after[0].amount),"123");
+        assert.equal(await page.evaluate(()=>document.activeElement.id),"missingConstant");
+        await roundTrip();
+      });
       await check("AI: each unavailable state names the actual failure",["CORE-53","CORE-52"],async()=>{
         for(const [status,error,expected] of [[429,"AI request limit reached.","resets in 2 min"],[503,"AI unavailable","not configured"],[403,"verification failed","verification failed"],[504,"timed out","timed out"],[422,"AI suggestion couldn't be used","AI suggestion couldn't be used"]]){
           await fixture("outlier","amount");

@@ -131,15 +131,27 @@ function refreshChrome() {
   $("#contextAction").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
   $("#headerIssues").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
 }
+let renderingWorkspace = false, workspaceRenderQueued = false;
 function render() {
-  refreshChrome();
-  document.querySelectorAll(".nav-link").forEach((button) => button.classList.toggle("active", button.dataset.screen === state.screen));
-  ({ data: renderData, view: renderSpreadsheet, issues: renderIssues, changes: renderChanges, report: renderReport })[state.screen]();
-  if (state.screen === "data") enhanceDatasetScreen();
-  if (state.screen === "data") { if (state.headers.length) { screen.insertAdjacentHTML?.("beforeend", cleaningOverviewHtml()); bindCleaningOverview(); } screen.insertAdjacentHTML?.("beforeend", workspaceTools()); bindWorkspaceTools(); }
-  if (state.screen === "changes") decorateDecisionHistory();
-  if (typeof enhanceCapabilityPages === "function") enhanceCapabilityPages();
-  if (typeof location !== "undefined" && document.body) document.body.classList.toggle("debug-ui", new URLSearchParams(location.search).get("debug") === "ui");
+  // CORE-17, CORE-22: input blur/change may request another render during a background DOM replacement.
+  if (renderingWorkspace) { workspaceRenderQueued = true; return; }
+  renderingWorkspace = true;
+  try {
+    refreshChrome();
+    document.querySelectorAll(".nav-link").forEach((button) => button.classList.toggle("active", button.dataset.screen === state.screen));
+    ({ data: renderData, view: renderSpreadsheet, issues: renderIssues, changes: renderChanges, report: renderReport })[state.screen]();
+    if (state.screen === "data") enhanceDatasetScreen();
+    if (state.screen === "data") { if (state.headers.length) { screen.insertAdjacentHTML?.("beforeend", cleaningOverviewHtml()); bindCleaningOverview(); } screen.insertAdjacentHTML?.("beforeend", workspaceTools()); bindWorkspaceTools(); }
+    if (state.screen === "changes") decorateDecisionHistory();
+    if (typeof enhanceCapabilityPages === "function") enhanceCapabilityPages();
+    if (typeof location !== "undefined" && document.body) document.body.classList.toggle("debug-ui", new URLSearchParams(location.search).get("debug") === "ui");
+  } finally {
+    renderingWorkspace = false;
+    if (workspaceRenderQueued) {
+      workspaceRenderQueued = false;
+      Promise.resolve().then(() => renderPreservingReviewFocus());
+    }
+  }
 }
 function reviewOverview() {
   const open = state.issues.filter((item) => item.status === "open");
