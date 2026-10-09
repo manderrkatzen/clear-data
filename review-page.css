@@ -128,3 +128,11 @@
 @media (max-width:620px) { .cross-scatter-pair { grid-template-columns: 1fr; } }
 /* CORE-48: readable measurement labels retain their own mobile geometry. */
 @media (max-width:620px) { .review-chart svg text { font-size: 12px; }.review-chart.compact svg { max-height: 169px; } }
+/* CORE-22, CORE-53: progress is visible, with reduced-motion support. */
+.review-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--blue); border-radius: 50%; vertical-align: -1px; margin-right: 7px; animation: review-spin .8s linear infinite; }
+@keyframes review-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .review-spinner { animation: none; } }
+.review-missing-value code { white-space: pre-wrap; }
+.missing-knn-columns { display: grid; gap: 4px; max-height: 150px; overflow: auto; font-size: 12px; margin-top: 6px; }
+.missing-knn-columns label { display: flex; gap: 6px; align-items: center; }
+.review-option-wrap:has(.duplicate-one-by-one) { width: 100%; max-width: none; }

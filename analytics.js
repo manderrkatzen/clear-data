@@ -1,6 +1,6 @@
 // Cached analytical work, shared charts, source traces, and summary-only AI.
 let analyticalSession = null;
-function analyticalOptions() { return { revision: state.datasetRevision, policies: state.ruleConfig.columns || [], classifications: effectiveClassifications() }; }
+function analyticalOptions() { return { revision: state.datasetRevision, policies: effectiveColumnPolicies(), classifications: effectiveClassifications(),dateFormats:reviewDateFormats() }; }
 function analyticalStore() {
   const key = JSON.stringify([state.datasetRevision, state.rows.length, state.ruleConfig, effectiveClassifications()]);
   if (analyticalSession?.key !== key) {

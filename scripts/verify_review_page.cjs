@@ -91,7 +91,7 @@ test("detection covers all requested new issue families",() => {
 test("AI summary and suggestions reject scope injection and low-confidence parses",() => {
   const context = {column:"date",type:"format",role:"date",headers:["date"],allowedFixes:["to-iso"],count:10,affected:2,values:[{value:"March 3rd 25",count:2,locked:true}],samples:[],groups:[]};
   const input = ai.validateRequest({mode:"parse",context});
-  assert.deepEqual(ai.validateResult({note:"These need a source date.",mapping:{"March 3rd 25":{value:"2025-03-03",confidence:.7}}},input).mapping,{});
+  assert.deepEqual(Object.entries(ai.validateResult({note:"These need a source date.",mapping:{"March 3rd 25":{value:"2025-03-03",confidence:.7}}},input).mapping),[]);
   assert.throws(()=>ai.validateResult({note:"Change it.",operation:"drop-column"},input),/not allowed/);
   assert.throws(()=>ai.validateResult({note:"Parse it.",mapping:{other:{value:"2025-03-03",confidence:.99}}},input),/unsubmitted/);
   assert.throws(()=>ai.validateRequest({mode:"fix",context:{...context,samples:Array(21).fill("a")}}),/20 sample/);

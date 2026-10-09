@@ -243,7 +243,13 @@ var CleaningEngine = (() => {
         if (draft.operation === "parseNumber") after = fixed(parseNumber(before, { ...policy, ...draft }), Number(decimals));
         if (draft.operation === "scale") after = fixed(parseNumber(before, policy) * parseNumber(draft.factor), Number(decimals));
         if (draft.operation === "parseDate") after = parseDate(before, draft.dateFormat || policy.dateFormat);
-        if (draft.operation === "cap") after = fixed(Math.max(text(draft.lower).trim() ? parseNumber(draft.lower) : -Infinity, Math.min(text(draft.upper).trim() ? parseNumber(draft.upper) : Infinity, parseNumber(before, policy))), Number(decimals));
+        if (draft.operation === "cap") {
+          const lower=text(draft.lower).trim()?parseNumber(draft.lower):-Infinity,upper=text(draft.upper).trim()?parseNumber(draft.upper):Infinity,factor=10**Number(decimals);
+          let value=Number(fixed(Math.max(lower,Math.min(upper,parseNumber(before,policy))),Number(decimals)));
+          // OUT-F-03 / INV-F-02: rounding must not put a capped value back outside its approved bounds.
+          if(value<lower)value=Math.ceil(lower*factor)/factor;if(value>upper)value=Math.floor(upper*factor)/factor;
+          if(value<lower||value>upper)throw new Error("No value at this column's precision fits the approved range.");after=fixed(value,Number(decimals));
+        }
         if (draft.operation === "recalculate") {
           const rule = draft.rule;
           if (!rule || !headers.includes(rule.left) || !headers.includes(rule.right) || !["sum", "difference", "product", "ratio"].includes(rule.operation)) throw new Error("Invalid metric definition.");

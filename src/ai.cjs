@@ -24,6 +24,10 @@ function rateLimit(key, env) {
   requestWindows.set(key, times);
   return true;
 }
+function rateLimitRetryAfter(key) {
+  const now=Date.now(),times=(requestWindows.get(key) || []).filter(time=>time>now-3600000);
+  return times.length?Math.max(1,Math.ceil((times[0]+3600000-now)/1000)):1;
+}
 async function readPayload(request) {
   if (Number(request.headers.get("content-length")) > MAX_BODY_BYTES) throw apiError("Request too large.", 413);
   const reader = request.body?.getReader();
@@ -292,4 +296,4 @@ async function handlePattern(request, env) {
     return json({ error: timeout ? "AI explanation timed out. Local comparisons remain available." : error.message || "Could not explain the pattern." }, timeout ? 504 : error.status || 422);
   }
 }
-module.exports = { MAX_BODY_BYTES, PROVIDER_TIMEOUT_MS, json, providerConfig, readPayload, validateRequest, parsePlan, responseText, validatePlan, handleProposal, validateInterpretationRequest, validateInterpretations, handleInterpretations, validatePatternRequest, validatePatternPlan, handlePattern, rateLimit, verifyTurnstile, askProvider };
+module.exports = { MAX_BODY_BYTES, PROVIDER_TIMEOUT_MS, json, providerConfig, readPayload, validateRequest, parsePlan, responseText, validatePlan, handleProposal, validateInterpretationRequest, validateInterpretations, handleInterpretations, validatePatternRequest, validatePatternPlan, handlePattern, rateLimit, rateLimitRetryAfter, verifyTurnstile, askProvider };

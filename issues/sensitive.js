@@ -13,16 +13,16 @@ ReviewModules.sensitive = (() => {
       return found.length ? [{column,reviewType:"sensitive",type:"Sensitive data",label:"Sensitive data",rows:found.flatMap(group => group.rows),recommendation:"manual",status:"open",severity:"medium",summary:"Personal or financial identifiers need review before sharing."}] : [];
     });
   }
-  function isSensitiveColumn(column) { return groups(state.original,column).length > 0 && (state.issues.some(issue => issue.column === column && issue.reviewType === "sensitive") || !["number","integer"].includes(cleaningProfile().columns.find(profile => profile.column === column)?.role)); }
+  function isSensitiveColumn(column) { return groups(state.original.concat(state.rows),column).length > 0 && (state.issues.some(issue => issue.column === column && issue.reviewType === "sensitive") || !["number","integer"].includes(cleaningProfile().columns.find(profile => profile.column === column)?.role)); }
   function init(issue, session) { if (session.locked === null) session.locked = groups(state.rows,issue.column).map(group => group.type); }
   function lockedRows(issue, session) { init(issue,session); return groups(state.rows,issue.column).filter(group => session.locked.includes(group.type)).flatMap(group => group.rows); }
-  function count(issue) { return lockedRows(issue,ReviewCore.data(issue)).length; }
+  function count(issue) { return state.headers.includes(issue.column)?groups(state.rows,issue.column).reduce((sum,group)=>sum+group.rows.length,0):0; }
   function renderExplore(issue, session) { // SENS-E-01, SENS-E-02, SENS-E-03
     init(issue,session); const found = groups(state.rows,issue.column);
     return `<section class="sensitive-explore" data-ui="review.explore.sensitive"><h2 data-ui="review.explore.sensitive.summary">${escapeHtml(issue.column)} · ${found.map(group => `${group.rows.length} ${escapeHtml(group.type)} values`).join(" · ")}</h2><p>Review these identifiers before sharing the cleaned file. Detection and treatment run in your browser; these values are never sent to AI.</p><div class="sensitive-types">${found.map(group => `<label data-ui="review.explore.sensitive.type" data-type="${escapeHtml(group.type)}"><input type="checkbox" data-sensitive-type="${escapeHtml(group.type)}" ${session.locked.includes(group.type) ? "checked" : ""}><b>${escapeHtml(group.type)}</b><span>${ReviewCore.count(group.rows.length,"cells")}</span></label>`).join("")}</div><div class="sensitive-examples" data-ui="review.explore.sensitive.examples"><h3>Masked examples</h3>${found.flatMap(group => group.rows.slice(0,3).map(row => `<p><span>${escapeHtml(group.type)}</span><code>${escapeHtml(ReviewPageEngine.mask(row[issue.column]))}</code></p>`)).slice(0,10).join("")}</div></section>`;
   }
   function getFixOptions(issue, session) {
-    return [{key:"mask",label:"Mask",risk:"Removes data",compute:() => ({operation:"mask"})}, {key:"hash",label:"Replace with a code",risk:"Removes data",compute:async () => {
+    return [{key:"mask",label:"Mask",risk:"Removes data",compute:() => ({operation:"mask"})}, {key:"hash",label:"Replace with a code",risk:"Removes data",disabled:typeof crypto==="undefined"||!crypto.subtle?"Deterministic codes require browser cryptography on a secure origin":"",compute:async () => {
       const mapping = Object.create(null);
       for (const value of new Set(lockedRows(issue,session).map(row => row[issue.column]))) { const digest = await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)); mapping[value] = `sha256:${Array.from(new Uint8Array(digest),byte => byte.toString(16).padStart(2,"0")).join("")}`; }
       return {operation:"hash",mapping};
@@ -38,7 +38,7 @@ ReviewModules.sensitive = (() => {
   }
   function renderPreview(issue, session, preview) { return samples(issue,preview.patches,lockedRows(issue,session)); }
   function renderReview(issue, decision) { // SENS-R-01
-    return `${ReviewCore.metricStrip([{label:"Cells changed",value:decision.patches.length},{label:"Rows removed",value:0},{label:"Columns added / removed",value:`0 / ${decision.structure.removedColumns.length}`},{label:decision.treatment.operation === "hash" ? "Values hashed" : "Values masked",value:decision.patches.length}])}${samples(issue,decision.patches,decision.reviewImpact.beforeRows)}`;
+    return `${ReviewCore.metricStrip([{label:"Cells changed",value:decision.patches.length},{label:"Rows removed",value:0},{label:"Columns added / removed",value:`0 / ${decision.structure.removedColumns.length}`},{label:"Columns removed",value:decision.structure.removedColumns.length},{label:decision.treatment.operation === "hash" ? "Values hashed" : "Values masked",value:decision.patches.length}])}${samples(issue,decision.patches,groups(decision.reviewImpact.beforeRows,issue.column).flatMap(group=>group.rows))}`;
   }
   function showRows(issue) {
     const session = ReviewCore.data(issue), panel = document.createElement("aside");

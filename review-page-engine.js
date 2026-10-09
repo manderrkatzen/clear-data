@@ -29,7 +29,7 @@ var ReviewPageEngine = ((CleaningEngine) => {
   }
   function sensitiveType(value, column = "") {
     const v = text(value).trim().replace(/^'(?=\+?\d)/, "");
-    if (!v || v.includes("*") || /^sha256:[a-f0-9]{64}$/.test(v)) return "";
+    if (!v || /^(?:\+\d{1,3}\s*)?\*{3,}/.test(v) || /^.\*{3,}@/.test(v) || /^sha256:[a-f0-9]{64}$/.test(v)) return "";
     if (!v.includes("*") && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "email";
     // SENS-D-01: card candidates require Luhn, not just a long digit string.
     const digits = v.replace(/[ -]/g, "");
@@ -45,7 +45,7 @@ var ReviewPageEngine = ((CleaningEngine) => {
     if (/(?:^|[_\s])(?:email|phone|mobile|ssn|dob|name|address)(?:$|[_\s])/i.test(column)) return "named personal field";
     return "";
   }
-  function mask(value) { const v = text(value); return v.includes("@") ? `${v[0]}***@${v.split("@")[1]}` : v.length <= 4 ? "***" : `${"*".repeat(Math.max(3, v.length - 4))}${v.slice(-4)}`; }
+  function mask(value) { const v = text(value).replace(/^'(?=\+?\d)/,"");if(v.includes("@"))return `${v[0]}***@${v.split("@")[1]}`;const country=/^\+(\d{1,3})[ (.-]/.exec(v);return country?`+${country[1]} *** *** ${v.replace(/\D/g,"").slice(-4)}`:v.length<=4?"***":`${"*".repeat(Math.max(3,v.length-4))}${v.slice(-4)}`; }
   function whitespaceTypes(value) {
     const v = text(value), types = [];
     if (v !== v.trim()) types.push("leading / trailing spaces");
@@ -148,16 +148,26 @@ var ReviewPageEngine = ((CleaningEngine) => {
   function dateValue(value, source = "mdy") {
     const v = text(value).trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return CleaningEngine.parseDate(v);
+    if(v.includes("T")) {const [head,time]=v.split("T"),day=dateValue(head,source),parsed=Date.parse(`${day}T${time}`);if(!Number.isFinite(parsed))throw new Error("not a real date");return new Date(parsed).toISOString().slice(0,10);}
+    if(/^\d{4}\/\d{2}\/\d{2}$/.test(v))return CleaningEngine.parseDate(v.replaceAll("/","-"));
+    if(/^\d{5}$/.test(v)&&Number(v)>=20000&&Number(v)<=60000)return CleaningEngine.parseDate(v,"excel");
+    const long=/^([A-Za-z]+) (\d{1,2}), (\d{4})$/.exec(v);
+    if(long){const months=["january","february","march","april","may","june","july","august","september","october","november","december"],month=months.findIndex(name=>name===long[1].toLowerCase()||name.slice(0,3)===long[1].toLowerCase())+1;return CleaningEngine.parseDate(`${long[3]}-${String(month).padStart(2,"0")}-${long[2].padStart(2,"0")}`);}
     const named = /^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/.exec(v);
     if (named) { const month = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(named[2].toLowerCase())+1; return CleaningEngine.parseDate(`${named[3]}-${String(month).padStart(2,"0")}-${named[1].padStart(2,"0")}`); }
     if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(v)) return CleaningEngine.parseDate(v.replaceAll(".", "/"), "dmy");
+    if(/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(v)){const parts=v.split(/[/-]/);if(Number(parts[0])>12)return CleaningEngine.parseDate(v,"dmy");if(Number(parts[1])>12)return CleaningEngine.parseDate(v,"mdy");}
     return CleaningEngine.parseDate(v, source);
   }
   function renderDate(iso, format) {
-    const [y,m,d] = iso.split("-");
+    const [y,m,d] = iso.slice(0,10).split("-");
     if (format === "dmy") return `${d}/${m}/${y}`;
     if (format === "mdy") return `${m}/${d}/${y}`;
     if (format === "mon") return `${d}-${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(m)-1]}-${y}`;
+    if(format==="ymdSlash")return `${y}/${m}/${d}`;
+    if(format==="dotted")return `${d}.${m}.${y}`;
+    if(format==="long")return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(m)-1]} ${Number(d)}, ${y}`;
+    if(format==="excel") {const days=Math.round((Date.parse(`${y}-${m}-${d}`)-Date.UTC(1899,11,31))/86400000);return String(days>=60?days+1:days);}
     return iso;
   }
   function fixEncoding(value) {
@@ -240,9 +250,10 @@ var ReviewPageEngine = ((CleaningEngine) => {
         if (draft.operation === "collapseSpaces") after = before.replace(/\s+/g," ");
         if (["removeHidden","cleanCharacters"].includes(draft.operation)) after = before.replace(/[\u200b-\u200d\u2060\ufeff]/g,"").replace(/[\t\r\n\u00a0]/g," ");
         if (["fixEncoding","cleanCharacters"].includes(draft.operation)) after = fixEncoding(after);
+        if(draft.operation==="fixEncoding"&&(after.includes("\ufffd")||whitespaceTypes(after).includes("broken encoding")))throw new Error("Encoding repair could not produce valid characters; review the original source."); // WS-F-03
         if (draft.operation === "cleanCharacters") after = after.trim().replace(/\s+/g," ");
-        if (draft.operation === "cleanCharacters" && draft.characterTypes) { after=before;const selected=new Set(draft.characterTypes);if(selected.has("zero-width characters"))after=after.replace(/[\u200b-\u200d\u2060\ufeff]/g,"");if(selected.has("line breaks / tabs"))after=after.replace(/[\r\n\t]/g," ");if(selected.has("non-breaking spaces"))after=after.replace(/\u00a0/g," ");if(selected.has("double spaces"))after=after.replace(/ {2,}/g," ");if(selected.has("leading / trailing spaces"))after=after.trim();if(selected.has("broken encoding"))after=fixEncoding(after);if(after.includes("\ufffd"))throw new Error("Encoding repair produces invalid characters."); }
-        if (draft.operation === "padZeros") { if (!/^\d+$/.test(before) || !Number.isInteger(Number(draft.width)) || draft.width < before.length || draft.width > 100) throw new Error("Choose a length at least as long as this numeric ID (maximum 100)."); after = before.padStart(Number(draft.width),"0"); }
+        if (draft.operation === "cleanCharacters" && draft.characterTypes) { after=before;const selected=new Set(draft.characterTypes);if(selected.has("zero-width characters"))after=after.replace(/[\u200b-\u200d\u2060\ufeff]/g,"");if(selected.has("line breaks / tabs"))after=after.replace(/[\r\n\t]/g," ");if(selected.has("non-breaking spaces"))after=after.replace(/\u00a0/g," ");if(selected.has("double spaces"))after=after.replace(/ {2,}/g," ");if(selected.has("leading / trailing spaces"))after=after.trim();if(selected.has("broken encoding")){after=fixEncoding(after);if(after.includes("\ufffd")||whitespaceTypes(after).includes("broken encoding"))throw new Error("Encoding repair could not produce valid characters; review the original source.");} }
+        if (draft.operation === "padZeros") { const raw=before.trim();if (!/^\d+$/.test(raw) || !Number.isInteger(Number(draft.width)) || draft.width < raw.length || draft.width > 100) throw new Error("Choose a length at least as long as this digit-only code (maximum 100)."); after = raw.padStart(Number(draft.width),"0"); }
         if (draft.operation === "valueMap") { if (!Object.hasOwn(draft.mapping || {},before)) throw new Error("AI could not confidently parse this value."); after = draft.mapping[before]; }
         if (draft.operation === "mask") after = mask(before);
         if (draft.operation === "hash") { if (!draft.mapping?.[before]) throw new Error("Prepare the SHA-256 preview first."); after = draft.mapping[before]; }
@@ -257,9 +268,14 @@ var ReviewPageEngine = ((CleaningEngine) => {
         if (after !== before) patches.push({rowId:row._row,column,before,after});
       } catch (error) { blocked.push({rowId:row._row,reason:error.message}); }
     }
-    const patched = new Set(patches.map(patch=>JSON.stringify([patch.rowId,patch.column])));
-    addedColumns.forEach((c,index) => rows.filter(r => !patched.has(JSON.stringify([r._row,c]))).forEach(r => patches.push({rowId:r._row,column:c,before:"",after:draft.operation==="splitColumns" ? text(r[column]).split(draft.separator).map(value=>value.trim()).filter(Boolean)[index] || "" : ""})));
-    return { selectedIds:selected.map(r => r._row),patches,blocked,removedRows,addedRows,addedColumns,removedColumns,referenceStats,provenance,rowLineage };
+    const patched = new Set(patches.map(patch=>JSON.stringify([patch.rowId,patch.column]))),derivedUnavailable=[];
+    addedColumns.forEach((c,index) => rows.filter(r => !patched.has(JSON.stringify([r._row,c]))).forEach(r => {
+      let after=draft.operation==="splitColumns"?text(r[column]).split(draft.separator).map(value=>value.trim()).filter(Boolean)[index] || "":"";
+      // OUT: a derived log column covers the usable column, while originals and scoped decisions stay intact.
+      if(draft.operation==="log"&&CleaningEngine.observationState(r,column,policy,classifications)==="present") {try{const value=CleaningEngine.parseNumber(r[column],policy)+Number(draft.logOffset||0);if(value<=0)throw new Error("x + offset must be positive");after=Math.log(value).toFixed(Number(draft.decimals));}catch(error){derivedUnavailable.push({rowId:r._row,reason:error.message});}}
+      patches.push({rowId:r._row,column:c,before:"",after});
+    }));
+    return { selectedIds:selected.map(r => r._row),patches,blocked,removedRows,addedRows,addedColumns,removedColumns,referenceStats,provenance,rowLineage,derivedUnavailable };
   }
   function replay(originalHeaders, original, changes) {
     let headers = [...originalHeaders], rows = original.map(r => ({ ...r }));
@@ -288,6 +304,6 @@ var ReviewPageEngine = ((CleaningEngine) => {
     current.forEach(r => pool.set(r._row,r));
     return [...pool.values()];
   }
-  return { labels,extraOperations,frequencies,pattern,sensitiveType,mask,whitespaceTypes,suggestedRange,violates,detect,treatment,applyPreview,replay,identityPool,dateValue,normalized,labelKey };
+  return { labels,extraOperations,frequencies,pattern,sensitiveType,mask,whitespaceTypes,suggestedRange,violates,detect,treatment,applyPreview,replay,identityPool,dateValue,renderDate,normalized,labelKey };
 })(typeof CleaningEngine !== "undefined" ? CleaningEngine : require("./cleaning-engine.js"));
 if (typeof module !== "undefined") module.exports = ReviewPageEngine;

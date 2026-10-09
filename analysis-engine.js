@@ -23,7 +23,8 @@ var AnalysisEngine = (() => {
     for (const column of headers) {
       const parsing = policy(column, options);
       // Reuse column caches without allocating a value/meaning pair for every unclassified cell.
-      const signature = JSON.stringify([parsing, rows.map(row => row[column]), classified.size ? rows.map(row => { const decision=classified.get(`${row._row}:${column}`);return decision && String(decision.value??"")===String(row[column]??"") ? decision.meaning : null; }) : null]);
+      const reviewedDates=options.dateFormats&&parsing.role==="date"?rows.map(row=>options.dateFormats[JSON.stringify([row._row,column,row[column]])] || null):null;
+      const signature = JSON.stringify([parsing, rows.map(row => row[column]), classified.size ? rows.map(row => { const decision=classified.get(`${row._row}:${column}`);return decision && String(decision.value??"")===String(row[column]??"") ? decision.meaning : null; }) : null,reviewedDates]);
       if (saved.get(column)?.signature === signature) { columns.set(column, saved.get(column)); continue; }
       // One observation-state pass builds the same masks and parsing evidence without intermediate arrays.
       const states=Array(rows.length),blanks=Array(rows.length),numbers=Array(rows.length).fill(null),dates=Array(rows.length).fill(null),distinctValues=new Set();
@@ -35,9 +36,10 @@ var AnalysisEngine = (() => {
         observed++;distinctValues.add(raw);
         if(parsing.numberFormat==="plain") { if(/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw)){const value=Number(raw);if(Number.isFinite(value)){numbers[index]=value;numericCount++;}} }
         else {try{numbers[index]=engine.parseNumber(row[column],parsing);numericCount++;}catch{}}
-        if(parsing.dateFormat==="iso" && (raw.length!==10 || raw[4]!=="-" || !/^\d{4}-\d{2}-\d{2}$/.test(raw)))continue;
-        if(["mdy","dmy"].includes(parsing.dateFormat) && !/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(raw))continue;
-        try{dates[index]=engine.parseDate(row[column],parsing.dateFormat).slice(0,7);dateCount++;}catch{}
+        const reviewedFormat=options.dateFormats?.[JSON.stringify([row._row,column,row[column]])],format=reviewedFormat || parsing.dateFormat;
+        if(!reviewedFormat&&parsing.role!=="date"&&format==="iso" && (raw.length!==10 || raw[4]!=="-" || !/^\d{4}-\d{2}-\d{2}$/.test(raw)))continue;
+        if(!reviewedFormat&&parsing.role!=="date"&&["mdy","dmy"].includes(format) && !/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(raw))continue;
+        try{const dateEngine=reviewedFormat||parsing.role==="date"?(typeof ReviewPageEngine!=="undefined"?ReviewPageEngine:require("./review-page-engine.js")):null;dates[index]=(dateEngine?dateEngine.dateValue(row[column],format):engine.parseDate(row[column],format)).slice(0,7);dateCount++;}catch{}
       }
       const distinct=distinctValues.size;
       const dateRole = parsing.role === "date" || dateCount >= Math.max(1, observed * .9);

@@ -1,4 +1,4 @@
-importScripts("cleaning-engine.js", "analysis-engine.js");
+importScripts("cleaning-engine.js", "review-page-engine.js", "analysis-engine.js");
 importScripts("capabilities-engine.js");
 importScripts("review-bands.js");
 let dataset = null;

@@ -11,16 +11,20 @@ function reviewDateFormats() {
   const key = `${state.datasetRevision}:${state.changes.length}:${state.changes[0]?.id || ""}`;
   if (dateFormatCache?.key === key) return dateFormatCache.entries;
   const entries = {};
-  for (const change of [...state.changes].reverse()) if (["dateFormat","dateCap","parseDate"].includes(change.treatment?.operation)) for (const patch of change.patches) entries[JSON.stringify([patch.rowId,patch.column,patch.after])] = change.treatment.operation === "dateFormat" ? change.treatment.targetFormat || "iso" : "iso";
+  for (const change of [...state.changes].reverse()) if (["dateFormat","dateCap","parseDate"].includes(change.treatment?.operation) || change.treatment?.convertedDates) for (const patch of change.patches) entries[JSON.stringify([patch.rowId,patch.column,patch.after])] = change.treatment.targetFormat || "iso";
   dateFormatCache = {key,entries}; return entries;
 }
 function invalidateCleaningProfile() { cleaningCache = null; classificationCache = null; }
 function cleaningProfile() {
   const key = JSON.stringify([state.datasetRevision, state.rows.length, state.ruleConfig?.columns, state.ruleConfig?.schema]);
-  if (!cleaningCache || cleaningCache.key !== key) cleaningCache = { key, result: CleaningEngine.profile(state.headers, state.rows, state.ruleConfig?.columns || [], state.ruleConfig?.schema || [], effectiveClassifications()) };
+  if (!cleaningCache || cleaningCache.key !== key) cleaningCache = { key, result: CleaningEngine.profile(state.headers, state.rows, effectiveColumnPolicies(), state.ruleConfig?.schema || [], effectiveClassifications()) };
   return cleaningCache.result;
 }
-function columnPolicy(column) { return state.ruleConfig.columns?.find(policy => policy.column === column) || CleaningEngine.defaultPolicy(column); }
+function columnPolicy(column) {
+  const base=state.ruleConfig.columns?.find(policy=>policy.column===column) || CleaningEngine.defaultPolicy(column),override=state.changes.find(change=>change.issue.column===column&&(change.treatment?.roleOverride || ["toText","padZeros"].includes(change.treatment?.operation)));
+  return override?{...base,...override.treatment.formatPolicyOverride,role:override.treatment.roleOverride || "text"}:base;
+}
+function effectiveColumnPolicies() {return state.headers.map(columnPolicy);}
 function effectiveClassifications() {
   const key = `${state.datasetRevision}:${state.changes.length}:${state.changes[0]?.id || ""}`;
   if (classificationCache?.key === key) return classificationCache.entries;
@@ -129,7 +133,7 @@ function guidedPreview(item, draft = reviewDraft(item)) {
     treatment.keys = definition.columns; treatment.keyMode = definition.mode === "key";
   }
   if (draft.operation === "recalculate") treatment.rule = item.rule;
-  const options = { policies: state.ruleConfig.columns || [], identityIds: state.allRows.map(row => row._row), dateFormats: reviewDateFormats(), ...(draft.similarResult ? { similarResult: draft.similarResult } : typeof analyticalTreatmentOptions === "function" ? analyticalTreatmentOptions(item, draft) : {}) };
+  const options = { policies: effectiveColumnPolicies(), identityIds: state.allRows.map(row => row._row), dateFormats: reviewDateFormats(), ...(draft.similarResult ? { similarResult: draft.similarResult } : typeof analyticalTreatmentOptions === "function" ? analyticalTreatmentOptions(item, draft) : {}) };
   const selectedIds = new Set(draft.scope.rowIds || []);
   const meanings = draft.lockedMissing ? effectiveClassifications().concat(reviewRows(item).filter(row => selectedIds.has(row._row)).map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: "missing" }))) : effectiveClassifications();
   const preview = CleaningEngine.treatment(state.headers, state.rows, reviewRows(item).map(row => row._row), item.column, treatment, policy, meanings, options);
@@ -157,13 +161,15 @@ function guidedPreview(item, draft = reviewDraft(item)) {
     }
   }
   const blockedIds = new Set(preview.blocked.map(entry => entry.rowId));
-  const classification = { rowIds: preview.selectedIds.filter(id => !blockedIds.has(id)), meaning: ["retain", "leaveMissing", "classify", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" };
+   const fills=["constant","median","mean","groupMedian","groupwise","knn","mode","groupMode","previous","next","interpolate"];
+   const classification = { rowIds: preview.selectedIds.filter(id => !blockedIds.has(id)), meaning: ["retain", "leaveMissing", "classify", "missing"].includes(draft.operation) ? draft.interpretation : fills.includes(draft.operation)?"legitimate":"resolved" };
    const toIndex = entries => new Map(entries.map(entry => [`${entry.rowId}:${entry.column}`,entry]));
-   const missingCount = (rows, entries) => { const index = toIndex(entries); return rows.filter(row => ["missing", "blank_unreviewed"].includes(CleaningEngine.observationState(row, item.column, policy, index))).length; };
    const classifiedIds = new Set(classification.rowIds), afterMeanings = meanings.concat(after.filter(row => classifiedIds.has(row._row)).map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: classification.meaning })));
-   const numericFor = (rows, entries) => { const index = toIndex(entries); return rows.flatMap(row => { if (CleaningEngine.observationState(row,item.column,policy,index) !== "present") return []; try { return [CleaningEngine.parseNumber(row[item.column],policy)]; } catch { return []; } }); };
    const removedTarget = preview.removedColumns?.includes(item.column);
-   const result = { ...preview, after, constraints, classification, beforeMissing: missingCount(state.rows, meanings), afterMissing: removedTarget ? 0 : missingCount(after, afterMeanings), beforeStats: CleaningEngine.stats(numericFor(state.rows,meanings)), afterStats: CleaningEngine.stats(removedTarget ? [] : numericFor(after,afterMeanings)), fingerprint: guidedFingerprint(item, draft), treatment };
+   // A single semantic pass per snapshot supplies the same counters/statistics instead of six repeated scans.
+   const frame=(rows,entries,removed=false)=>{const index=toIndex(entries),missing=[],excluded=[],values=[];for(const row of rows){const status=CleaningEngine.observationState(row,item.column,policy,index);if(["missing","blank_unreviewed"].includes(status)&&!removed)missing.push(row._row);if(status!=="present"||removed){excluded.push(row._row);continue;}try{values.push(CleaningEngine.parseNumber(row[item.column],policy));}catch{}}const stats=CleaningEngine.stats(values),sum=values.reduce((total,value)=>total+value,0);stats.sd=stats.count?Math.sqrt(values.reduce((total,value)=>total+(value-stats.mean)**2,0)/stats.count):null;return {missing,excluded,values,stats,sum};};
+   const beforeFrame=frame(state.rows,meanings),afterFrame=frame(after,afterMeanings,removedTarget),beforeMissingIds=beforeFrame.missing,afterMissingIds=afterFrame.missing,beforeExcludedIds=beforeFrame.excluded,afterExcludedIds=afterFrame.excluded;
+   const result = { ...preview, after, constraints, classification, beforeMissingIds,afterMissingIds,beforeExcludedIds,afterExcludedIds,beforeMissing: beforeMissingIds.length, afterMissing: afterMissingIds.length, beforeStats: beforeFrame.stats, afterStats: afterFrame.stats,beforeSum:beforeFrame.sum,afterSum:afterFrame.sum, fingerprint: guidedFingerprint(item, draft), treatment };
   if (typeof enrichCapabilityPreview === "function") enrichCapabilityPreview(item, draft, result);
   return result;
 }
@@ -192,12 +198,12 @@ function approveGuidedDecision(item) {
      state.rows = state.rows.filter(row => !removedIds.has(row._row));
      if (preview.addedRows?.length) { state.rows.push(...preview.addedRows.map(row => ({ ...row }))); state.allRows.push(...state.rows.filter(row => preview.addedRows.some(added => added._row === row._row))); }
      state.headers = state.headers.concat(preview.addedColumns || []).filter(column => !(preview.removedColumns || []).includes(column));
-    const interpretationValues = reviewedRows.map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: ["retain", "leaveMissing", "classify", "missing"].includes(draft.operation) ? draft.interpretation : "resolved" }));
+    const interpretationValues = reviewedRows.map(row => ({ rowId: row._row, column: item.column, value: row[item.column], meaning: preview.classification.meaning }));
     const sample = (patches, key) => patches.slice(0, 3).map(patch => String(patch[key]).trim() ? patch[key] : "Blank").join(", ");
     const change = { id: newReviewId(), createdAt: new Date().toISOString(), issue: item, title: treatmentLabel(draft.operation), disposition: draft.operation === "retain" ? "valid" : "finalized", rows: reviewedRows, before: preview.patches.length ? sample(preview.patches, "before") : "Values retained", after: preview.patches.length ? sample(preview.patches, "after") : removedIds.size ? `${removedIds.size} records removed` : "Values retained", reason: item.summary, note: draft.note || "", interpretation: draft.interpretation, interpretationValues, treatment: { ...preview.treatment, previewFingerprint: undefined }, originals: [], patches: preview.patches, removedRows: preview.removedRows, reviewedFingerprints: fingerprints, fingerprint: reviewFingerprint(item, reviewedRows) };
      state.changes.unshift(change);
      change.structure = { addedRows: preview.addedRows || [], addedColumns: preview.addedColumns || [], removedColumns: preview.removedColumns || [], rowLineage: preview.rowLineage || [] };
-     change.reviewImpact = { beforeRows: beforeReview, afterRows: state.rows.map(row => ({ ...row })), beforeHeaders, afterHeaders: [...state.headers], beforeMissing: preview.beforeMissing, afterMissing: preview.afterMissing, beforeStats: preview.beforeStats, afterStats: preview.afterStats, groups: draft.groupColumns || draft.similar?.columns || [] };
+     change.reviewImpact = { beforeRows: beforeReview, afterRows: state.rows.map(row => ({ ...row })), beforeHeaders, afterHeaders: [...state.headers], beforeMissing: preview.beforeMissing, afterMissing: preview.afterMissing,beforeMissingIds:preview.beforeMissingIds,afterMissingIds:preview.afterMissingIds,beforeExcludedIds:preview.beforeExcludedIds,afterExcludedIds:preview.afterExcludedIds, beforeStats: preview.beforeStats, afterStats: preview.afterStats, groups: draft.groupColumns || draft.similar?.columns || [] };
     if (draft.operation === "leaveMissing") change.disposition = "valid";
     recordDecisionEvent(change);
     refreshIssues();
@@ -262,7 +268,7 @@ async function profileInBackground(revision, signal) {
     signal?.addEventListener("abort", abort, { once: true });
     worker.onmessage = event => { finish(); if (event.data.error) reject(new Error(event.data.error)); else if (event.data.revision !== revision) reject(new Error("Stale profile")); else resolve(event.data.result); };
     worker.onerror = () => { finish(); reject(new Error("Background profiling could not run.")); };
-    worker.postMessage({ revision, headers: state.headers, rows: state.rows, policies: state.ruleConfig.columns, schema: state.ruleConfig.schema, classifications: effectiveClassifications() });
+    worker.postMessage({ revision, headers: state.headers, rows: state.rows, policies: effectiveColumnPolicies(), schema: state.ruleConfig.schema, classifications: effectiveClassifications() });
   });
 }
 async function startAutomaticReview(onlyIssue = null, question = "", representationValue = undefined) {

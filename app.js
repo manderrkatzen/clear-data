@@ -109,6 +109,7 @@ function openCount() { return state.issues.filter((item) => item.status === "ope
 function inferType(header) { const role = cleaningProfile().columns.find(profile => profile.column === header)?.role || "text"; return role.charAt(0).toUpperCase() + role.slice(1); }
 function metrics() {
   const original = new Map(state.original.map((row) => [row._row, row]));
+  const currentIds=new Set(state.rows.map(row=>row._row));
   let changedCells = 0, changedRows = 0;
   state.rows.forEach((row) => {
     const source = original.get(row._row);
@@ -116,7 +117,7 @@ function metrics() {
     changedCells += count;
     if (count) changedRows++;
   });
-  return { rows: state.rows.length, columns: state.headers.length, removedRows: state.original.filter(source => !state.rows.some(row => row._row === source._row)).length, addedRows: state.rows.filter(row => !original.has(row._row)).length, blanks: state.rows.reduce((total, row) => total + state.headers.filter((header) => !String(row[header] ?? "").trim()).length, 0), resolved: state.issues.filter((item) => item.status !== "open").length, changes: changedRows, changedRows, changedCells, decisions: state.changes.length };
+  return { rows: state.rows.length, columns: state.headers.length, removedRows: state.original.filter(source => !currentIds.has(source._row)).length, addedRows: state.rows.filter(row => !original.has(row._row)).length, blanks: state.rows.reduce((total, row) => total + state.headers.filter((header) => !String(row[header] ?? "").trim()).length, 0), resolved: state.issues.filter((item) => item.status !== "open").length, changes: changedRows, changedRows, changedCells, decisions: state.changes.length };
 }
 function refreshChrome() {
   $("#datasetName").textContent = state.fileName || "No dataset loaded";
@@ -218,7 +219,7 @@ function refreshIssues() {
       fresh = { ...item, rows: profile.rows, outlier: profile, summary: `${profile.rows.length} values match the saved rule. ${profile.note}` };
     }
     const decision = state.changes.find((change) => change.issue.id === item.id);
-    if (fresh) fresh.rows = fresh.rows.filter(row => !state.changes.some(change => change.issue.id === item.id && (change.disposition === "valid" || ["log","splitColumns","toText"].includes(change.treatment?.operation)) && change.reviewedFingerprints?.[row._row] === reviewFingerprint(fresh, [row])));
+    if (fresh) fresh.rows = fresh.rows.filter(row => !state.changes.some(change => change.issue.id === item.id && (change.disposition === "valid" || ["log","splitColumns","toText"].includes(change.treatment?.operation) || change.treatment?.keepAllRows?.includes(row._row)) && change.reviewedFingerprints?.[row._row] === reviewFingerprint(fresh, [row])));
     if (!fresh || !fresh.rows.length) {
       item.status = decision ? decision.disposition : "resolved";
       item.currentRows = [];
