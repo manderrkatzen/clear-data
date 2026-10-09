@@ -223,11 +223,12 @@ function refreshIssues() {
     if (!fresh || !fresh.rows.length) {
       item.status = decision ? decision.disposition : "resolved";
       item.currentRows = [];
-      if (item.recommendation === "outlier") { item.rows = fresh.rows; item.outlier = fresh.outlier; item.summary = fresh.summary; }
+      if (item.recommendation === "outlier" && fresh) { item.rows = fresh.rows; item.outlier = fresh.outlier; item.summary = fresh.summary; }
       return item;
     }
     const accepted = decision?.disposition === "valid" && decision.fingerprint === reviewFingerprint(fresh);
-    Object.assign(item, { column: fresh.column, rows: fresh.rows, currentRows: fresh.rows, summary: fresh.summary, rule: fresh.rule || item.rule, candidate: fresh.candidate || item.candidate, duplicateProfile: fresh.duplicateProfile, duplicateDefinition: fresh.duplicateDefinition || item.duplicateDefinition, outlier: fresh.outlier || item.outlier, status: accepted ? "valid" : "open" });
+    // CORE-04: refreshed findings retain module-specific evidence, including scale clusters and date roles.
+    Object.assign(item, fresh, { id: item.id, rows: fresh.rows, currentRows: fresh.rows, rule: fresh.rule || item.rule, candidate: fresh.candidate || item.candidate, duplicateDefinition: fresh.duplicateDefinition || item.duplicateDefinition, outlier: fresh.outlier || item.outlier, status: accepted ? "valid" : "open" });
     return item;
   });
   detected.forEach((item) => { item.id = ++nextId; state.issues.push(item); });
