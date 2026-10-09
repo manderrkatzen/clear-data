@@ -79,6 +79,10 @@ typography:
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: "-0.3px"
+  review-brand:
+    fontFamily: '"Source Sans 3", sans-serif'
+    fontSize: "22px"
+    fontWeight: 600
   body:
     fontFamily: '"Source Sans 3", sans-serif'
     fontSize: "15px"
@@ -264,9 +268,9 @@ This is a practical, stepped type hierarchy, not a mathematical modular scale. C
 
 Desktop shell: CSS grid with a navigation column (196px) and `minmax(0, 1fr)` content. The sidebar is sticky at the viewport top, with height (100vh) and padding (26px 16px 20px). The dataset topbar is (72px) high with inline padding (30px). Screens have maximum width (1600px) and padding (28px 30px 40px).
 
-Review overrides the screen cap and uses (20px 24px) screen padding. Its desktop grid has a column-grouped issue list (280px), a flexible white task surface, and a (24px) gap. Height is `calc(100dvh - 112px)` with a (620px) minimum. The task surface has (8px) corners and (22px 26px 20px) padding. Header and tabs remain above a flexing, internally scrolling tab-content area; the issue list scrolls independently. Fix and Review footers stay in the content flow, pushed toward the bottom by flex spacing rather than overlaid on evidence. Dataset definitions remain under `dataset.setup`.
+Review overrides the screen cap and uses (20px 24px) screen padding. In Review, the navigation rail narrows to (168px), the topbar becomes (60px), and redundant eyebrow/continuation copy recedes. Its desktop grid has a column-grouped issue list (220px), a flexible white task surface, and a (20px) gap. Height is `calc(100dvh - 100px)` with a (620px) minimum. The task surface has (8px) corners, a hairline border, and (24px) padding. Header and tabs remain above an internally scrolling evidence area. The issue list has its own bounded scroll container. Apply/Undo footers occupy separate space below the tab content, so they neither cover charts nor disappear into the evidence scroll. Dataset definitions remain under `dataset.setup`.
 
-Desktop overview metrics retain four columns and bordered strips. Review metric strips wrap with a (20px) gap; consequence figures wrap with a (24px) gap. The consequence block uses top/bottom hairlines and (18px) vertical padding, rather than nested cards. Review sample tables scroll within (210px); multi-value Explore examples within (340px). Missing Explore expands the grouped row sheet into remaining space. Profile content retains its (480px) scroll region. The spreadsheet scroll region remains capped at (65vh), with its incumbent issue rail (180px) on desktop.
+Desktop overview metrics retain four columns and bordered strips. Review metric strips use restrained (18px) values and wrap with (12px 24px) gaps; consequence figures wrap with a (24px) gap. The consequence block uses hairlines and (16px) vertical padding. Review sample tables scroll within (210px); multi-value Explore examples within (340px). Missing Explore gives its remaining space to one priority-sorted table, with (13px) data text and locally scrolling columns/rows. Profile content retains its (480px) scroll region. The spreadsheet scroll region remains capped at (65vh), with its incumbent issue rail (180px) on desktop.
 
 Spacing is contextual: compact control gaps (8px), Review content gaps (14px), header/footer gaps (18px), workspace padding (20px), desktop Review column gap (24px), and incumbent desktop screen gutters (30px). The frontmatter spacing steps remain extracted values, not global spacing custom properties or a mandate for uniform card layouts.
 
@@ -277,11 +281,11 @@ All breakpoints are inclusive `max-width` queries:
 | Width | Effective behavior |
 | --- | --- |
 | 1200px | Rail becomes 178px; screen/topbar gutters 24px. |
-| 1100px | Review list becomes 235px with an 18px gap; task padding becomes 20px. |
-| 900px | Review stacks the list above the task, drops the viewport height, and lets tab content flow. Issue panel is capped at 230px, issue list at 135px, and task minimum height is 600px. Filters use two columns; the missing-row scroll area is capped at 520px. |
+| 1100px | Review list becomes 200px with a 16px gap; task padding becomes 20px. |
+| 900px | Review issue browsing becomes a collapsed "Browse issues" disclosure above the task, retaining search/filter and a 180px list when expanded. Task height flows with its content; the single inspection table has a 260px minimum and 460px maximum scrolling height. |
 | 800px | Shell becomes one column; rail becomes an in-flow navy header with horizontally scrollable navigation; product label and sidebar bottom disappear. Topbar height becomes automatic, minimum 70px; screen gutters 18px; overview metrics become two columns. |
 | 700px | Inherited spreadsheet rail becomes 105px; markers wrap, bubbles become 22px high, and marker labels become 100px wide. The inherited import workflow strip also becomes one column. |
-| 620px | Review screen padding becomes 16px 14px; task padding 18px 14px. Missing overview, group mini-charts, outlier pairs, cross-column pairs, and sensitive examples stack. Fix footer wraps and Apply becomes full width. Histogram SVG labels become 12px and compact height cap becomes 169px; geometry recomposes in JavaScript for the narrow viewport. |
+| 620px | Review screen padding becomes 16px 14px; task padding 18px 14px. Missing overview, priority controls, group comparison charts, outlier pairs, cross-column pairs, and sensitive examples stack. Direction/priority controls have 44px height. Fix footer wraps and Apply becomes full width. Histogram/outlier SVG labels use 12px, with responsive drawing geometry rather than miniature desktop canvases. |
 | 560px | Screen gutters 14px; navigation icons hidden; global header badges and ghost action hidden; headings shrink. Spreadsheet rail stays 105px. |
 
 The effective inherited (700px) and (620px) changes matter: do not describe them as beginning only at the final layer's (560px) query. Wide tables retain local horizontal scrolling instead of shrinking the data to fit.
@@ -328,7 +332,7 @@ Issues are grouped by dataset column and ordered by issue type, with label, coun
 
 ### Missing-value evidence and scope
 
-Explore shows compact exact-representation rows with counts, shares, lock state, and available AI assessments. Blanks begin locked; other candidate representations enter treatment scope only through explicit locks. The expanded, internally scrolling Rows around the gaps sheet places actual missing records before five nearby present records, with show-more controls. Up to three lock columns organize nested groups; numerical locks expose band settings. Context columns and deterministic gap summaries support judgment. AI picks remain suggestions requiring the analyst's lock action; model-assessed rankings are not calibrated probabilities.
+Explore starts with "Treat as missing": exact representations, counts/shares, selection state and available AI assessments. Blanks begin selected; other candidates enter treatment scope only through explicit selection. "Inspect the rows" is one continuous table. Row identity and the reviewed column stay pinned; chosen ordering columns appear next in priority order, followed by stable selected context columns. Column-header buttons and an "Order by" toolbar set ascending/descending priorities. Native position selectors and drag-reordering are equivalent. Sorting is typed and lexicographic, source-stable on ties, and keeps unavailable ordering values last. It never mutates source order or fill scope. Missing cells use visible "Missing" text and root coral/red-background finding treatment; nonblank selected tokens retain exact source text. Fifty rows render initially, with Show more/Show all. Background analysis does not replace chosen visible columns. Inspection preferences survive tabs, approvals, Undo and project restore. Group-based fill columns/bands remain separately available in the Fix "Fill groups" disclosure, using the existing engine. AI picks remain explicitly accepted suggestions.
 
 ### Shared Fix and Review
 
@@ -340,7 +344,7 @@ Review shows recorded metrics, issue-specific chart or samples, the fix/time/not
 
 Numeric Review histograms use common bins over the existing 1st–99th percentile range, visible edge counts, per-series percentages, legend populations, and labeled median lines. Skew-triggered log scaling is explicitly named. Filled values have a separately labeled stacked segment. Missing-value By group reuses the existing grouping engine, bounded to four groups plus Other with a shared y-scale. Category comparisons use labeled totals and grey unchanged marks; issue-specific previews can use changed-category text or row examples instead of a redundant chart.
 
-At 620px and below, histogram canvas width recomposes to `max(280, viewport width - 56)` rather than shrinking the desktop 720-unit drawing. Bin/bar geometry adjusts to that width while bins, rates, and medians retain their meaning. CSS gives SVG labels (12px) and compact histograms a (169px) height cap. Resize rerenders the Review geometry after a (100ms) debounce without discarding preview or scope. This mobile fix is specific to histogram composition; it is not evidence of a full chart-system audit.
+Histogram canvas width uses the available task width (maximum 720 drawing units), recomposing bins while retaining their numerical definitions. CSS no longer compresses previews into capped heights; evidence scrolls locally and actions have dedicated layout space. Outlier scatter geometry likewise recomposes to the available narrow viewport, retaining shared data domains and rule bounds. The secondary outlier histogram is available under "Distribution and rule bounds", collapsed by default. Resize rerenders geometry after a (100ms) debounce without discarding preview or scope. This is a targeted clarity pass, not a full chart-system or accessibility certification.
 
 ### Structural and sensitive review
 

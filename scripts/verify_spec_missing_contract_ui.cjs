@@ -18,6 +18,7 @@ const base=process.env.BASE_URL || "http://localhost:4174",folder="docs/screensh
       await page.goto(`${base}/?debug=ui`);
       const load=async(headers,rows,name="contract.csv",policies=[])=>page.evaluate(({headers,rows,name,policies})=>{loadData(csvText(headers,rows),name);cancelAutomaticReview(false);if(policies.length)applyRuleConfig({...exportRuleConfig(),columns:policies});const issue=state.issues.find(issue=>issue.column===headers[1]&&issue.reviewType==="missing");if(issue)ReviewCore.select(issue.id);},{headers,rows,name,policies});
       const ready=()=>page.waitForFunction(()=>!ReviewCore.data(ReviewCore.current()).pending&&Boolean(ReviewCore.data(ReviewCore.current()).preview));
+      const fillGroup=async column=>{await page.locator("#reviewTab-fix").click();await ready();if(await page.locator(".missing-fill-groups").getAttribute("open")===null)await page.locator(".missing-fill-groups > summary").click();await page.locator("#missingAddLock").selectOption(column);await ready();};
       const choose=async fix=>{if(fix==="knn")await page.waitForFunction(()=>(ReviewCore.data(ReviewCore.current()).comparison?.results || []).length>0);await page.locator("#reviewTab-fix").click();await ready();const button=page.locator(`[data-fix="${fix}"]`);if(await button.count())await button.click();else await page.locator("#reviewMore").selectOption(fix);await ready();};
       const undo=async()=>{await page.locator("#reviewUndo").click();assert.equal(await page.evaluate(()=>metrics().changedCells),0);};
       // MISS-D-01: aggregate numeric aliases before screening a spike, but keep representations independent.
@@ -38,8 +39,8 @@ const base=process.env.BASE_URL || "http://localhost:4174",folder="docs/screensh
       // MISS-F-04…05: primary-target statistics include SD as well as total.
       const numericRows=Array.from({length:100},(_,i)=>({_row:i+1,id:`row-${i+1}`,amount:i<10?"":String(10+i%5),channel:i<60?"North":"South",hold:String(i),event_date:`2025-01-${String(i%28+1).padStart(2,"0")}`}));
       await load(["id","amount","channel","hold","event_date"],numericRows,"numeric-contract.csv");
-      await page.locator("#missingAddLock").selectOption("channel");
-      await page.locator("#missingAddLock").selectOption("hold");
+      await fillGroup("channel");
+      await fillGroup("hold");
       const bands=await page.evaluate(()=>{const issue=ReviewCore.current(),session=ReviewCore.data(issue),full=AnalysisEngine.prepare(state.headers,state.rows,analyticalOptions()),expected=AnalysisEngine.bandsFor(full,"hold",{mode:"quantiles",k:5,minCategoryCount:5}).labels,sub=state.rows.filter(row=>row.channel==="North"),actual=ReviewModules.missing.grouped(issue,session,sub,["hold"]);return actual.every(group=>group.rows.every(row=>expected[state.rows.findIndex(item=>item._row===row._row)]===group.label));});
       assert.equal(bands,true,"MISS-E-17: nested bands must not be recomputed from a subset");
       await choose("median");assert.equal(await page.locator(".review-effect-figures > span").count(),4);
@@ -63,7 +64,7 @@ const base=process.env.BASE_URL || "http://localhost:4174",folder="docs/screensh
       // Every numerical choice must run its own preview -> Apply -> Review -> Undo path.
       for(const fix of ["mean","median-by-group","constant","knn","previous-value","next-value","interpolate","leave","drop-rows"]) {
         await load(["id","amount","channel","hold","event_date"],numericRows,`${fix}-contract.csv`);
-        if(fix==="median-by-group")await page.locator("#missingAddLock").selectOption("channel");
+        if(fix==="median-by-group")await fillGroup("channel");
         await choose(fix);
         if(fix==="knn") {await page.locator("#missingKnnK").fill("7");await page.locator("#missingKnnK").dispatchEvent("change");await ready();}
         const blocked=await page.evaluate(()=>ReviewCore.data(ReviewCore.current()).preview.blocked.length);
@@ -82,7 +83,7 @@ const base=process.env.BASE_URL || "http://localhost:4174",folder="docs/screensh
       await undo();
       // MISS-A-02, MISS-A-03 / CORE-24, CORE-50: advice includes group medians/share and never applies itself.
       await load(["id","amount","channel","hold","event_date"],numericRows,"ai-fix-contract.csv");
-      await page.locator("#missingAddLock").selectOption("channel");await choose("median");
+      await fillGroup("channel");await choose("median");
       await page.locator("#reviewAskAi").click();await page.locator("#reviewAiInstruction").fill("Fill with 0; blank means no recorded charge.");await page.locator("#reviewSuggestAi").click();
       await page.locator('[data-fix="ai:constant"]').waitFor();assert.equal(await page.evaluate(()=>metrics().changedCells),0);
       assert.ok(await page.locator('[data-ui="review.fix.option"]').count()<=4);

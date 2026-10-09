@@ -115,6 +115,7 @@ var ReviewCore = (() => {
   function fixHtml(issue) { // CORE-18, CORE-21, CORE-22, CORE-23, CORE-24, CORE-26, CORE-27, CORE-28
     const session=data(issue),option=choice(issue),preview=session.preview;
     return `<button class="review-reminder" data-ui="review.fix.reminder" id="reviewReminder">${escapeHtml(moduleFor(issue).reminder(issue,session))}</button>${session.updated?`<p class="review-update" role="status">${escapeHtml(session.updated)}</p>`:""}${optionsHtml(issue)}
+      ${moduleFor(issue).renderFixSetup?.(issue,session)||""}
       ${session.askOpen?`<div class="review-ai-box"><label>Your instruction<input id="reviewAiInstruction" maxlength="300" value="${escapeHtml(session.instruction || "")}" placeholder="Describe the fix you need"></label><button class="secondary" id="reviewSuggestAi">Suggest a fix</button>${aiStatus(issue)}</div>`:""}
       ${preview?consequence(issue,preview,option):`<p role="status" class="review-empty-copy">${session.pending?'<span class="review-spinner" aria-hidden="true"></span>Checking this fix…':escapeHtml(session.error || "Choose a fix to compute its effect.")}</p>`}
       ${preview?`<section data-ui="review.fix.preview" class="review-preview">${moduleFor(issue).renderPreview(issue,session,preview,option)}</section>`:""}

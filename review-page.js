@@ -14,6 +14,17 @@ function renderReviewPage() {
   $("#reviewTypeFilter").onchange=event=>{state.reviewKind=event.target.value;renderPreservingReviewFocus();};$("#reviewColumnSearch").oninput=event=>{state.reviewSearch=event.target.value;renderPreservingReviewFocus();};
   document.querySelectorAll("[data-review-issue]").forEach(button=>button.onclick=()=>ReviewCore.select(Number(button.dataset.reviewIssue)));
   document.querySelectorAll("[data-queue-show-all]").forEach(button=>button.onclick=()=>{state.reviewQueueExpanded[button.dataset.queueShowAll]=true;renderPreservingReviewFocus();});
+  // CORE-20: on narrow screens, issue browsing is available without pushing the active task below a second dashboard.
+  const panel=document.querySelector(".review-issues");
+  if(panel){
+    const disclosure=document.createElement("details"),content=document.createElement("div");disclosure.className="review-queue-disclosure";content.className="review-queue-content";
+    disclosure.innerHTML=`<summary>Browse issues <span>${open.length} open</span></summary>`;disclosure.open=innerWidth>900||Boolean(state.reviewQueueOpen);
+    content.append(panel.querySelector(".review-issues-filter"),panel.querySelector(".review-issue-list"));disclosure.append(content);panel.append(disclosure);
+    disclosure.addEventListener("toggle",()=>{if(disclosure.isConnected&&innerWidth<=900)state.reviewQueueOpen=disclosure.open;});
+  }
+  // CORE-27, CORE-37: actions have their own layout space; evidence scrolls without hiding or covering Apply/Undo.
+  const task=document.querySelector(".review-main"),footer=task?.querySelector(".review-fix-footer,.review-review-footer");
+  if(footer)task.append(footer);
   if(selected)ReviewCore.bindShared(selected);
 }
 function reviewIssueHtml(issue) { // CORE-14, CORE-15, CORE-16, CORE-20, CORE-49, CORE-61, CORE-62
