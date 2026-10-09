@@ -261,3 +261,44 @@
   .outlier-mini-hist svg { max-height: none !important; }
   .outlier-scatter text { font-size: 12px; }
 }
+
+/* CORE-11, CORE-25, CORE-31, CORE-35, CORE-57: analytical trust before decorative density. */
+.priority-add { position: relative; flex-shrink: 0; }
+.priority-add > summary { display: grid; place-items: center; width: 40px; height: 40px; color: var(--panel); background: var(--blue); border-radius: 6px; cursor: pointer; list-style: none; }
+.priority-add > summary::-webkit-details-marker { display: none; }
+.priority-add > summary:hover { background: var(--blue-hover); }
+.priority-picker { position: absolute; inset-block-start: calc(100% + 8px); inset-inline-start: 0; z-index: 8; width: 250px; max-width: calc(100vw - 56px); padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 20px #182b4314; }
+.priority-picker label { display: grid; gap: 8px; font-size: 13px; }
+.priority-picker select { width: 100%; }
+.review-method-help, .review-tab-help { font-size: 13px; color: var(--muted); margin: 0; }
+.review-method-help .text-button { font-size: inherit; }
+.review-fix-footer { flex-wrap: wrap; gap: 8px 16px; }
+.review-apply-reason { flex-basis: 100%; font-size: 13px; color: var(--muted); margin: 0; }
+.review-apply-reason[hidden] { display: none; }
+.review-impact-setting { margin-top: 10px; font-size: 13px; color: var(--muted); }
+.review-impact-setting summary { cursor: pointer; padding: 6px 0; }
+.review-impact-setting label { display: grid; gap: 6px; max-width: 360px; margin: 8px 0; }
+.review-impact-setting > p { font-size: 12px; }
+.review-outcome { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; }
+.review-outcome p { font-weight: 600; }
+.review-primary-metrics { border-bottom: 0; padding-bottom: 8px; }
+.review-primary-metrics b { font-size: 21px; }
+.review-decision-details { font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.review-decision-details summary { cursor: pointer; padding: 6px 0; }
+.review-decision-details .review-metric-strip { border: 0; margin-top: 12px; padding-bottom: 0; }
+dialog.review-row-panel { margin: 0 0 0 auto; height: 100dvh; max-height: 100dvh; max-width: none; border: 0; border-inline-start: 1px solid var(--line); border-radius: 0; box-sizing: border-box; }
+dialog.review-row-panel::backdrop { background: #182b432e; }
+.review-chart-edges { font-size: 12px !important; }
+.review-issue-header > div { min-width: 0; flex: 1; }
+.review-issue-header > .text-button { flex-shrink: 0; white-space: nowrap; }
+.review-tab-content > .review-table-scroll { flex-shrink: 0; }
+@media (max-width:620px) {
+  .priority-add > summary { width: 44px; height: 44px; }
+  .priority-picker { inset-inline-start: auto; inset-inline-end: 0; }
+  .review-tabs { gap: 8px; }
+  .review-tabs > button { min-width: 64px; min-height: 44px; padding: 10px 8px; }
+  .review-fix-choice, .review-more select, .review-fix-footer button, .review-review-footer button, #reviewCloseRows { min-height: 44px; }
+  .review-fix-footer .text-button, .review-review-footer .text-button { padding: 10px 4px; }
+  .review-method-help .text-button, .review-impact-setting summary, .review-decision-details summary { min-height: 44px; padding-block: 10px; box-sizing: border-box; }
+  .review-page .priority-picker select, .review-page .review-impact-setting select { font-size: 16px; min-height: 44px; }
+}

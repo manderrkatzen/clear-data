@@ -41,10 +41,9 @@ ReviewModules.sensitive = (() => {
     return `${ReviewCore.metricStrip([{label:"Cells changed",value:decision.patches.length},{label:"Rows removed",value:0},{label:"Columns added / removed",value:`0 / ${decision.structure.removedColumns.length}`},{label:"Columns removed",value:decision.structure.removedColumns.length},{label:decision.treatment.operation === "hash" ? "Values hashed" : "Values masked",value:decision.patches.length}])}${samples(issue,decision.patches,groups(decision.reviewImpact.beforeRows,issue.column).flatMap(group=>group.rows))}`;
   }
   function showRows(issue) {
-    const session = ReviewCore.data(issue), panel = document.createElement("aside");
-    document.querySelector(".review-row-panel")?.remove(); panel.className = "review-row-panel";
+    const session = ReviewCore.data(issue), panel = document.createElement("dialog");
     panel.innerHTML = `<header><h2>Affected sensitive rows</h2><button class="secondary" id="reviewCloseRows">Close</button></header><p>Examples stay masked here. The source snapshot remains local.</p>${samples(issue,session.preview.patches,lockedRows(issue,session))}`;
-    document.body.append(panel); document.getElementById("reviewCloseRows").onclick = () => panel.remove(); panel.onkeydown = event => { if (event.key === "Escape") panel.remove(); }; document.getElementById("reviewCloseRows").focus();
+    ReviewCore.openRowsPanel(panel);
   }
   function bind(issue, session) {
     document.querySelectorAll("[data-sensitive-type]").forEach(input => input.onchange = () => { const before = lockedRows(issue,session).length; session.locked = input.checked ? session.locked.concat(input.dataset.sensitiveType) : session.locked.filter(type => type !== input.dataset.sensitiveType); ReviewCore.lockChanged(issue,before); renderPreservingReviewFocus(); });

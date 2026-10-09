@@ -20,8 +20,12 @@ const folder = "docs/screenshots/review-spec/05-labels";
       assert.equal(await page.locator('[data-ui="review.explore.labels.cluster"]').count(), 2);
       assert.ok(await page.locator("[data-label-cluster]").first().isChecked());
       assert.equal(await page.evaluate(() => state.issues.filter(issue => issue.column === "rep" && issue.reviewType === "category-variants").length), 0);
+      await page.waitForFunction(()=>ReviewCore.data(ReviewCore.current()).aiUnavailableByConfig===true);
+      await page.evaluate(async()=>{await document.fonts.ready;});
       await page.screenshot({ path: `${folder}/explore-${width}.png`, fullPage: true });
-      await page.locator('[data-label-variant="e-mail"]').dragTo(page.locator("#labelsNotSame"));
+      // The mobile drop area can straddle the viewport edge; exercise a visible part of the actual target.
+      await page.locator("#labelsNotSame").scrollIntoViewIfNeeded();
+      await page.locator('[data-label-variant="e-mail"]').dragTo(page.locator("#labelsNotSame"),{targetPosition:{x:80,y:10}});
       assert.equal(await page.locator('[data-label-variant="e-mail"]').count(), 0);
       await page.locator("#reviewTab-fix").click();
       await page.waitForFunction(() => !ReviewCore.data(ReviewCore.current()).pending && Boolean(ReviewCore.data(ReviewCore.current()).preview));

@@ -241,9 +241,11 @@ const results = [];
       });
       await check("review: recorded missing comparison is frozen after a later treatment",["CORE-47","MISS-R-01","MISS-R-02"],async()=>{
         await fixture("missing","amount");await choose("median");await page.locator("#reviewApply").click();
+        await page.locator('.review-decision-details > summary').click();
         const oldMetrics=await page.locator('[data-ui="review.review.metrics"]').innerText();
         await page.evaluate(()=>ReviewCore.select(state.issues.find(issue=>issue.reviewType==="outlier"&&issue.column==="amount").id));await choose("cap");await page.locator("#reviewApply").click();
         await page.evaluate(()=>ReviewCore.select(state.issues.find(issue=>issue.reviewType==="missing"&&issue.column==="amount").id,"review"));
+        await page.locator('.review-decision-details > summary').click();
         assert.equal(await page.locator('[data-ui="review.review.metrics"]').innerText(),oldMetrics,"Later cap cannot rewrite the recorded fill statistics");
         await page.locator("#reviewUndo").click();
         assert.ok(await page.evaluate(()=>state.rows[98].amount!=="10000"),"Undo older fill preserves later cap");

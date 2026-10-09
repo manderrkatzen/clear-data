@@ -19,9 +19,10 @@ const base=process.env.BASE_URL||"http://localhost:4174",folder=process.env.ARTI
     const ready=()=>page.waitForFunction(()=>!ReviewCore.data(ReviewCore.current()).pending&&Boolean(ReviewCore.data(ReviewCore.current()).preview));
     assert.equal(await page.locator('[data-ui="review.explore.missing.sheet"] table').count(),1);
     assert.deepEqual(await ids(),sourceIds.slice(0,50));
-    await page.locator("#missingAddOrder").selectOption("distance_to_store");
+    const addOrder=async column=>{await page.locator("#missingOrderAdd").click();await page.locator("#missingAddOrder").selectOption(column);};
+    await addOrder("distance_to_store");
     await page.locator('[data-order-direction="0"]').click();
-    await page.locator("#missingAddOrder").selectOption("store_type");
+    await addOrder("store_type");
     const expected=[...rows].sort((a,b)=>Number(b.distance_to_store)-Number(a.distance_to_store)||a.store_type.localeCompare(b.store_type)||a._row-b._row).map(row=>row._row);
     assert.deepEqual(await ids(),expected.slice(0,50));
     assert.deepEqual((await headings()).slice(0,4),["Row","amount","distance_to_store","store_type"]);
@@ -67,7 +68,7 @@ const base=process.env.BASE_URL||"http://localhost:4174",folder=process.env.ARTI
     assert.deepEqual(await page.evaluate(()=>({order:ReviewCore.data(ReviewCore.current()).tableOrder,columns:ReviewCore.data(ReviewCore.current()).tableColumns})),prefs);
     const corrupt=await page.evaluate(()=>{const before=csvText(),saved=serializeProject();saved.reviewPage[issueKey(ReviewCore.current())].tableOrder=[{column:"fabricated",direction:"desc"}];let rejected=false;try{restoreProject(saved);}catch{rejected=true;}return {rejected,unchanged:csvText()===before};});assert.deepEqual(corrupt,{rejected:true,unchanged:true});
     await page.locator("#missingResetOrder").click();assert.deepEqual(await ids(),sourceIds.slice(0,50));
-    await page.locator("#missingAddOrder").selectOption("event_date");
+    await addOrder("event_date");
     assert.deepEqual(await ids(),[...rows].sort((a,b)=>Date.parse(a.event_date)-Date.parse(b.event_date)||a._row-b._row).slice(0,50).map(row=>row._row));
     for(const size of [1280,900,600,width]){await page.setViewportSize({width:size,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`No page overflow at ${size}`);}
     await page.setViewportSize({width,height:900});
