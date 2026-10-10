@@ -4,7 +4,7 @@ function renderPreservingReviewFocus() {
   const start = active?.selectionStart, end = active?.selectionEnd;
   const queue = document.querySelector(".review-issue-list"), top = queue?.scrollTop, left = queue?.scrollLeft;
   render();
-  const replacement = id && document.getElementById(id);
+  const replacement = active?.isConnected ? active : id && document.getElementById(id);
   replacement?.focus?.({ preventScroll: true });
   if (typeof start === "number" && replacement?.setSelectionRange && ["text", "search", "textarea"].includes(replacement.type)) replacement.setSelectionRange(start, end);
   const nextQueue = document.querySelector(".review-issue-list");
