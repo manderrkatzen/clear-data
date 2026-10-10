@@ -26,7 +26,8 @@ The analyst remains in control: detected issues can be finalized, marked valid, 
 ### Try a bundled sample
 
 Choose **Try a sample dataset** and select **Healthcare patient visits**, **Sales orders**,
-or **Marketing campaigns**. Each sample contains 1,000 records. In Explore, select a
+**Marketing campaigns**, or **UI test sheet**. The first three samples contain 1,000 records;
+UI test sheet contains 306 records and exercises a broad range of review findings. In Explore, select a
 type-specific rail marker or highlighted cell to inspect its value and evidence.
 Off-screen findings are counted separately by issue type at each edge of the rail.
 For missing numerical values, review mean, median, or leaving the value missing in
@@ -63,7 +64,7 @@ These Playwright captures use synthetic data and a mocked AI interpretation;
 Blank cells are review findings, not automatic errors: fields such as an open
 opportunity's actual close date can legitimately be empty.
 
-- Local CSV upload plus healthcare, sales, and marketing sample datasets.
+- Local CSV upload plus healthcare, sales, marketing, and UI test sample datasets.
 - Spreadsheet-style inspection with highlighted issue cells.
 - Deterministic checks for missing values, category variants, format conflicts, cross-column rules, and numerical outliers.
 - Bounded AI requests for alternative remediation proposals.

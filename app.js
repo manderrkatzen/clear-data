@@ -364,6 +364,7 @@ function loadSample(name) {
     ["healthcare_patient_visits.csv", "Healthcare patient visits", "Patient visits, clinical measurements, and readmissions"],
     ["sales_orders.csv", "Sales orders", "Orders, pricing, profitability, and delivery metrics"],
     ["marketing_campaigns.csv", "Marketing campaigns", "Campaign spend, conversions, and performance metrics"],
+    ["ui_test_sheet.csv", "UI test sheet", "A compact dataset covering missingness, formats, duplicates, labels, and other review findings"],
   ];
   if (name) {
     fetch(new URL(name, window.location.origin), { cache: "no-store" }).then((response) => {
