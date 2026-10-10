@@ -81,6 +81,20 @@
 .rc-ai:empty { display:none; }
 .rc-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:12px; font-size:14px; color:var(--rv-ink-2); }
 .rc-toolbar > label { display:flex; align-items:center; gap:8px; }
+/* LAY-22…26: keep rule drafts visually separate from the applied evidence below. */
+.rc-rule-editor { padding-bottom:16px; border-bottom:1px solid var(--rv-line); }
+.rc-rule-fields,.rc-rule-parameters { display:flex; flex-wrap:wrap; align-items:end; gap:12px 20px; min-width:0; }
+.rc-rule-fields label { display:grid; gap:6px; font-size:14px; color:var(--rv-ink-2); }
+.rc-rule-fields input[type=number] { width:100px; min-height:40px; }
+.rc-rule-fields select { min-height:40px; }
+.rc-rule-slider { flex:1; min-width:160px; }
+.rc-rule-slider input { width:100%; min-height:40px; margin:0; }
+.rc-rule-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px 20px; margin-top:16px; }
+.rc-rule-actions > p { flex-basis:100%; max-width:70ch; color:var(--rv-ink-2); font-size:14px; }
+.rc-rule-actions .rc-secondary-button { border:1px solid var(--rv-accent); border-radius:6px; background:var(--rv-surface); color:var(--rv-accent); padding:8px 14px; min-height:44px; font-size:14px; font-weight:600; }
+.rc-rule-actions .rc-secondary-button:hover { background:var(--rv-accent-soft); }
+.rc-rule-actions .text-button { min-height:44px; }
+.rc-rule-actions [hidden] { display:none; }
 .rc-chip { display:inline-flex; align-items:center; flex-wrap:wrap; gap:8px; padding:4px 12px; border:1px solid var(--rv-line); border-radius:24px; background:var(--rv-surface); }
 .rc-headline { padding:10px 16px; background:var(--rv-neutral); border-radius:8px; font-size:14px; margin-bottom:12px !important; }
 .rc-table-scroll { overflow:auto; max-height:320px; }

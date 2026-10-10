@@ -1,12 +1,12 @@
 // LAY-01…08, LAY-30…32: shared content-driven templates; issue modules provide values, never their own page layout.
 var ReviewComponents = (() => {
-  const wording={locked:"selected",scope:"selection",treatment:"fix",candidate:"value",representation:"value",finding:"issue",semantic:"meaning",provenance:"source",attributed:"credited"};
-  const plain=value=>String(value??"").replace(/\b(locked|scope|treatment|candidate|representation|finding|semantic|provenance|attributed)(s)?\b/gi,(_,word,plural)=>(wording[word.toLowerCase()]||word)+(plural||""));
+  // UI copy is authored explicitly; never rename dataset fields or user notes through a word-replacement filter.
+  const plain=value=>String(value??"");
   const text=value=>escapeHtml(plain(value));
   const attrs=values=>Object.entries(values||{}).map(([key,value])=>` ${key}="${escapeHtml(value)}"`).join("");
   const noun=()=>/healthcare|patient|visit/i.test(state.fileName)?"patients":/marketing|campaign/i.test(state.fileName)?"campaigns":/sales|order/i.test(state.fileName)?"orders":"entries";
   const count=(n,unit=noun())=>`${Number(n).toLocaleString()} ${unit}`;
-  const short=value=>plain(value).split(/\s+/).slice(0,25).join(" ");
+  const short=value=>plain(value);
   // C1 / LAY-02, LAY-18, LAY-50: one truthful question, decision or outcome.
   function lead(title,sub=""){const line=text(sub).replace(/\$[\d,.]+|\b\d[\d,.]*%?/,value=>`<b>${value}</b>`);return `<div class="rc-lead" data-ui="review.lead"><p>${text(title)}</p>${sub?`<div>${line}</div>`:""}</div>`;}
   // C2: one deterministic takeaway, never a fabricated interpretation or cutoff.
@@ -55,6 +55,9 @@ var ReviewComponents = (() => {
     if(option.key.startsWith("ai:"))return short(session.aiFixProposal?.reason||"Suggested for your review; no values change until you approve.");
     if(session.fix===option.key&&preview){const effect=ReviewCore.moduleFor(issue).consequence(issue,session,preview,option),figures=(effect.figures||[]).slice(0,2).map(figure=>`${figure.label}: ${figure.before} → ${figure.after}`).join("; ");return short(effect.effect||figures||effect.sentence);}
     const n=ReviewCore.exploreScope(issue).length,key=option.key,unit=noun();
+    if(issue.reviewType==="category-variants"&&["case-lower","case-title","case-upper","trim"].includes(key))return "Formats every nonblank label in the column; matching names may merge beyond the selected groups.";
+    if(key==="drop-column")return "Removes this column and its values from the working file; review dependent rules before approving.";
+    if(issue.reviewType?.startsWith("duplicate")&&key!=="keep-all")return "Keeps the chosen copy in each selected group and removes the others; entry counts and totals change.";
     if(key==="constant")return `${count(n,unit)} will appear as “${session.value||"Unknown"}” in ${issue.column} reports.`;
     if(["keep","keep-all","keep-as-text","leave"].includes(key))return `${count(n,unit)} stay unchanged in your reports.`;
     if(key.includes("drop")||key.startsWith("keep-")&&key!=="keep-first"&&issue.reviewType?.startsWith("duplicate"))return `Changes which ${unit} remain in your reports; review the exact totals before approving.`;
@@ -74,7 +77,13 @@ var ReviewComponents = (() => {
   // C8 / LAY-06, LAY-54: one counted action, with its own reserved layout space.
   function footer({summary="",links="",label,id="",action=""}={}){return `<footer class="rc-footer" data-ui="review.footer"><div><span>${summary?text(summary):links}</span><button class="primary" id="${id}" data-layout-action="${action}">${text(label)}</button></div></footer>`;}
   function section(title,content,slot){return content?`<section class="rc-section" data-review-section="${slot}">${title?`<h2>${text(title)}</h2>`:""}${content}</section>`:"";}
-  function explore(issue,content){const n=ReviewCore.exploreScope(issue).length;return `${lead(content.lead,content.sub)}${section(content.selectionTitle||"What needs attention",content.selection,"selection")}${section(content.evidenceTitle||"Where and why",content.evidence,"evidence")}${footer({summary:`${count(n)} selected${content.grouping?` · ${content.grouping}`:""}`,label:`Choose a fix for ${count(n)}`,id:"reviewChooseFix",action:"fix"})}`;}
+  function explore(issue,content){
+    const n=ReviewCore.exploreScope(issue).length;
+    const controls=section(content.controlsTitle||"Define the check",content.controls,"controls");
+    const selection=section(content.selectionTitle||"Review the values",content.selection,"selection");
+    const evidence=section(content.evidenceTitle||"Inspect the context",content.evidence,"evidence");
+    return `${lead(content.lead,content.sub)}${controls}${content.evidenceFirst?evidence+selection:selection+evidence}${footer({summary:`${count(n)} selected${content.grouping?` · ${content.grouping}`:""}`,label:`Choose a fix for ${count(n)}`,id:"reviewChooseFix",action:"fix"})}`;
+  }
   function actionLabel(issue,option,preview){const key=option.key.replace(/^ai:/,""),n=preview?.selectedIds.length??ReviewCore.exploreScope(issue).length;
     if(key==="drop-column")return `Remove 1 column`;
     if(key==="constant"&&!ReviewCore.numericType(issue.column))return `Label ${count(n)} “${ReviewCore.data(issue).value||"Unknown"}”`;

@@ -55,6 +55,7 @@ var ReviewCore = (() => {
   }
   function switchTab(issue,tab) { // CORE-16, CORE-17, CORE-18
     const session=data(issue),decision=state.changes.find(change=>change.issue.id===issue.id);
+    if(tab==="fix"&&kind(issue)==="outlier"&&session.ruleDirty){notify("Update results or cancel the rule changes before choosing a fix.");document.getElementById("outlierApplyRule")?.focus();return;}
     if(tab==="fix"&&!exploreScope(issue).length){notify("Select at least one value in Explore first.");return;}
     if(tab==="review"&&!decision){notify("Choose a fix and approve its preview before reviewing changes.");return;}
     session.tab=tab;
@@ -67,7 +68,7 @@ var ReviewCore = (() => {
   }
   function lockChanged(issue,before) {
     const session=data(issue),delta=affected(issue).length-before;session.generation++;session.pending=false;session.preview=null;
-    session.pendingUpdate=`Updated: ${Math.abs(delta)} ${delta>=0?"more":"fewer"} ${moduleFor(issue).unit || "cells"} locked`;
+    session.pendingUpdate=`Updated: ${Math.abs(delta)} ${delta>=0?"more":"fewer"} ${moduleFor(issue).unit || "cells"} selected`;
     if(session.tab==="fix")showScopeUpdate(issue);
   }
   async function compute(issue) {
@@ -100,6 +101,7 @@ var ReviewCore = (() => {
     session.tab="review"; session.changeId=change.id; state.selectedIssue=issue.id; render();
   }
   function accept(issue,extra = {}) { // CORE-15: no change, next issue, reversible acceptance.
+    if(kind(issue)==="outlier"&&data(issue).ruleDirty){notify("Update results or cancel the rule changes before accepting these values.");return switchTab(issue,"explore");}
     // SENS-F-02: header acceptance must use the same required-note path as Keep.
     if (kind(issue) === "sensitive") { const session=data(issue);if(!affected(issue).length)session.locked=null;session.fix="keep";session.noteOpen=true;return switchTab(issue,"fix"); }
     const session = data(issue), draft = reviewDraft(issue); Object.assign(draft,{operation:"retain",interpretation:"legitimate",lockedMissing:false,scope:{mode:"selected",rowIds:reviewRows(issue).map(row=>row._row)},note:session.note,...extra}); draft.previewFingerprint=guidedFingerprint(issue,draft); const change=approveGuidedDecision(issue); if (!change) return; change.reviewSpec={fix:"keep",label:extra.repeatableColumn ? "Repeats allowed" : "Accepted without changes",risk:"Doesn't change values",metric:metricColumn()}; change.snapshot.reviewSpec={...change.reviewSpec}; session.tab="review"; const next=state.issues.find(item=>item.status === "open" && item.id !== issue.id); if (next) select(next.id); else select(issue.id,"review"); }
@@ -167,7 +169,7 @@ var ReviewCore = (() => {
   function updateApplyButton(issue) { // CORE-27, CORE-28, CORE-57, SENS-F-02: one gate, with a specific reason.
     const session=data(issue), preview=session.preview, option=choice(issue), button=document.getElementById("reviewApply");
     if (!button) return;
-    const reason=issue.status!=="open" ? "This issue is already reviewed; Undo its decision first" : session.error ? session.error : session.pending || !preview ? "Wait for a complete preview" : !preview.selectedIds.length ? "Lock at least one item in Explore" : option.requiresNote && !session.note.trim() ? "Add a note explaining why these values can be kept" : preview.blocked.length===preview.selectedIds.length ? "Every selected row is blocked; choose another fix" : preview.blocked.length && !session.skipBlocked ? "Review blocked rows and explicitly choose Apply to the rest" : preview.constraints.length && !session.acknowledgeConstraints ? "Acknowledge the new rule violations" : reviewDraft(issue).requiresConflictAcknowledgement && !session.acknowledgeConflicts ? "Acknowledge the differing duplicate cells and survivor policy" : "";
+    const reason=issue.status!=="open" ? "This issue is already reviewed; Undo its decision first" : session.ruleDirty ? "Update results or cancel the rule changes in Explore first" : session.error ? session.error : session.pending || !preview ? "Wait for a complete preview" : !preview.selectedIds.length ? "Select at least one value in Explore" : option.requiresNote && !session.note.trim() ? "Add a note explaining why these values can be kept" : preview.blocked.length===preview.selectedIds.length ? "Every selected row is blocked; choose another fix" : preview.blocked.length && !session.skipBlocked ? "Review blocked rows and explicitly choose Apply to the rest" : preview.constraints.length && !session.acknowledgeConstraints ? "Acknowledge the new rule violations" : reviewDraft(issue).requiresConflictAcknowledgement && !session.acknowledgeConflicts ? "Acknowledge the differing duplicate cells and the copies to keep" : "";
     button.disabled=false;button.dataset.gateReason=ReviewComponents.plain(reason);button.title=ReviewComponents.plain(reason);
     const explanation=document.getElementById("reviewApplyReason");if(explanation){explanation.textContent=reason;explanation.hidden=!reason;button.setAttribute("aria-describedby","reviewApplyReason");}
   }
