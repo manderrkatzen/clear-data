@@ -126,6 +126,10 @@
 .rc-option-parameters > label { display:inline-flex; gap:8px; align-items:center; }
 .rc-option-parameters input[type=number],.rc-option-parameters input[type=text] { width:120px; }
 .rc-options > .rc-more { border-top:1px solid var(--rv-line-2); padding-inline-start:60px; }
+.rc-ai-fix { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px 16px; padding:16px; border-top:1px solid var(--rv-line); color:var(--rv-ink-2); font-size:14px; }
+.rc-ai-fix > label,.rc-ai-fix > .review-ai-status { grid-column:1/-1; }
+.rc-ai-fix > input { width:100%; min-height:44px; }
+.rc-ai-fix > .text-button { min-height:44px; }
 .rc-risk { align-self:start; white-space:nowrap; border-radius:24px; padding:2px 8px; font-size:12px; font-weight:600; }
 .rc-risk.neutral,.rc-risk.structure { color:var(--rv-ink-2); background:var(--rv-neutral); }
 .rc-risk.safe { color:var(--rv-ok); background:var(--rv-ok-soft); }
