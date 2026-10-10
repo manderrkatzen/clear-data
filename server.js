@@ -13,6 +13,7 @@ for (const asset of ["capabilities-engine.js", "capabilities.js", "review-page.j
 for (const asset of ["review-core.js", "review-charts.js", "issues/missing.js", "issues/outliers.js", "issues/duplicates.js", "issues/format.js", "issues/labels.js", "issues/whitespace.js", "issues/invalid.js", "issues/cross-column.js", "issues/constant.js", "issues/leading-zeros.js"]) assets.add(asset);
 assets.add("issues/multi-value.js");
 assets.add("issues/sensitive.js");
+assets.add("review-components.js");
 
 async function sendWebResponse(response, result) {
   response.writeHead(result.status, Object.fromEntries(result.headers));

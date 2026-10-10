@@ -326,6 +326,8 @@ function serializeProject(name = state.projectName || state.fileName) {
     outlierDrafts: cloneReview(state.outlierDrafts), issueFilters: cloneReview(state.issueFilters), decisionNotes: cloneReview(state.decisionNotes || {}),
     datasetPurpose: state.datasetPurpose || "",
     primaryReviewMetric: state.primaryReviewMetric || "",
+    reviewApplyRows: Object.fromEntries(Object.entries(state.reviewPage||{}).filter(([,prefs])=>Array.isArray(prefs.applyRowIds)).map(([key,prefs])=>[key,[...prefs.applyRowIds]])),
+    reviewContextColumns: Object.fromEntries(Object.entries(state.reviewPage||{}).filter(([,prefs])=>Array.isArray(prefs.chosenContextColumns)).map(([key,prefs])=>[key,[...prefs.chosenContextColumns]])),
     reviewPage: Object.fromEntries(Object.entries(state.reviewPage || {}).map(([key,data]) => [key,{locked:data.locked,unlocked:data.unlocked,locks:data.locks,banding:data.banding,showAll:data.showAll,sheetOpen:data.sheetOpen,aiClusters:data.aiClusters || [],whitespaceInitialized:Boolean(data.whitespaceInitialized),fix:data.fix,note:data.note,value:data.value,valueInitialized:data.valueInitialized,knnColumns:data.knnColumns,knnK:data.knnK,orderColumn:data.orderColumn,separator:data.separator,targetLength:data.targetLength,tolerance:data.tolerance,range:data.range,canonical:data.canonical,mapping:data.mapping,memberOverrides:data.memberOverrides,detached:data.detached,blankMeansValue:data.blankMeansValue,uniqueConfirmed:data.uniqueConfirmed,survivors:data.survivors,groupIndex:data.groupIndex,visitedGroups:data.visitedGroups,keepRule:data.keepRule,partialChoices:data.partialChoices,target:data.target,targetFormat:data.targetFormat,sourceDate:data.sourceDate,percent:data.percent,keepTime:data.keepTime,factor:data.factor,capLow:data.capLow,capHigh:data.capHigh,x:data.x,logY:data.logY,tableOrder:data.tableOrder,tableColumns:data.tableColumns,tableLimit:data.tableLimit}])),
     view: { screen: state.screen, query: state.query, flaggedOnly: state.flaggedOnly, selectedIssue: state.selectedIssue, selectedRecord: state.selectedRecord, selectedFix: state.selectedFix }, revision: state.datasetRevision,
   };
@@ -369,6 +371,8 @@ function validateProject(data) {
     issueIds.add(item.id);
   });
   const changeIds = new Set();
+  for(const [key,rowIds] of Object.entries(data.reviewApplyRows||{}))if(!data.issues.some(issue=>issueKey(issue)===key)||!Array.isArray(rowIds)||new Set(rowIds).size!==rowIds.length||rowIds.some(id=>!ids.has(id)))throw new Error("Invalid saved apply-to selection.");
+  for(const [key,columns] of Object.entries(data.reviewContextColumns||{}))if(!data.issues.some(issue=>issueKey(issue)===key)||!Array.isArray(columns)||new Set(columns).size!==columns.length||columns.some(column=>!allHeaders.includes(column)))throw new Error("Invalid saved context columns.");
   if (data.primaryReviewMetric && data.primaryReviewMetric !== "__rows__" && !allHeaders.includes(data.primaryReviewMetric)) throw new Error("Invalid Review primary metric.");
   for (const [key,prefs] of Object.entries(data.reviewPage || {})) {
     if (!data.issues.some(item => issueKey(item) === key) || !prefs || prefs.locked !== null && (!Array.isArray(prefs.locked) || prefs.locked.some(v => typeof v !== "string")) || !Array.isArray(prefs.locks) || prefs.locks.length > 3 || new Set(prefs.locks).size !== prefs.locks.length || prefs.locks.some(c => !allHeaders.includes(c)) || !Array.isArray(prefs.unlocked) || prefs.unlocked.some(id => !ids.has(id))) throw new Error("Invalid saved Explore locks.");
@@ -466,6 +470,8 @@ function restoreProject(input) {
   state.reviewPage = {};
   resetGuidedReview();
   if (typeof ReviewCore !== "undefined") for (const item of state.issues) { const prefs = data.reviewPage?.[issueKey(item)]; if (prefs) Object.assign(ReviewCore.data(item),prefs,{locks:prefs.locks.filter(column => state.headers.includes(column))}); }
+  if(typeof ReviewCore!=="undefined")for(const item of state.issues){const rowIds=data.reviewApplyRows?.[issueKey(item)];if(rowIds)ReviewCore.data(item).applyRowIds=[...rowIds];}
+  if(typeof ReviewCore!=="undefined")for(const item of state.issues){const columns=data.reviewContextColumns?.[issueKey(item)];if(columns)ReviewCore.data(item).chosenContextColumns=[...columns];}
   state.primaryReviewMetric = data.primaryReviewMetric || "";
   state.datasetPurpose = typeof data.datasetPurpose === "string" ? data.datasetPurpose.slice(0, 1000) : "";
   refreshIssues();

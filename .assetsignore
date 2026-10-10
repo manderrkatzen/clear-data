@@ -19,6 +19,7 @@
 !review-page.js
 !review-page-engine.js
 !review-core.js
+!review-components.js
 !review-charts.js
 !issues/
 !issues/*.js
