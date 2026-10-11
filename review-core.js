@@ -60,7 +60,7 @@ var ReviewCore = (() => {
     if(tab==="review"&&!decision){notify("Choose a fix and approve its preview before reviewing changes.");return;}
     session.tab=tab;
     if(tab==="fix") {
-      const options=optionList(issue);if(!options.some(option=>option.key===session.fix))session.fix=options[0]?.key || "";
+      const options=optionList(issue);if(!options.some(option=>option.key===session.fix))session.fix=ReviewComponents.preferred(issue,options)[0]?.key || options[0]?.key || "";
       showScopeUpdate(issue);
       if(!session.preview || session.preview.fingerprint!==guidedFingerprint(issue,reviewDraft(issue)))return compute(issue);
     }
@@ -88,6 +88,7 @@ var ReviewCore = (() => {
   }
   async function apply(issue) { // CORE-27, CORE-28: recheck fingerprint, no silent valid subset.
     const session = data(issue), draft = reviewDraft(issue), option = choice(issue);
+    if(issue.reviewType==="duplicate-values"&&!session.uniqueAnswerGiven)return notify("Choose whether these repeated values should be unique in Explore before applying a fix.");
     const targetRole=cleaningProfile().columns.find(profile=>profile.column===issue.column)?.role;
     const targetPolicy=structuredClone(columnPolicy(issue.column)),targetPrecision=precision(issue.column),moduleDetails=moduleFor(issue).decisionMetadata?.(issue,session,session.preview) || {};
     const gate=document.getElementById("reviewApply")?.dataset.gateReason;if(gate)return notify(gate);
@@ -170,9 +171,9 @@ var ReviewCore = (() => {
   function updateApplyButton(issue) { // CORE-27, CORE-28, CORE-57, SENS-F-02: one gate, with a specific reason.
     const session=data(issue), preview=session.preview, option=choice(issue), button=document.getElementById("reviewApply");
     if (!button) return;
-    const reason=issue.status!=="open" ? "This issue is already reviewed; Undo its decision first" : session.ruleDirty ? "Update results or cancel the rule changes in Explore first" : session.error ? session.error : session.pending || !preview ? "Wait for a complete preview" : !preview.selectedIds.length ? "Select at least one value in Explore" : option.requiresNote && !session.note.trim() ? "Add a note explaining why these values can be kept" : preview.blocked.length===preview.selectedIds.length ? "Every selected row is blocked; choose another fix" : preview.blocked.length && !session.skipBlocked ? "Review blocked rows and explicitly choose Apply to the rest" : preview.constraints.length && !session.acknowledgeConstraints ? "Acknowledge the new rule violations" : reviewDraft(issue).requiresConflictAcknowledgement && !session.acknowledgeConflicts ? "Acknowledge the differing duplicate cells and the copies to keep" : "";
-    button.disabled=false;button.dataset.gateReason=ReviewComponents.plain(reason);button.title=ReviewComponents.plain(reason);
-    const explanation=document.getElementById("reviewApplyReason");if(explanation){explanation.textContent=reason;explanation.hidden=!reason;button.setAttribute("aria-describedby","reviewApplyReason");}
+    const reason=issue.status!=="open" ? "This issue is already reviewed; Undo its decision first" : session.ruleDirty ? "Update results or cancel the rule changes in Explore first" : session.error ? session.error : session.pending || !preview ? "Wait for a complete preview" : !preview.selectedIds.length ? "Select at least one value in Explore" : issue.reviewType==="duplicate-values"&&!session.uniqueAnswerGiven ? "Choose whether repeated values should be unique in Explore before applying a fix" : option.requiresNote && !session.note.trim() ? "Add a note explaining why these values can be kept" : preview.blocked.length===preview.selectedIds.length ? "Every selected row is blocked; choose another fix" : preview.blocked.length && !session.skipBlocked ? "Review blocked rows and explicitly choose Apply to the rest" : preview.constraints.length && !session.acknowledgeConstraints ? "Acknowledge the new rule violations" : reviewDraft(issue).requiresConflictAcknowledgement && !session.acknowledgeConflicts ? "Acknowledge the differing duplicate cells and the copies to keep" : "";
+    button.disabled=Boolean(reason);button.dataset.gateReason=ReviewComponents.plain(reason);button.title=ReviewComponents.plain(reason);
+    const explanation=document.getElementById("reviewApplyReason");if(explanation){explanation.textContent=reason;explanation.hidden=!reason;if(reason)button.setAttribute("aria-describedby","reviewApplyReason");else button.removeAttribute("aria-describedby");}
   }
   let aiConfiguration;
   function checkAiConfiguration(issue) { // CORE-T-03: a configuration read does not trigger on-request interpretation.

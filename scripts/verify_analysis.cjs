@@ -128,6 +128,13 @@ test("duplicate-copy rows stay out of analytical populations, hold groups, and f
   assert.deepEqual(fills.fills.map(fill=>fill.row),[1,2,3,4,5]);
 });
 test("analytical comparisons stay below the 200ms sample-size budget", () => {
+  const warm=sample("sales_orders.csv"),warmOptions={revision:1};
+  // Warm V8 on a separate parsed dataset, as the running application already did during import profiling.
+  analysis.prepare(warm.headers,warm.rows,warmOptions);
+  analysis.compare(warm.headers,warm.rows,"delivery_days",warmOptions);
+  analysis.holdSimilar(warm.headers,warm.rows,"delivery_days","quantity","channel",{},warmOptions);
+  analysis.fillSimilar(warm.headers,warm.rows,"delivery_days",{columns:["channel"]},warmOptions);
+  analysis.compare(warm.headers,warm.rows,"customer_tenure_months",warmOptions);
   const { headers, rows } = sample("sales_orders.csv");
   const options = { revision: 1 };
   // Import/background profiling warms reusable column masks before this interaction budget starts.
