@@ -3,8 +3,9 @@ var ReviewPageEngine = ((CleaningEngine) => {
   const labels = { missing: "Missing values", "duplicate-rows": "Duplicate rows", "duplicate-values": "Repeated values", outlier: "Outliers", format: "Format mismatch", "type-mismatch": "Wrong type", "category-variants": "Inconsistent labels", whitespace: "Hidden spaces & characters", scale: "Mixed units / scale", invalid: "Impossible values", "cross-column": "Conflicting columns", constant: "Empty or constant column", "leading-zeros": "Lost leading zeros / IDs as numbers", "multi-value": "Multiple values in one cell", sensitive: "Sensitive data" };
   const extraOperations = ["mode", "groupMode", "previous", "next", "interpolate", "log", "dateFormat", "dateCap", "titlecase", "absolute", "rowValues", "swapDates", "trimEnds", "stripInvisible", "collapseSpaces", "removeHidden", "fixEncoding", "cleanCharacters", "dropColumn", "padZeros", "toText", "splitColumns", "splitRows", "splitFlags", "firstValue", "mask", "hash", "valueMap"];
   const text = value => String(value ?? "");
-  const nullToken = value => /^(null|n\/?a|none|nil|undefined|--?|\?|#n\/a)$/i.test(text(value).trim());
-  const normalized = value => text(value).normalize("NFKC").trim().toLowerCase().replace(/[\p{P}\s_]+/gu, "");
+  const missingTokens = new Set(["", "null", "none", "n/a", "#n/a", "-", "--", "?", "unknown", "missing", "#div/0!", "#value!", "#ref!", "#num!", "#null!"]);
+  const nullToken = value => missingTokens.has(text(value).trim().toLowerCase());
+  const normalized = value => fixEncoding(text(value).replace(/[\u200b-\u200d\u2060\ufeff]/g, "").replace(/\u00a0/g, " ").normalize("NFKC")).trim().toLowerCase().replace(/[\p{P}\s_]+/gu, "");
   function labelKey(value,column) {
     const key = normalized(value);
     if (key === "ny") return "newyork";
@@ -71,6 +72,10 @@ var ReviewPageEngine = ((CleaningEngine) => {
   function detect(headers, rows, profile, existing, classifications = [], repeatableColumns = [], configuredRanges = {}, dateFormats = {}) {
     const findings = [];
     const byId = new Map(rows.map(row => [row._row,row]));
+    const duplicateGroups = new Map();
+    rows.forEach(row => { const key = JSON.stringify(headers.map(column => row[column])); if (!duplicateGroups.has(key)) duplicateGroups.set(key, []); duplicateGroups.get(key).push(row); });
+    const duplicateCopies = new Set([...duplicateGroups.values()].filter(group => group.length > 1).flatMap(group => group.slice(1).map(row => row._row)));
+    const eligibleRows = rows.filter(row => !duplicateCopies.has(row._row));
     const add = (column, reviewType, selected, details = {}) => {
       if (!selected.length) return;
       const recommendation = ({ missing: ["number", "integer"].includes(profile.columns.find(p => p.column === column)?.role) ? "impute" : "keep", outlier: "outlier", "duplicate-rows": "duplicates", "duplicate-values": "duplicates" })[reviewType] || "manual";
@@ -79,19 +84,31 @@ var ReviewPageEngine = ((CleaningEngine) => {
     const keyed = existing.find(i => i.recommendation === "duplicates" && i.duplicateDefinition?.mode === "key");
     if (keyed && !repeatableColumns.includes(keyed.column)) add(keyed.column,"duplicate-values",keyed.rows,{duplicateDefinition:keyed.duplicateDefinition});
     for (const p of profile.columns) {
-      const column = p.column, present = rows.filter(r => text(r[column]).trim()), groups = frequencies(present, column), numeric = ["number", "integer"].includes(p.role), date = p.role === "date" || p.role !== "identifier" && (existing.some(item => item.column === column && item.candidate?.kind === "date_format") || present.length > 0 && present.filter(row => /^\d{4}-\d{2}-\d{2}$|^\d{1,2}[/.\-]\d{1,2}[/.\-]\d{4}$|^\d{1,2}-[A-Za-z]{3}-\d{4}$/.test(row[column]) || dateFormats[JSON.stringify([row._row,column,row[column]])]).length / present.length >= .6);
+      const column = p.column, present = eligibleRows.filter(r => text(r[column]).trim()), groups = frequencies(present, column), numeric = ["number", "integer"].includes(p.role), date = p.role === "date" || p.role !== "identifier" && (existing.some(item => item.column === column && item.candidate?.kind === "date_format") || present.length > 0 && present.filter(row => /^\d{4}-\d{2}-\d{2}$|^\d{1,2}[/.\-]\d{1,2}[/.\-]\d{4}$|^\d{1,2}-[A-Za-z]{3}-\d{4}$/.test(row[column]) || dateFormats[JSON.stringify([row._row,column,row[column]])]).length / present.length >= .6);
       const knownMissing = new Set(existing.filter(i => i.column === column && ["impute", "keep"].includes(i.recommendation)).flatMap(i => i.rows.map(r => r._row)));
-      const sentinels = new Set(numeric ? groups.filter(group => { try { return [0,-1,999,9999].includes(CleaningEngine.parseNumber(group.value,p.policy)); } catch { return false; } }).map(group => group.value) : []);
+      const parsedNumbers = numeric ? present.flatMap(row => { try { return [{ row, value: CleaningEngine.parseNumber(row[column],p.policy) }]; } catch { return []; } }) : [];
+      const sentinels = new Set(numeric && parsedNumbers.length / Math.max(1,present.length) >= .9 ? groups.filter(group => {
+        let value; try { value = CleaningEngine.parseNumber(group.value,p.policy); } catch { return false; }
+        if (![0,-1,-99,-999,999,9999].includes(value) || group.rows.length < 3) return false;
+        const others = parsedNumbers.filter(entry => entry.value !== value).map(entry => entry.value).sort((a,b) => a-b);
+        const q = fraction => others[Math.round((others.length - 1) * fraction)];
+        return value < q(.01) || value > q(.99) || ([0,-1].includes(value) && !others.includes(value));
+      }).map(group => group.value) : []);
       const reviewed = new Set(classifications.filter(e => e.column === column && ["resolved","legitimate","not_applicable"].includes(e.meaning) && byId.get(e.rowId)?.[column] === e.value).map(e => e.rowId));
-      add(column, "missing", rows.filter(r => knownMissing.has(r._row) || !reviewed.has(r._row) && (!text(r[column]).trim() || nullToken(r[column]) || sentinels.has(text(r[column])))),{date});
+      add(column, "missing", eligibleRows.filter(r => knownMissing.has(r._row) || !reviewed.has(r._row) && (!text(r[column]).trim() || nullToken(r[column]) || sentinels.has(text(r[column])))),{date});
       const outlier = existing.find(i => i.column === column && i.recommendation === "outlier");
       if (outlier) add(column, "outlier", outlier.rows, { outlier: outlier.outlier, outlierDefinition: outlier.outlierDefinition });
       const repeat = groups.filter(g => g.rows.length > 1);
-      if (!repeatableColumns.includes(column) && CleaningEngine.isIdentifier(column) && (/(?:_?id)$/i.test(column) || groups.length / (present.length || 1) >= .95)) add(column, "duplicate-values", repeat.flatMap(g => g.rows), { duplicateDefinition: { mode: "key", columns: [column] } });
+      if (!repeatableColumns.includes(column) && CleaningEngine.isIdentifier(column) && /(?:_?id|_?code|_?number|_?no|email)$/i.test(column) && repeat.length) add(column, "duplicate-values", repeat.flatMap(g => g.rows), { duplicateDefinition: { mode: "key", columns: [column] } });
       const formatOf = row => dateFormats[JSON.stringify([row._row,column,row[column]])] || (p.policy.dateFormat !== "iso" ? p.policy.dateFormat : "");
       const patterns = frequencies(present, column, (value,row) => pattern(value,date,formatOf(row)));
       if (date || numeric || p.role !== "identifier" && patterns.some(g => !["plain", "text"].includes(g.value))) {
-        if (patterns.length > 1 || date && patterns.some(group => group.value === "text") || !date && patterns.some(g => !["plain", "text"].includes(g.value))) add(column, "format", present, { date });
+        const patterned = patterns.filter(group => !["text", "(blank)"].includes(group.value)).sort((a,b) => b.rows.length-a.rows.length);
+        const majorityPattern = patterned[0];
+        if (majorityPattern && majorityPattern.rows.length / Math.max(1,present.length) >= .5) {
+          const offFormat = patterned.slice(1).filter(group => date ? /YYYY|Mon|Excel/.test(group.value) : group.value !== "plain").flatMap(group => group.rows);
+          if (offFormat.length) add(column, "format", offFormat, { date, majorityFormat: majorityPattern.value });
+        }
         if (numeric || date) add(column, "type-mismatch", present.filter(r => pattern(r[column],date,formatOf(r)) === "text" && !nullToken(r[column])), { date });
       }
       const clusters = new Map();
@@ -104,14 +121,18 @@ var ReviewPageEngine = ((CleaningEngine) => {
       if (numeric) {
         const numbers = present.flatMap(r => { try { return [{ row: r, value: CleaningEngine.parseNumber(r[column]) }]; } catch { return []; } });
         const small = numbers.filter(e => e.value > 0 && e.value <= 1), large = numbers.filter(e => e.value > 1 && e.value <= 100);
-        if (/pct|percent|rate/i.test(column) && small.length >= 3 && large.length >= 3) add(column, "scale", numbers.map(e => e.row));
+        if (/pct|percent|rate/i.test(column) && small.length && large.length) {
+          const share = small.length / (small.length + large.length);
+          if (share >= .1 && share <= .5) add(column, "scale", small.map(entry => entry.row), { minorityRange: "(0, 1]" });
+          else if (share > .5 && share <= .9) add(column, "scale", large.map(entry => entry.row), { minorityRange: "(1, 100]" });
+        }
         else if (numbers.length > 10) { const sorted = numbers.map(e => Math.abs(e.value)).filter(v => v > 0).sort((a,b) => a-b), median = CleaningEngine.stats(sorted).median; if (median > 0 && numbers.filter(e => Math.abs(e.value) >= median * 100).length >= 3) add(column, "scale", numbers.map(e => e.row)); }
       }
       const declared = existing.find(i => i.column === column && i.recommendation === "schema");
       const range = configuredRanges[column] || (declared && ["number","integer"].includes(declared.rule.type) ? {type:"number",min:declared.rule.minimum ?? "",max:declared.rule.maximum ?? ""} : suggestedRange(column, date ? "date" : p.role));
-      if (range) add(column, "invalid", present.filter(r => violates(r[column],range,formatOf(r))), { range, date });
-      const blanks = rows.length - present.length;
-      if (blanks / rows.length >= .95 || (groups[0]?.rows.length || 0) / rows.length >= .99) add(column, "constant", rows);
+      if (range) add(column, "invalid", present.filter(r => !sentinels.has(text(r[column])) && !nullToken(r[column]) && violates(r[column],range,formatOf(r))), { range, date });
+      const blanks = eligibleRows.length - present.length;
+      if (blanks / Math.max(1,eligibleRows.length) >= .95 || (groups[0]?.rows.length || 0) / Math.max(1,eligibleRows.length) >= .99) add(column, "constant", eligibleRows);
       if (CleaningEngine.isIdentifier(column) && present.every(r => /^\d+$/.test(text(r[column]).trim()))) {
         const lengths = frequencies(present, column, v => text(v).trim().length);
         if (lengths.length > 1) add(column, "leading-zeros", present, { width: Number(lengths[0].value) });
@@ -120,20 +141,23 @@ var ReviewPageEngine = ((CleaningEngine) => {
       if (multi.length && multi.length < present.length * .5) add(column, "multi-value", multi, { separator: multi.some(r => text(r[column]).includes(";")) ? ";" : multi.some(r => text(r[column]).includes("|")) ? "|" : multi.some(r => text(r[column]).includes(" / ")) ? " / " : "," });
       add(column, "sensitive", present.filter(r => sensitiveType(r[column], column)));
     }
-    const duplicates = new Map();
-    rows.forEach(r => { const key = JSON.stringify(headers.map(c => r[c])); if (!duplicates.has(key)) duplicates.set(key, []); duplicates.get(key).push(r); });
-    add(headers[0], "duplicate-rows", [...duplicates.values()].filter(g => g.length > 1).flat(), { displayColumn: "All columns", duplicateDefinition: { mode: "exact", columns: headers } });
+    add(headers[0], "duplicate-rows", [...duplicateGroups.values()].filter(group => group.length > 1).flatMap(group => group.slice(1)), { displayColumn: "All columns", duplicateDefinition: { mode: "exact", columns: headers } });
     for (const i of existing.filter(i => ["metric", "metricBlocked", "relation", "schema", "valid"].includes(i.recommendation))) add(i.column, i.recommendation === "schema" ? "invalid" : "cross-column", i.rows, { ...i, reviewType: i.recommendation === "schema" ? "invalid" : "cross-column" });
     const find = regex => headers.find(c => regex.test(c));
     const suggest = (target, left, right, operation) => {
       if (!target || !left || !right || findings.some(i => i.reviewType === "cross-column" && i.column === target)) return;
       const rule = { id: `auto:${target}`, name: `${target} = ${left} ${operation === "difference" ? "−" : "+"} ${right}`, target, column: target, left, right, operation, factor: 1, decimals: 2, tolerance: 1 };
-      const violations = rows.filter(r => { try { const a = CleaningEngine.parseNumber(r[left]), b = CleaningEngine.parseNumber(r[right]), t = CleaningEngine.parseNumber(r[target]); return Math.abs(t - (operation === "difference" ? a-b : a+b)) > rule.tolerance; } catch { return false; } });
+      const violations = eligibleRows.filter(r => { try { const a = CleaningEngine.parseNumber(r[left]), b = CleaningEngine.parseNumber(r[right]), t = CleaningEngine.parseNumber(r[target]); return Math.abs(t - (operation === "difference" ? a-b : a+b)) > Math.max(Math.abs(t)*.01,1); } catch { return false; } });
       add(target, "cross-column", violations, { rule, recommendation: "manual" });
     };
     suggest(find(/^profit(?:_|$)/i), find(/^revenue(?:_|$)/i), find(/^(?:cost|total_cost)(?:_|$)/i), "difference");
-    const start = find(/start.*date|date.*start/i), end = find(/end.*date|date.*end/i);
-    if (start && end) add(end, "cross-column", rows.filter(r => { try { return dateValue(r[end],dateFormats[JSON.stringify([r._row,end,r[end]])] || profile.columns.find(column => column.column === end).policy.dateFormat) < dateValue(r[start],dateFormats[JSON.stringify([r._row,start,r[start]])] || profile.columns.find(column => column.column === start).policy.dateFormat); } catch { return false; } }), { rule: { id: `auto:${end}`, name: `${end} must be on or after ${start}`, column: end, left: end, right: start, kind: "comparison", operator: ">=", comparisonType: "date" } });
+    const earlierNames = /start|order|open|admit|created|date/i, laterNames = /end|ship|deliver|close|discharge|due/i;
+    const dateColumns = headers.filter(column => profile.columns.find(item => item.column === column)?.role === "date" || eligibleRows.filter(row => /^\d{4}-\d{2}-\d{2}$/.test(text(row[column]).trim())).length >= eligibleRows.length * .6);
+    for (const later of dateColumns.filter(column => laterNames.test(column))) for (const earlier of dateColumns.filter(column => column !== later && earlierNames.test(column))) {
+      const comparable = eligibleRows.flatMap(row => { try { return [{ row, later: dateValue(row[later],dateFormats[JSON.stringify([row._row,later,row[later]])] || profile.columns.find(item => item.column === later)?.policy.dateFormat), earlier: dateValue(row[earlier],dateFormats[JSON.stringify([row._row,earlier,row[earlier]])] || profile.columns.find(item => item.column === earlier)?.policy.dateFormat) }]; } catch { return []; } });
+      const compliant = comparable.filter(item => item.later >= item.earlier), violations = comparable.filter(item => item.later < item.earlier);
+      if (comparable.length && compliant.length / comparable.length >= .9) add(later,"cross-column",violations.map(item => item.row),{rule:{id:`auto:${later}:${earlier}`,name:`${later} must be on or after ${earlier}`,column:later,left:later,right:earlier,kind:"comparison",operator:">=",comparisonType:"date"}});
+    }
     const clicks = find(/^clicks$/i), impressions = find(/^impressions$/i);
     if (clicks && impressions && !findings.some(i => i.reviewType === "cross-column" && i.column === clicks)) add(clicks, "cross-column", rows.filter(r => Number(r[clicks]) > Number(r[impressions])), { rule: { id: "auto:clicks", name: "clicks must not exceed impressions", column: clicks, left: clicks, right: impressions, kind: "comparison", operator: "<=", comparisonType: "number" } });
     const total = find(/^total(?:_|$)/i), parts = headers.filter(c => /^(?:subtotal|tax|shipping|fee)(?:_|$)/i.test(c));
@@ -143,7 +167,7 @@ var ReviewPageEngine = ((CleaningEngine) => {
     }
     const unique = new Map();
     findings.forEach(i => { const key = `${i.column}:${i.reviewType}`; if (!unique.has(key)) unique.set(key, i); });
-    return [...unique.values()].map((i, index) => ({ ...i, id: index + 1 }));
+    return [...unique.values()].map((i, index) => ({ ...i, id: index + 1, count: i.rows.length, rows: [...new Map(i.rows.map(row => [row._row,row])).values()] }));
   }
   function dateValue(value, source = "mdy") {
     const v = text(value).trim();
