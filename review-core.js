@@ -24,7 +24,7 @@ var ReviewCore = (() => {
     const number=Number(value).toLocaleString(undefined,{minimumFractionDigits:Math.min(minimum,decimals),maximumFractionDigits:decimals});
     return `${options.money?"$":""}${number}${!options.money && percent?"%":""}`;
   }
-  function count(value,unit,total = state.rows.length) { return `${Number(value).toLocaleString()} ${unit} (${(value/Math.max(1,total)*100).toFixed(1)}%)`; }
+  function count(value,unit,total = state.rows.length) { const amount=Number(value),[first,...rest]=String(unit).split(" "),singular=first.endsWith("ies")?`${first.slice(0,-3)}y`:first.endsWith("s")?first.slice(0,-1):first,label=[amount===1?singular:first,...rest].join(" ");return `${amount.toLocaleString()} ${label} (${(amount/Math.max(1,total)*100).toFixed(1)}%)`; }
   // CORE-31: explicit override, then first matching numerical column in dataset order, else rows.
   function metricColumn() { if (state.primaryReviewMetric === "__rows__") return ""; if (state.headers.includes(state.primaryReviewMetric) && numericType(state.primaryReviewMetric)) return state.primaryReviewMetric; return state.headers.find(column=>/revenue|sales|amount|spend|cost|price|total/i.test(column) && numericType(column)) || ""; }
   function total(rows,column = metricColumn()) { if (!column) return rows.length; return ReviewCharts.numeric(rows,column).reduce((sum,value)=>sum+value,0); }
@@ -183,11 +183,12 @@ var ReviewCore = (() => {
   }
   function bindShared(issue) {
     const session=data(issue), bind=(id,event,callback)=>document.getElementById(id)?.addEventListener(event,callback);
-    document.querySelectorAll("[data-review-tab]").forEach(button=>button.onclick=()=>switchTab(issue,button.dataset.reviewTab));
+    document.querySelectorAll("[data-review-tab]").forEach(button=>button.onclick=event=>{event.preventDefault();if(button.classList.contains("off"))return;switchTab(issue,button.dataset.reviewTab);});
     bind("reviewAccept","click",()=>accept(issue)); bind("reviewReminder","click",()=>switchTab(issue,"explore"));
     bind("reviewChooseFix","click",()=>switchTab(issue,"fix"));
     document.querySelectorAll("[data-option-setup]").forEach(button=>button.onclick=()=>{switchTab(issue,"explore");document.getElementById("missingAddLock")?.focus();});
     document.querySelectorAll("[data-fix]").forEach(button=>button.onclick=()=>{session.fix=button.dataset.fix;session.skipBlocked=false;compute(issue);});
+    document.querySelectorAll(".opt[data-o]").forEach(option=>option.onclick=event=>{if(event.target.closest("button,input,select"))return;session.fix=option.dataset.o;session.skipBlocked=false;compute(issue);});
     bind("reviewMore","change",event=>{if(event.target.value){session.fix=event.target.value;session.skipBlocked=false;compute(issue);}});
     bind("reviewAskAi","click",()=>{session.askOpen=!session.askOpen;renderPreservingReviewFocus();if(session.askOpen)document.getElementById("reviewAiInstruction")?.focus();});
     bind("reviewChooseFillGroups","click",()=>{const groups=document.querySelector(".missing-fill-groups");if(groups){session.fillGroupsOpen=true;groups.open=true;document.getElementById("missingAddLock")?.focus();}});

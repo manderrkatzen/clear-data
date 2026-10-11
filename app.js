@@ -137,6 +137,7 @@ function render() {
   if (renderingWorkspace) { workspaceRenderQueued = true; return; }
   renderingWorkspace = true;
   try {
+    if (state.screen !== "issues" && typeof restoreReviewReferenceShell === "function") restoreReviewReferenceShell();
     refreshChrome();
     document.querySelectorAll(".nav-link").forEach((button) => button.classList.toggle("active", button.dataset.screen === state.screen));
     ({ data: renderData, view: renderSpreadsheet, issues: renderIssues, changes: renderChanges, report: renderReport })[state.screen]();

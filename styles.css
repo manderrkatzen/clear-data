@@ -67,3 +67,5 @@ dialog h2 { margin-top: 0; }
   .change-card header { flex-wrap: wrap; }
   .comparison { grid-template-columns: 1fr; gap: 10px; }
 }
+.app-shell.reference-hidden { display: none; }
+#screen.reference-screen { display: block; position: fixed; inset: 0; z-index: 1000; max-width: none; margin: 0; padding: 0; overflow: hidden; }

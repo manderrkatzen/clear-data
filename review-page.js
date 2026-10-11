@@ -37,49 +37,36 @@ function prepareReviewBindings(root) {
     registration.list=[];
   }
 }
+let reviewScreenParent=null,reviewScreenNext=null;
+function restoreReviewReferenceShell(){
+  if(!document.body.classList.contains("ui-pages-active"))return;
+  if(reviewScreenParent)reviewScreenParent.insertBefore(screen,reviewScreenNext?.parentNode===reviewScreenParent?reviewScreenNext:null);
+  screen.classList.remove("reference-screen");document.querySelector(".app-shell")?.classList.remove("reference-hidden");document.querySelector("#reviewReferenceStyles").disabled=true;document.body.classList.remove("ui-pages-active");
+}
 function renderReviewPage() {
   $("#topEyebrow").textContent="REVIEW";
+  if(!reviewScreenParent){reviewScreenParent=screen.parentNode;reviewScreenNext=screen.nextSibling;}
+  screen.classList.add("reference-screen");document.body.append(screen);document.body.classList.add("ui-pages-active");document.querySelector(".app-shell")?.classList.add("reference-hidden");document.querySelector("#reviewReferenceStyles").disabled=false;
   const open=state.issues.filter(issue=>issue.status==="open"),selected=state.issues.find(issue=>issue.id===state.selectedIssue)||open[0]||state.issues[0];if(selected)state.selectedIssue=selected.id;
-  const filter=state.reviewKind || "all",query=(state.reviewSearch || "").toLowerCase(),visible=state.issues.filter(issue=>(filter==="all"||issue.reviewType===filter)&&(issue.displayColumn || issue.column).toLowerCase().includes(query));
-  state.reviewQueueExpanded ||= {};
-  function list(issues,key) { // CORE-10, CORE-11, CORE-58, CORE-60
-    const columns=["All columns",...state.headers],ordered=[...issues].sort((a,b)=>columns.indexOf(a.displayColumn || a.column)-columns.indexOf(b.displayColumn || b.column)||ReviewCore.order.indexOf(a.reviewType)-ReviewCore.order.indexOf(b.reviewType)),groups=new Map();
-    for(const issue of state.reviewQueueExpanded[key]?ordered:ordered.slice(0,200)) {const column=issue.displayColumn || issue.column;if(!groups.has(column))groups.set(column,[]);groups.get(column).push(issue);}
-    return [...groups].map(([column,items])=>`<section class="review-issue-column" data-ui="review.issues.column" data-column="${escapeHtml(column)}"><h3>${escapeHtml(column)}</h3>${items.map(issue=>{const module=ReviewCore.moduleFor(issue),count=module.queueCount?module.queueCount(issue):module.count?module.count(issue):reviewRows(issue).length,status=issue.status==="open"?"open":issue.status==="valid"?"accepted":"fixed";return `<button id="reviewIssue${issue.id}" class="review-issue ${selected?.id===issue.id?"active":""}" data-ui="review.issues.item" data-review-issue="${issue.id}" data-column="${escapeHtml(issue.column)}" data-issue="${issue.reviewType || "manual"}" aria-pressed="${selected?.id===issue.id}"><i class="review-issue-dot ${status}" aria-label="${status}"></i><span>${ReviewComponents.text(ReviewPageEngine.labels[issue.reviewType] || issue.type)}</span><b title="${ReviewComponents.text(module.queueCountLabel?module.queueCountLabel(issue):ReviewCore.count(count,module.unit || "cells"))}">${count.toLocaleString()}</b></button>`;}).join("")}</section>`).join("")+(ordered.length>200&&!state.reviewQueueExpanded[key]?`<button class="text-button" data-queue-show-all="${key}">Show all ${ordered.length} issues</button>`:"");
-  }
-  // CORE-12, CORE-13: type/column filters and a collapsed, separately bounded resolved list.
+  const ordered=[...state.issues].sort((a,b)=>state.headers.indexOf(a.displayColumn||a.column)-state.headers.indexOf(b.displayColumn||b.column)||ReviewCore.order.indexOf(a.reviewType)-ReviewCore.order.indexOf(b.reviewType));
+  const grouped=new Map();for(const issue of ordered){const column=issue.displayColumn||issue.column;if(!grouped.has(column))grouped.set(column,[]);grouped.get(column).push(issue);}
+  const list=[...grouped].map(([column,issues])=>`<div class="col" data-column="${escapeHtml(column)}">${escapeHtml(column)}</div>${issues.map(issue=>{const module=ReviewCore.moduleFor(issue),count=module.queueCount?module.queueCount(issue):module.count?module.count(issue):reviewRows(issue).length,status=issue.status==="open"?"open":issue.status==="valid"?"accepted":"fixed";return `<a href="#" class="item ${selected?.id===issue.id?"on":""}" id="reviewIssue${issue.id}" data-ui="review.list.item" data-review-issue="${issue.id}" aria-current="${selected?.id===issue.id?"page":"false"}"><span>${escapeHtml(ReviewPageEngine.labels[issue.reviewType]||issue.type)}</span><span class="c num">${status==="open"?count.toLocaleString():status}</span></a>`;}).join("")}`).join("");
+  const tab=selected?ReviewCore.data(selected).tab:"explore",decision=selected&&state.changes.find(change=>change.issue.id===selected.id),main=selected?reviewIssueHtml(selected):'<div class="wrap"><h1>No findings</h1><p>The current checks found no issues to review.</p></div>';
   const template=document.createElement("template");
-  template.innerHTML=`<div class="review-page"><aside class="review-issues" data-ui="review.issues"><div class="review-issues-heading"><h2>Issues</h2><span>${open.length} open</span></div><div class="review-issues-filter" data-ui="review.issues.filter"><select id="reviewTypeFilter" aria-label="Filter issue type"><option value="all">All issue types</option>${Object.entries(ReviewPageEngine.labels).map(([key,label])=>`<option value="${key}" ${filter===key?"selected":""}>${label}</option>`).join("")}</select><input id="reviewColumnSearch" type="search" aria-label="Search column name" placeholder="Search column name" value="${escapeHtml(state.reviewSearch || "")}"></div><div class="review-issue-list">${list(visible.filter(issue=>issue.status==="open"),"open") || '<p class="review-empty-copy">No matching open issues.</p>'}<details class="review-resolved" data-ui="review.issues.done"><summary>Resolved (${visible.filter(issue=>issue.status!=="open").length})</summary>${list(visible.filter(issue=>issue.status!=="open"),"resolved")}</details></div></aside><main class="review-main" data-ui="review.main">${selected?reviewIssueHtml(selected):'<h1>No findings</h1><p>The current checks found no issues to review.</p>'}</main></div>`;
-  const nextPage=template.content.firstElementChild;
-  const panel=nextPage.querySelector(".review-issues"),disclosure=document.createElement("details"),content=document.createElement("div");
-  disclosure.className="review-queue-disclosure";content.className="review-queue-content";
-  disclosure.innerHTML=`<summary>Browse issues <span>${open.length} open</span></summary>`;disclosure.open=innerWidth>900||Boolean(state.reviewQueueOpen);
-  content.append(panel.querySelector(".review-issues-filter"),panel.querySelector(".review-issue-list"));disclosure.append(content);panel.append(disclosure);
-  const task=nextPage.querySelector(".review-main"),footer=task.querySelector(".rc-footer");if(footer)task.append(footer);
-  const currentPage=screen.querySelector(".review-page"),identity=JSON.stringify([selected?.id,selected?ReviewCore.data(selected).tab:null]);
-  if(currentPage){
-    const sameView=currentPage.dataset.viewIdentity===identity;
-    const scroll=[currentPage,...currentPage.querySelectorAll("*")].filter(node=>(sameView||node.closest(".review-issues"))&&(node.scrollTop||node.scrollLeft||node.matches(".review-tab-content,.review-issue-list"))).map(node=>[node,node.scrollTop,node.scrollLeft]),windowX=window.scrollX,windowY=window.scrollY;
-    // Navigation resets just the tab body; the queue and workspace frame stay mounted.
-    if(!sameView){const oldBody=currentPage.querySelector("#reviewTabContent"),nextBody=nextPage.querySelector("#reviewTabContent");if(oldBody&&nextBody)oldBody.replaceWith(nextBody.cloneNode(true));}
-    patchReviewDom(currentPage,nextPage);
-    for(const [node,top,left] of scroll)if(node.isConnected){node.scrollTop=top;node.scrollLeft=left;}
-    if(sameView&&(window.scrollX!==windowX||window.scrollY!==windowY))window.scrollTo(windowX,windowY);
-  }
-  else screen.replaceChildren(nextPage);
-  const page=screen.querySelector(".review-page");page.dataset.viewIdentity=identity;prepareReviewBindings(page);
-  $("#reviewTypeFilter").onchange=event=>{state.reviewKind=event.target.value;renderPreservingReviewFocus();};$("#reviewColumnSearch").oninput=event=>{state.reviewSearch=event.target.value;renderPreservingReviewFocus();};
-  document.querySelectorAll("[data-review-issue]").forEach(button=>button.onclick=()=>ReviewCore.select(Number(button.dataset.reviewIssue)));
-  document.querySelectorAll("[data-queue-show-all]").forEach(button=>button.onclick=()=>{state.reviewQueueExpanded[button.dataset.queueShowAll]=true;renderPreservingReviewFocus();});
-  // CORE-20: on narrow screens, issue browsing is available without pushing the active task below a second dashboard.
-  const liveDisclosure=page.querySelector(".review-queue-disclosure");
-  liveDisclosure.addEventListener("toggle",()=>{if(liveDisclosure.isConnected&&innerWidth<=900)state.reviewQueueOpen=liveDisclosure.open;});
+  template.innerHTML=`<div class="app"><nav class="nav" data-ui="app.nav"><div class="brand">ClearData</div><a href="#" data-workspace-screen="data">Dataset</a><a href="#" data-workspace-screen="view">Explore</a><a href="#" class="on" data-workspace-screen="issues">Review <span class="pill">${open.length}</span></a><a href="#" data-workspace-screen="changes">Decisions</a><a href="#" data-workspace-screen="report">Report</a></nav><div class="shell"><header class="top" data-ui="app.top"><span class="file">${escapeHtml(state.fileName||"Dataset")}</span><span class="ver">${state.changes.length?"Working version":"Original"}</span>${decision?'<button class="link" data-ui="top.undo">Undo last change</button>':""}</header><div class="body"><aside class="issues" data-ui="review.list"><div class="hd"><span>ISSUES</span><span>${open.length} open</span></div>${list}</aside><main class="main" data-ui="review.main"><div class="content"><div class="wrap">${main}</div></div></main></div></div></div>`;
+  const nextApp=template.content.firstElementChild,footer=nextApp.querySelector(".main .foot");if(footer)nextApp.querySelector(".main").append(footer);
+  const currentApp=screen.firstElementChild;if(currentApp)patchReviewDom(currentApp,nextApp);else screen.replaceChildren(nextApp);const app=screen.firstElementChild;
+  prepareReviewBindings(app);
+  app.querySelectorAll("[data-review-issue]").forEach(button=>button.onclick=event=>{event.preventDefault();ReviewCore.select(Number(button.dataset.reviewIssue));});
+  app.querySelectorAll("[data-workspace-screen]").forEach(link=>link.onclick=event=>{event.preventDefault();go(link.dataset.workspaceScreen);});
+  app.querySelector('[data-ui="top.undo"]')?.addEventListener("click",()=>{const change=state.changes[0];if(change)rollbackChange(change.id);render();});
   if(selected)ReviewCore.bindShared(selected);
 }
 function reviewIssueHtml(issue) { // CORE-14, CORE-15, CORE-16, CORE-20, CORE-49, CORE-61, CORE-62
   const session=ReviewCore.data(issue),module=ReviewCore.moduleFor(issue);module.init?.(issue,session);
   const rows=ReviewCore.exploreScope(issue),count=module.count?module.count(issue):reviewRows(issue).length,unit=module.unit || "cells",decision=state.changes.find(change=>change.issue.id===issue.id),countLabel=module.countLabel?module.countLabel(issue):unit==="percent"?`${count}% ${issue.unit?.includes("empty")?"empty":"one value"}`:ReviewCore.count(count,unit);
-  return `<header class="review-issue-header" data-ui="review.issue-header"><div><h1>${escapeHtml(issue.displayColumn || issue.column)}</h1><p>${ReviewComponents.text(ReviewPageEngine.labels[issue.reviewType] || issue.type)} · ${ReviewComponents.text(countLabel)}</p></div>${issue.status==="open"?'<button class="text-button" id="reviewAccept" data-ui="review.issue-header.accept">Accept as is</button>':'<span class="review-resolved-label">Reviewed</span>'}</header><nav class="review-tabs" data-ui="review.tabs" role="tablist" aria-label="Issue review">${["explore","fix","review"].map(tab=>`<button id="reviewTab-${tab}" data-review-tab="${tab}" role="tab" aria-selected="${session.tab===tab}" aria-controls="reviewTabContent" tabindex="${session.tab===tab?0:-1}">${tab[0].toUpperCase()+tab.slice(1)}</button>`).join("")}</nav><section id="reviewTabContent" class="review-tab-content ${session.tab}" role="tabpanel" aria-labelledby="reviewTab-${session.tab}">${session.tab==="explore"?module.renderExplore(issue,session):session.tab==="fix"?ReviewCore.fixHtml(issue):ReviewCore.reviewHtml(issue)}</section>`;
+  const fixed=issue.status!=="open",changed=decision?.patches?.filter(patch=>patch.column===issue.column).length||0,fixedCount=decision?.removedRows?.length||changed||decision?.rows?.length||count,operation=decision?.treatment?.operation,verb=operation==="remove"?"removed":operation==="retain"?"accepted":operation==="leaveMissing"?"left missing":changed?"changed":"reviewed",title=fixed?`${ReviewComponents.count(fixedCount,operation==="remove"?"rows":module.unit||"values")} ${verb}`:`${ReviewPageEngine.labels[issue.reviewType]||issue.type} · ${countLabel}`;
+  return `<div class="head" data-ui="review.header"><div><h1>${escapeHtml(issue.displayColumn||issue.column)}</h1><div class="sub">${ReviewComponents.text(title)}</div></div>${fixed?'<span class="state" data-ui="review.header.state">Fixed</span>':'<button class="link" id="reviewAccept" data-ui="review.header.accept">Accept as is</button>'}</div><nav class="tabs" data-ui="review.tabs" aria-label="Issue review">${["explore","fix","review"].map(tab=>`<a href="#" class="tab ${session.tab===tab?"on":""} ${tab==="review"&&!decision?"off":""}" id="reviewTab-${tab}" data-review-tab="${tab}" aria-current="${session.tab===tab?"page":"false"}">${tab[0].toUpperCase()+tab.slice(1)}</a>`).join("")}</nav><div class="tab-content ${session.tab}" data-tab="${session.tab}">${session.tab==="explore"?module.renderExplore(issue,session):session.tab==="fix"?ReviewCore.fixHtml(issue):ReviewCore.reviewHtml(issue)}</div>`;
 }
 // CORE-19: shortcuts never intercept value, note, instruction, or content editing.
 document.addEventListener("keydown",event=>{
@@ -87,7 +74,7 @@ document.addEventListener("keydown",event=>{
   const issue=ReviewCore.current();if(!issue)return;
   if(["1","2","3"].includes(event.key)){event.preventDefault();ReviewCore.switchTab(issue,["explore","fix","review"][Number(event.key)-1]);}
   if(["j","k"].includes(event.key)){event.preventDefault();const open=state.issues.filter(item=>item.status==="open"),index=open.findIndex(item=>item.id===issue.id),next=open[(index+(event.key==="j"?1:open.length-1)+open.length)%open.length];if(next)ReviewCore.select(next.id);}
-  if(["ArrowLeft","ArrowRight"].includes(event.key)&&event.target.matches("[data-review-tab]")){event.preventDefault();const tabs=[...document.querySelectorAll("[data-review-tab]:not(:disabled)")],index=tabs.indexOf(event.target),next=tabs[(index+(event.key==="ArrowRight"?1:tabs.length-1))%tabs.length];ReviewCore.switchTab(issue,next.dataset.reviewTab);document.getElementById(next.id)?.focus();}
+  if(["ArrowLeft","ArrowRight"].includes(event.key)&&event.target.matches("[data-review-tab]")){event.preventDefault();const tabs=[...document.querySelectorAll("[data-review-tab]:not(.off)")],index=tabs.indexOf(event.target),next=tabs[(index+(event.key==="ArrowRight"?1:tabs.length-1))%tabs.length];if(next){ReviewCore.switchTab(issue,next.dataset.reviewTab);document.getElementById(next.id)?.focus();}}
 });
 document.addEventListener("click",event=>{document.querySelectorAll(".priority-add[open]").forEach(picker=>{if(!picker.contains(event.target))picker.open=false;});});
 // CORE-20, CORE-48: resizing recomposites only display geometry, keeping the preview and scope.
