@@ -2,7 +2,7 @@
 var ReviewModules = {};
 var ReviewCore = (() => {
   const risks = {"Doesn't change values":"neutral","Doesn't invent information":"safe","Estimates values":"estimate","Invents information":"estimate","Removes data":"remove","Changes structure":"structure"};
-  const order = ["missing","outlier","duplicate-rows","duplicate-values","format","type-mismatch","scale","category-variants","whitespace","invalid","cross-column","constant","leading-zeros","multi-value","sensitive"];
+  const order = ["missing","invalid","outlier","duplicate-rows","duplicate-values","format","type-mismatch","scale","category-variants","whitespace","cross-column","constant","leading-zeros","multi-value","sensitive"];
   const kind = issue => issue.reviewType || "manual";
   function data(issue) {
     state.reviewPage ||= {};
@@ -24,14 +24,14 @@ var ReviewCore = (() => {
     const number=Number(value).toLocaleString(undefined,{minimumFractionDigits:Math.min(minimum,decimals),maximumFractionDigits:decimals});
     return `${options.money?"$":""}${number}${!options.money && percent?"%":""}`;
   }
-  function count(value,unit,total = state.rows.length) { const amount=Number(value),[first,...rest]=String(unit).split(" "),singular=first.endsWith("ies")?`${first.slice(0,-3)}y`:first.endsWith("s")?first.slice(0,-1):first,label=[amount===1?singular:first,...rest].join(" ");return `${amount.toLocaleString()} ${label} (${(amount/Math.max(1,total)*100).toFixed(1)}%)`; }
+  function count(value,unit,total = detectorRows().length) { const amount=Number(value),[first,...rest]=String(unit).split(" "),singular=first.endsWith("ies")?`${first.slice(0,-3)}y`:first.endsWith("s")?first.slice(0,-1):first,label=[amount===1?singular:first,...rest].join(" ");return `${amount.toLocaleString()} ${label} (${(amount/Math.max(1,total)*100).toFixed(1)}%)`; }
   // CORE-31: explicit override, then first matching numerical column in dataset order, else rows.
   function metricColumn() { if (state.primaryReviewMetric === "__rows__") return ""; if (state.headers.includes(state.primaryReviewMetric) && numericType(state.primaryReviewMetric)) return state.primaryReviewMetric; return state.headers.find(column=>/revenue|sales|amount|spend|cost|price|total/i.test(column) && numericType(column)) || ""; }
   function total(rows,column = metricColumn()) { if (!column) return rows.length; return ReviewCharts.numeric(rows,column).reduce((sum,value)=>sum+value,0); }
   function money(value,column = metricColumn()) { return format(value,column,{money:Boolean(column && /usd|revenue|sales|amount|spend|cost|price|total/i.test(column)),decimals:column ? precision(column) : 0}); }
   function affected(issue) {const session=data(issue),rows=state.headers.includes(issue.column)?moduleFor(issue).lockedRows(issue,session):[];if(!Array.isArray(session.applyRowIds))return rows;const ids=new Set(session.applyRowIds);return rows.filter(row=>ids.has(row._row));}
   function exploreScope(issue) {return state.headers.includes(issue.column)?moduleFor(issue).exploreRows?.(issue,data(issue)) || affected(issue):[];}
-  function measure(issue) { const rows = affected(issue), metric = metricColumn(), carry = total(rows,metric), whole = total(state.rows,metric); return {rows,metric,carry,whole,share:whole ? carry/whole*100 : 0}; }
+  function measure(issue) { const rows = affected(issue), metric = metricColumn(), carry = total(rows,metric), whole = total(detectorRows(),metric); return {rows,metric,carry,whole,share:whole ? carry/whole*100 : 0}; }
   function optionList(issue) { // CORE-24, CORE-50: selecting a validated AI option accepts parameters, never applies data.
     const session=data(issue),options=moduleFor(issue).getFixOptions(issue,session),proposal=session.aiFixProposal,original=proposal && options.find(option=>option.key===proposal.operation);
     if(original)options.push({...original,key:`ai:${original.key}`,label:`AI: ${original.label}`,more:false,compute:context=>{
@@ -229,7 +229,7 @@ var ReviewCore = (() => {
     panel.querySelector("[data-review-show-all]")?.addEventListener("click",()=>{session.expandedLists ||= {};session.expandedLists[key]=true;showRows(issue,blockedOnly);});openRowsPanel(panel,blockedOnly?"reviewBlockedList":"reviewRows");
   }
   function detect(headers,rows,profile,existing) { // CORE-04: normalize every module's findings to the same public contract.
-    const baseline=ReviewPageEngine.detect(headers,rows,profile,existing,effectiveClassifications(),state.changes.map(change=>change.treatment?.repeatableColumn).filter(Boolean),Object.fromEntries(state.issues.filter(issue=>issue.rangeEdited).map(issue=>[issue.column,issue.range])),reviewDateFormats()),context={headers,rows,profile,existing,baseline,policies:state.ruleConfig.columns,classifications:effectiveClassifications()};
+    const copies=duplicateCopyRowIds(headers,rows),uniqueRows=rows.filter(row=>!copies.has(row._row)),uniqueProfile=uniqueRows.length===rows.length?profile:CleaningEngine.profile(headers,uniqueRows,effectiveColumnPolicies(),state.ruleConfig?.schema||[],effectiveClassifications()),cleanExisting=existing.map(issue=>({...issue,rows:issue.rows.filter(row=>!copies.has(row._row))})).filter(issue=>issue.rows.length||["metricBlocked","schema"].includes(issue.recommendation)),baseline=ReviewPageEngine.detect(headers,uniqueRows,uniqueProfile,cleanExisting,effectiveClassifications(),state.changes.map(change=>change.treatment?.repeatableColumn).filter(Boolean),Object.fromEntries(state.issues.filter(issue=>issue.rangeEdited).map(issue=>[issue.column,issue.range])),reviewDateFormats()),context={headers,rows:uniqueRows,allRows:rows,profile:uniqueProfile,existing:cleanExisting,baseline,policies:state.ruleConfig.columns,classifications:effectiveClassifications()};
     const replaced=new Set(Object.keys(ReviewModules)),generated=Object.values(ReviewModules).flatMap(module=>module.detect(context));
     return baseline.filter(issue=>!replaced.has(issue.reviewType)).concat(generated).sort((a,b)=>headers.indexOf(a.column)-headers.indexOf(b.column)||order.indexOf(a.reviewType)-order.indexOf(b.reviewType)).map((issue,index)=>{
       const finding={...issue,id:index+1};finding.issueKey=issueKey(finding);finding.cells=finding.rows.map(row=>({rowId:row._row,column:finding.column}));finding.count=moduleFor(finding).count?moduleFor(finding).count(finding):finding.rows.length;return finding;

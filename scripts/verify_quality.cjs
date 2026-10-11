@@ -5,6 +5,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { pathToFileURL } = require("node:url");
 const ai = require("../src/ai.cjs");
+const reviewAi = require("../src/review-ai.cjs");
 const root = path.resolve(__dirname, "..");
 
 function workspace() {
@@ -387,6 +388,13 @@ test("shared API rejects mismatched operations/sources and keeps bounded caveats
   const plan = ai.validatePlan({ operation: "fill_missing", column: "amount", value: 0, assumptions: [1, "a", "b", "c", "d"], warnings: ["warning"] }, numeric);
   assert.deepEqual(plan.assumptions, ["a", "b", "c"]);
   assert.equal(plan.requiresConfirmation, true);
+});
+
+test("repeated-value uniqueness assessment is bounded and requires explicit valid evidence", () => {
+  const input = reviewAi.validateRequest({ mode: "uniqueness", context: { column: "order_id", type: "duplicate-values", role: "text", headers: ["order_id"], allowedFixes: ["new-ids", "keep-first"], count: 10, affected: 4, values: [{ value: "SO-1", count: 2, locked: true }], samples: ["SO-1", "SO-2"], groups: [], statistics: {}, uniqueness: { rows: 10, distinct: 8, repeatedValues: 2 } } });
+  assert.deepEqual(reviewAi.validateResult({ note: "These values look like separate order records. They are commonly unique identifiers.", uniqueness: { should_be_unique: "yes", confidence: 94, reason: "Order identifiers normally differ per order." } }, input).uniqueness, { should_be_unique: "yes", confidence: 94, reason: "Order identifiers normally differ per order." });
+  assert.throws(() => reviewAi.validateResult({ note: "These values may be identifiers.", uniqueness: { should_be_unique: "yes", confidence: 101, reason: "Too high." } }, input));
+  assert.throws(() => reviewAi.validateRequest({ mode: "uniqueness", context: { column: "email", type: "sensitive", role: "text", headers: ["email"], allowedFixes: ["keep"], count: 10, affected: 2, values: [], samples: [], groups: [], statistics: {}, uniqueness: { rows: 10, distinct: 9, repeatedValues: 1 } } }));
 });
 
 test("body limits use UTF-8 bytes, including streamed requests", async () => {

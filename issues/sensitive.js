@@ -13,10 +13,10 @@ ReviewModules.sensitive = (() => {
       return found.length ? [{column,reviewType:"sensitive",type:"Sensitive data",label:"Sensitive data",rows:found.flatMap(group => group.rows),recommendation:"manual",status:"open",severity:"medium",summary:"Personal or financial identifiers need review before sharing."}] : [];
     });
   }
-  function isSensitiveColumn(column) { return groups(state.original.concat(state.rows),column).length > 0 && (state.issues.some(issue => issue.column === column && issue.reviewType === "sensitive") || !["number","integer"].includes(cleaningProfile().columns.find(profile => profile.column === column)?.role)); }
-  function init(issue, session) { if (session.locked === null) session.locked = groups(state.rows,issue.column).map(group => group.type); }
-  function lockedRows(issue, session) { init(issue,session); return groups(state.rows,issue.column).filter(group => session.locked.includes(group.type)).flatMap(group => group.rows); }
-  function count(issue) { return state.headers.includes(issue.column)?groups(state.rows,issue.column).reduce((sum,group)=>sum+group.rows.length,0):0; }
+  function isSensitiveColumn(column) { return groups(state.original.concat(detectorRows()),column).length > 0 && (state.issues.some(issue => issue.column === column && issue.reviewType === "sensitive") || !["number","integer"].includes(cleaningProfile().columns.find(profile => profile.column === column)?.role)); }
+  function init(issue, session) { if (session.locked === null) session.locked = groups(detectorRows(),issue.column).map(group => group.type); }
+  function lockedRows(issue, session) { init(issue,session); return groups(detectorRows(),issue.column).filter(group => session.locked.includes(group.type)).flatMap(group => group.rows); }
+  function count(issue) { return state.headers.includes(issue.column)?groups(detectorRows(),issue.column).reduce((sum,group)=>sum+group.rows.length,0):0; }
   function getFixOptions(issue, session) {
     return [{key:"mask",label:"Mask",risk:"Removes data",compute:() => ({operation:"mask"})}, {key:"hash",label:"Replace with a code",risk:"Removes data",disabled:typeof crypto==="undefined"||!crypto.subtle?"Deterministic codes require browser cryptography on a secure origin":"",compute:async () => {
       const mapping = Object.create(null);
@@ -46,7 +46,7 @@ ReviewModules.sensitive = (() => {
     return ReviewComponents.table({columns:[{key:"row",label:"Row",numeric:true},{key:"before",label:"Masked source"},{key:"after",label:"After"}],rows:examples,card:false,ui:"review.review.sample"});
   }
   function exploreContent(issue,session){ // SENS-E-01…03: masked data supplied to shared components; no AI slot.
-    init(issue,session);const c=ReviewComponents,found=groups(state.rows,issue.column),items=found.map(group=>({value:group.type,raw:false,count:group.rows.length,share:`${(group.rows.length/state.rows.length*100).toFixed(1)}%`,control:`<input type="checkbox" data-sensitive-type="${escapeHtml(group.type)}" ${session.locked.includes(group.type)?"checked":""}>`,extra:`<span><code>${escapeHtml(group.rows.slice(0,3).map(row=>ReviewPageEngine.mask(row[issue.column])).join(" · "))}</code></span>`,meta:"processed locally",ui:"review.explore.sensitive.type",attrs:{"data-type":group.type}}));
+     init(issue,session);const c=ReviewComponents,population=detectorRows(),found=groups(population,issue.column),items=found.map(group=>({value:group.type,raw:false,count:group.rows.length,share:`${(group.rows.length/Math.max(1,population.length)*100).toFixed(1)}%`,control:`<input type="checkbox" data-sensitive-type="${escapeHtml(group.type)}" ${session.locked.includes(group.type)?"checked":""}>`,extra:`<span><code>${escapeHtml(group.rows.slice(0,3).map(row=>ReviewPageEngine.mask(row[issue.column])).join(" · "))}</code></span>`,meta:"processed locally",ui:"review.explore.sensitive.type",attrs:{"data-type":group.type}}));
     return {lead:`How should these ${count(issue)} personal values be shared?`,sub:"Review before exporting; originals remain in your local source and project backup.",selection:c.selection(items,{ui:"review.explore.sensitive.examples",total:`${lockedRows(issue,session).length} values selected`}),evidence:""};
   }
   function fixContent(issue,session,preview){return {examples:maskedExamples(issue,preview.patches,lockedRows(issue,session))};}

@@ -7,6 +7,15 @@ let reviewController = null;
 let automaticReviewRun = 0;
 const interpretationCache = new Map();
 let dateFormatCache = null;
+let detectorPopulationCache = null;
+function duplicateCopyRowIds(headers=state.headers,rows=state.rows) {
+  const sourceRows=rows===state.rows&&state.original?.length?state.original:rows;
+  if(detectorPopulationCache?.rows===sourceRows&&detectorPopulationCache.headers===headers)return detectorPopulationCache.copies;
+  const groups=new Map();for(const row of sourceRows){const key=JSON.stringify(headers.map(column=>row[column]));if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row);}
+  const copies=new Set([...groups.values()].filter(group=>group.length>1).flatMap(group=>group.slice(1).map(row=>row._row)));
+  detectorPopulationCache={rows:sourceRows,headers,copies};return copies;
+}
+function detectorRows(rows=state.rows,headers=state.headers) {const copies=duplicateCopyRowIds(headers,rows);return rows.filter(row=>!copies.has(row._row));}
 function reviewDateFormats() {
   const key = `${state.datasetRevision}:${state.changes.length}:${state.changes[0]?.id || ""}`;
   if (dateFormatCache?.key === key) return dateFormatCache.entries;
@@ -168,7 +177,7 @@ function guidedPreview(item, draft = reviewDraft(item)) {
    const removedTarget = preview.removedColumns?.includes(item.column);
    // A single semantic pass per snapshot supplies the same counters/statistics instead of six repeated scans.
    const frame=(rows,entries,removed=false)=>{const index=toIndex(entries),missing=[],excluded=[],values=[];for(const row of rows){const status=CleaningEngine.observationState(row,item.column,policy,index);if(["missing","blank_unreviewed"].includes(status)&&!removed)missing.push(row._row);if(status!=="present"||removed){excluded.push(row._row);continue;}try{values.push(CleaningEngine.parseNumber(row[item.column],policy));}catch{}}const stats=CleaningEngine.stats(values),sum=values.reduce((total,value)=>total+value,0);stats.sd=stats.count?Math.sqrt(values.reduce((total,value)=>total+(value-stats.mean)**2,0)/stats.count):null;return {missing,excluded,values,stats,sum};};
-   const beforeFrame=frame(state.rows,meanings),afterFrame=frame(after,afterMeanings,removedTarget),beforeMissingIds=beforeFrame.missing,afterMissingIds=afterFrame.missing,beforeExcludedIds=beforeFrame.excluded,afterExcludedIds=afterFrame.excluded;
+    const duplicateCopies=duplicateCopyRowIds(state.headers,state.rows),beforePopulation=state.rows.filter(row=>!duplicateCopies.has(row._row)),afterPopulation=after.filter(row=>!duplicateCopies.has(row._row)),beforeFrame=frame(beforePopulation,meanings),afterFrame=frame(afterPopulation,afterMeanings,removedTarget),beforeMissingIds=beforeFrame.missing,afterMissingIds=afterFrame.missing,beforeExcludedIds=beforeFrame.excluded,afterExcludedIds=afterFrame.excluded;
    const result = { ...preview, after, constraints, classification, beforeMissingIds,afterMissingIds,beforeExcludedIds,afterExcludedIds,beforeMissing: beforeMissingIds.length, afterMissing: afterMissingIds.length, beforeStats: beforeFrame.stats, afterStats: afterFrame.stats,beforeSum:beforeFrame.sum,afterSum:afterFrame.sum, fingerprint: guidedFingerprint(item, draft), treatment };
   if (typeof enrichCapabilityPreview === "function") enrichCapabilityPreview(item, draft, result);
   return result;
@@ -191,7 +200,7 @@ function approveGuidedDecision(item) {
      if (item.recommendation === "outlier" && !saveOutlierRule(item, false)) return;
     const fingerprints = Object.fromEntries(reviewedRows.map(row => [row._row, reviewFingerprint(item, [row])]));
     const rowById = new Map(state.rows.map(row => [row._row, row]));
-     const beforeReview = state.rows.map(row => ({ ...row }));
+      const duplicateCopies=duplicateCopyRowIds(state.headers,state.rows),rowPopulation=item.reviewType==="duplicate-rows"?state.rows:state.rows.filter(row=>!duplicateCopies.has(row._row)),beforeReview=rowPopulation.map(row=>({ ...row }));
      const beforeHeaders = [...state.headers];
      preview.patches.forEach(patch => { rowById.get(patch.rowId)[patch.column] = patch.after; });
     const removedIds = new Set(preview.removedRows.map(row => row._row));
@@ -203,7 +212,8 @@ function approveGuidedDecision(item) {
     const change = { id: newReviewId(), createdAt: new Date().toISOString(), issue: item, title: treatmentLabel(draft.operation), disposition: draft.operation === "retain" ? "valid" : "finalized", rows: reviewedRows, before: preview.patches.length ? sample(preview.patches, "before") : "Values retained", after: preview.patches.length ? sample(preview.patches, "after") : removedIds.size ? `${removedIds.size} records removed` : "Values retained", reason: item.summary, note: draft.note || "", interpretation: draft.interpretation, interpretationValues, treatment: { ...preview.treatment, previewFingerprint: undefined }, originals: [], patches: preview.patches, removedRows: preview.removedRows, reviewedFingerprints: fingerprints, fingerprint: reviewFingerprint(item, reviewedRows) };
      state.changes.unshift(change);
      change.structure = { addedRows: preview.addedRows || [], addedColumns: preview.addedColumns || [], removedColumns: preview.removedColumns || [], rowLineage: preview.rowLineage || [] };
-     change.reviewImpact = { beforeRows: beforeReview, afterRows: state.rows.map(row => ({ ...row })), beforeHeaders, afterHeaders: [...state.headers], beforeMissing: preview.beforeMissing, afterMissing: preview.afterMissing,beforeMissingIds:preview.beforeMissingIds,afterMissingIds:preview.afterMissingIds,beforeExcludedIds:preview.beforeExcludedIds,afterExcludedIds:preview.afterExcludedIds, beforeStats: preview.beforeStats, afterStats: preview.afterStats, groups: draft.groupColumns || draft.similar?.columns || [] };
+      const afterPopulation=item.reviewType==="duplicate-rows"?state.rows:state.rows.filter(row=>!duplicateCopies.has(row._row));
+      change.reviewImpact = { beforeRows: beforeReview, afterRows: afterPopulation.map(row => ({ ...row })), beforeHeaders, afterHeaders: [...state.headers], beforeMissing: preview.beforeMissing, afterMissing: preview.afterMissing,beforeMissingIds:preview.beforeMissingIds,afterMissingIds:preview.afterMissingIds,beforeExcludedIds:preview.beforeExcludedIds,afterExcludedIds:preview.afterExcludedIds, beforeStats: preview.beforeStats, afterStats: preview.afterStats, groups: draft.groupColumns || draft.similar?.columns || [] };
     if (draft.operation === "leaveMissing") change.disposition = "valid";
     recordDecisionEvent(change);
     refreshIssues();

@@ -53,7 +53,7 @@ function numericColumns() { return cleaningProfile().columns.filter(profile => [
 function quantile(sorted, p) { const position = (sorted.length - 1) * p; const lower = Math.floor(position); const upper = Math.ceil(position); return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower); }
 function numericStats(values) { const sorted = values.filter(Number.isFinite).sort((a, b) => a - b); const mean = sorted.reduce((sum, value) => sum + value, 0) / (sorted.length || 1); return { mean, median: quantile(sorted, .5) || 0, min: sorted[0] || 0, max: sorted[sorted.length - 1] || 0, q1: quantile(sorted, .25) || 0, q3: quantile(sorted, .75) || 0 }; }
 function observedNumericEntries(column) {
-  return state.rows.flatMap(row => {
+  return detectorRows().flatMap(row => {
     if (observationState(row, column) !== "present") return [];
     try { return [{ row, raw: String(row[column]).trim(), value: CleaningEngine.parseNumber(row[column], columnPolicy(column)) }]; } catch { return []; }
   });

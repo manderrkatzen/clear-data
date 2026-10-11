@@ -1,6 +1,6 @@
 // Review detection and additional pure treatments. Existing calculations stay in CleaningEngine.
 var ReviewPageEngine = ((CleaningEngine) => {
-  const labels = { missing: "Missing values", "duplicate-rows": "Duplicate rows", "duplicate-values": "Repeated values", outlier: "Outliers", format: "Format mismatch", "type-mismatch": "Wrong type", "category-variants": "Inconsistent labels", whitespace: "Hidden spaces & characters", scale: "Mixed units / scale", invalid: "Impossible values", "cross-column": "Conflicting columns", constant: "Empty or constant column", "leading-zeros": "Lost leading zeros / IDs as numbers", "multi-value": "Multiple values in one cell", sensitive: "Sensitive data" };
+  const labels = { missing: "Missing values", "duplicate-rows": "Duplicate rows", "duplicate-values": "Repeated values", outlier: "Outliers", format: "Format mismatch", "type-mismatch": "Wrong type", "category-variants": "Inconsistent labels", whitespace: "Hidden spaces & characters", scale: "Mixed scale", invalid: "Impossible values", "cross-column": "Conflicting columns", constant: "Empty or constant column", "leading-zeros": "Lost leading zeros", "multi-value": "Multiple values in one cell", sensitive: "Sensitive data" };
   const extraOperations = ["mode", "groupMode", "previous", "next", "interpolate", "log", "dateFormat", "dateCap", "titlecase", "absolute", "rowValues", "swapDates", "trimEnds", "stripInvisible", "collapseSpaces", "removeHidden", "fixEncoding", "cleanCharacters", "dropColumn", "padZeros", "toText", "splitColumns", "splitRows", "splitFlags", "firstValue", "mask", "hash", "valueMap"];
   const text = value => String(value ?? "");
   const missingTokens = new Set(["", "null", "none", "n/a", "#n/a", "-", "--", "?", "unknown", "missing", "#div/0!", "#value!", "#ref!", "#num!", "#null!"]);
@@ -207,7 +207,7 @@ var ReviewPageEngine = ((CleaningEngine) => {
   function treatment(headers, rows, eligibleIds, column, draft, policy, classifications, options) {
     const selected = CleaningEngine.scopeRows(rows, eligibleIds, draft.scope, { ...options, policies: options.policies || [policy], classifications });
     const patches = [], blocked = [], removedRows = [], addedRows = [], addedColumns = [], removedColumns = [], provenance = [], rowLineage = [];
-    const ids = new Set(selected.map(r => r._row)), reference = rows.filter(r => !ids.has(r._row) && CleaningEngine.observationState(r,column,policy,classifications) === "present");
+    const ids = new Set(selected.map(r => r._row)), duplicateCopies=new Set(options.excludedRowIds||[]),reference = rows.filter(r => !ids.has(r._row) && !duplicateCopies.has(r._row) && CleaningEngine.observationState(r,column,policy,classifications) === "present");
     const mode = values => frequencies(values, column)[0]?.value;
     const referenceStats = CleaningEngine.stats(reference.flatMap(r => { try { return [CleaningEngine.parseNumber(r[column],policy)]; } catch { return []; } }));
     let groupLabels = null;
@@ -328,6 +328,6 @@ var ReviewPageEngine = ((CleaningEngine) => {
     current.forEach(r => pool.set(r._row,r));
     return [...pool.values()];
   }
-  return { labels,extraOperations,frequencies,pattern,sensitiveType,mask,whitespaceTypes,suggestedRange,violates,detect,treatment,applyPreview,replay,identityPool,dateValue,renderDate,normalized,labelKey };
+  return { labels,extraOperations,frequencies,pattern,sensitiveType,mask,whitespaceTypes,suggestedRange,violates,detect,treatment,applyPreview,replay,identityPool,dateValue,renderDate,normalized,labelKey,fixEncoding };
 })(typeof CleaningEngine !== "undefined" ? CleaningEngine : require("./cleaning-engine.js"));
 if (typeof module !== "undefined") module.exports = ReviewPageEngine;

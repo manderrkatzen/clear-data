@@ -170,7 +170,7 @@ var CleaningEngine = (() => {
     const decimals = draft.decimals ?? policy.decimals;
     if (!Number.isInteger(Number(decimals)) || Number(decimals) < 0 || Number(decimals) > 12) throw new Error("Precision must be between 0 and 12.");
     const classified = new Map(classifications.map(entry => [`${entry.rowId}:${entry.column}`, entry]));
-    const reference = rows.filter(row => !selectedIds.has(row._row) && observationState(row, column, policy, classified) === "present");
+    const duplicateCopies = new Set(options.excludedRowIds || []), reference = rows.filter(row => !selectedIds.has(row._row) && !duplicateCopies.has(row._row) && observationState(row, column, policy, classified) === "present");
     const referenceValues = reference.flatMap(row => { try { return [parseNumber(row[column], policy)]; } catch { return []; } });
     const referenceStats = stats(referenceValues);
     if (["groupwise", "knn", "groupMedian"].includes(draft.operation)) {

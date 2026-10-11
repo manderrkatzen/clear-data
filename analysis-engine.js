@@ -18,7 +18,7 @@ var AnalysisEngine = (() => {
     if (contextKey && contexts.get(rows)?.key === contextKey) return contexts.get(rows).context;
     let saved = cache.get(rows);
     if (!saved) { saved = new Map(); cache.set(rows, saved); }
-    const classified = new Map((options.classifications || []).map(entry => [`${entry.rowId}:${entry.column}`, entry]));
+    const classified = new Map((options.classifications || []).map(entry => [`${entry.rowId}:${entry.column}`, entry])),excludedRows=options.excludedRowIds?.length?new Set(options.excludedRowIds):null;
     const columns = new Map();
     for (const column of headers) {
       const parsing = policy(column, options);
@@ -41,16 +41,17 @@ var AnalysisEngine = (() => {
         if(!reviewedFormat&&parsing.role!=="date"&&["mdy","dmy"].includes(format) && !/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(raw))continue;
         try{const dateEngine=reviewedFormat||parsing.role==="date"?(typeof ReviewPageEngine!=="undefined"?ReviewPageEngine:require("./review-page-engine.js")):null;dates[index]=(dateEngine?dateEngine.dateValue(row[column],format):engine.parseDate(row[column],format)).slice(0,7);dateCount++;}catch{}
       }
+      if(excludedRows){observed=0;numericCount=0;dateCount=0;distinctValues.clear();for(let index=0;index<rows.length;index++){if(excludedRows.has(rows[index]._row)||states[index]!=="present")continue;observed++;distinctValues.add(text(rows[index][column]));if(numbers[index]!==null)numericCount++;if(dates[index]!==null)dateCount++;}}
       const distinct=distinctValues.size;
       const dateRole = parsing.role === "date" || dateCount >= Math.max(1, observed * .9);
       const numericRole = ["number", "integer"].includes(parsing.role) || (parsing.role === "auto" && numericCount >= Math.max(1, observed * .9));
       const type = dateRole ? "date" : numericRole ? "numeric" : "categorical";
-      const sortedIndices = numbers.map((value,index)=>Number.isFinite(value)?index:-1).filter(index=>index>=0).sort((a,b)=>numbers[a]-numbers[b]);
+      const sortedIndices = (excludedRows?numbers.map((value,index)=>Number.isFinite(value)&&!excludedRows.has(rows[index]._row)?index:-1):numbers.map((value,index)=>Number.isFinite(value)?index:-1)).filter(index=>index>=0).sort((a,b)=>numbers[a]-numbers[b]);
       const sorted = sortedIndices.map(index=>numbers[index]);
       const entry = { signature, states, blanks, numbers, dates, observed, distinct, type, sorted, sortedIndices, policy: parsing, idLike: parsing.role === "identifier" || (engine.isIdentifier(column) && distinct / Math.max(1, observed) >= .95) };
       saved.set(column, entry); columns.set(column, entry);
     }
-    const context = { headers, rows, columns, options, comparisons:new Map(), cohorts:new Map() };
+    const context = { headers, rows, columns, options, excludedRows, comparisons:new Map(), cohorts:new Map() };
     if (contextKey) contexts.set(rows, { key: contextKey, context });
     return context;
   }
@@ -107,7 +108,7 @@ var AnalysisEngine = (() => {
     let cohort=!indices ? context.cohorts.get(targetColumn) : null;
     if(!cohort) {
       const selected=[],source=indices || target.states.keys();let nMissing=0;
-      for(const index of source)if(target.states[index]!=="not_applicable"){selected.push(index);if(target.blanks[index])nMissing++;}
+      for(const index of source)if(target.states[index]!=="not_applicable"&&!context.excludedRows?.has(rows[index]._row)){selected.push(index);if(target.blanks[index])nMissing++;}
       cohort={selected,nMissing};if(!indices)context.cohorts.set(targetColumn,cohort);
     }
     const selected=cohort.selected,overallMissing=cohort.nMissing/Math.max(1,selected.length),usable=[];
@@ -144,13 +145,13 @@ var AnalysisEngine = (() => {
   function compare(headers, rows, targetColumn, options = {}) {
     if (!headers.includes(targetColumn)) throw new Error("Choose an existing target column.");
     const context = prepare(headers, rows, options), target = context.columns.get(targetColumn);
-    const nMissing = target.blanks.filter(Boolean).length, excludedNotApplicable = target.states.filter(status => status === "not_applicable").length, nPresent = rows.length - nMissing - excludedNotApplicable;
-    if (nMissing < 5 || nPresent < 5) return { targetColumn, total: rows.length, nMissing, nPresent, excludedNotApplicable, insufficientData: true, results: [], pattern: "insufficient", note: "At least five missing and five present records are needed." };
+    let total=rows.length,nMissing=target.blanks.filter(Boolean).length,excludedNotApplicable=target.states.filter(status=>status==="not_applicable").length;if(context.excludedRows){total=0;nMissing=0;excludedNotApplicable=0;for(let index=0;index<rows.length;index++){if(context.excludedRows.has(rows[index]._row))continue;total++;if(target.blanks[index])nMissing++;if(target.states[index]==="not_applicable")excludedNotApplicable++;}}const nPresent=total-nMissing-excludedNotApplicable;
+    if (nMissing < 5 || nPresent < 5) return { targetColumn, total, nMissing, nPresent, excludedNotApplicable, insufficientData: true, results: [], pattern: "insufficient", note: "At least five missing and five present records are needed." };
     const candidates = options.columns || headers.filter(column => column !== targetColumn && !context.columns.get(column).idLike);
     if (!Array.isArray(candidates) || candidates.some(column => !headers.includes(column) || column === targetColumn)) throw new Error("Comparison columns must exist and differ from the target.");
     const results = candidates.map(column => compareColumn(context, targetColumn, column)).filter(Boolean).sort((a, b) => b.effectSize - a.effectSize || headers.indexOf(a.column) - headers.indexOf(b.column));
     const none = results.length >= 3 && results.every(result => ["weak", "none"].includes(result.strength));
-    return { targetColumn, total: rows.length, nMissing, nPresent, excludedNotApplicable, insufficientData: false, results, pattern: none ? "none_detected" : "detected", note: none ? "Missing rows look like present rows in every other column. The gaps may depend on the missing value itself, so filling with an average could bias results." : "" };
+    return { targetColumn, total, nMissing, nPresent, excludedNotApplicable, insufficientData: false, results, pattern: none ? "none_detected" : "detected", note: none ? "Missing rows look like present rows in every other column. The gaps may depend on the missing value itself, so filling with an average could bias results." : "" };
   }
   function bandsFor(context, column, banding = {}) {
     const entry = context.columns.get(column);
@@ -159,7 +160,7 @@ var AnalysisEngine = (() => {
       const minimum = Number(banding.minCategoryCount ?? 10);
       if (!Number.isInteger(minimum) || minimum < 1 || minimum > 1000) throw new Error("Category group minimum must be between 1 and 1000.");
       const counts = new Map();
-      context.rows.forEach((row, index) => { if (entry.states[index] === "present") { const key = text(row[column]); counts.set(key, (counts.get(key) || 0) + 1); } });
+      context.rows.forEach((row, index) => { if (entry.states[index] === "present"&&(!context.excludedRows||!context.excludedRows.has(row._row))) { const key = text(row[column]); counts.set(key, (counts.get(key) || 0) + 1); } });
       return { labels: context.rows.map((row, index) => entry.states[index] !== "present" ? "Unknown" : counts.get(text(row[column])) < minimum ? "Other" : text(row[column])), numeric: false };
     }
     const mode = banding.mode || "quantiles";
@@ -189,7 +190,7 @@ var AnalysisEngine = (() => {
     if (!target) throw new Error("Choose an existing target column.");
     const unbanded = compareColumn(context, targetColumn, comparisonColumn);
     const definition = bandsFor(context, holdColumn, banding), groups = new Map();
-    definition.labels.forEach((label, index) => { if (target.states[index] === "not_applicable") return; if (!groups.has(label)) groups.set(label, []); groups.get(label).push(index); });
+    definition.labels.forEach((label, index) => { if (target.states[index] === "not_applicable"||context.excludedRows&&context.excludedRows.has(rows[index]._row)) return; if (!groups.has(label)) groups.set(label, []); groups.get(label).push(index); });
     const bands = [...groups].map(([label, indices]) => {
       const nMissing = indices.filter(index => target.blanks[index]).length, nPresent = indices.length - nMissing;
       const result = compareColumn(context, targetColumn, comparisonColumn, indices);
@@ -201,8 +202,7 @@ var AnalysisEngine = (() => {
     const sameDirection = band => typeof unbanded?.direction === "number" ? band.direction === unbanded.direction : Object.entries(unbanded?.direction || {}).filter(([label, direction]) => band.direction?.[label] === direction).length > Object.keys(unbanded?.direction || {}).length / 2;
     const unbandedEffect = unbanded?.effectSize || 0;
     const verdict = valid.length < 2 ? "insufficient" : combinedEffect <= unbandedEffect * .3 ? "explained" : combinedEffect >= unbandedEffect * .7 && valid.filter(sameDirection).length > valid.length / 2 ? "holds" : "partial";
-    const nMissing = target.blanks.filter(Boolean).length;
-    const unknownMissing = target.blanks.filter((blank, index) => blank && context.columns.get(holdColumn).blanks[index]).length;
+    let nMissing=target.blanks.filter(Boolean).length,unknownMissing=target.blanks.filter((blank,index)=>blank&&context.columns.get(holdColumn).blanks[index]).length;if(context.excludedRows){nMissing=0;unknownMissing=0;for(let index=0;index<rows.length;index++){if(context.excludedRows.has(rows[index]._row)||!target.blanks[index])continue;nMissing++;if(context.columns.get(holdColumn).blanks[index])unknownMissing++;}}
     return { targetColumn, comparisonColumn, holdColumn, banding, unbandedEffect, combinedEffect, verdict, bands, warning: nMissing && unknownMissing / nMissing >= .5 ? "The hold column is missing in at least half of the target-missing records; this result is unreliable." : "", summary: `${comparisonColumn} while holding ${holdColumn}: ${verdict}; ${valid.length} usable bands.` };
   }
   function fillSimilar(headers, rows, targetColumn, params = {}, options = {}) {
@@ -214,8 +214,8 @@ var AnalysisEngine = (() => {
     const selected = params.rowIds ? new Set(params.rowIds) : null;
     const rowIds = new Set(rows.map(row => row._row));
     if (selected && [...selected].some(id => !rowIds.has(id))) throw new Error("Fill scope contains unknown source rows.");
-    const donors = rows.map((row, index) => ({ row, index, value: target.numbers[index] })).filter(entry => target.states[entry.index] === "present" && Number.isFinite(entry.value) && !selected?.has(entry.row._row));
-    const missing = rows.map((row, index) => ({ row, index })).filter(entry => target.blanks[entry.index] && (!selected || selected.has(entry.row._row)));
+    const donors = rows.map((row, index) => ({ row, index, value: target.numbers[index] })).filter(entry => target.states[entry.index] === "present" && Number.isFinite(entry.value) && !selected?.has(entry.row._row)&&( !context.excludedRows||!context.excludedRows.has(entry.row._row)));
+    const missing = rows.map((row, index) => ({ row, index })).filter(entry => target.blanks[entry.index] && (!context.excludedRows||!context.excludedRows.has(entry.row._row)) && (!selected || selected.has(entry.row._row)));
     const global = statistics(donors.map(entry => entry.value)).median;
     const definitions = columns.map(column => params.strict ? { labels: rows.map(row => String(row[column] ?? "")), numeric: false } : bandsFor(context, column, params.banding?.[column] || {}));
     const key = index => JSON.stringify(definitions.map(definition => definition.labels[index]));

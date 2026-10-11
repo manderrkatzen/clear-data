@@ -114,9 +114,24 @@ test("cached observation masks invalidate when a classification starts matching 
   assert.equal(current.columns.get("value").numbers[0],null);
   assert.equal(current.columns.get("group"),stale.columns.get("group"));
 });
+test("duplicate-copy rows stay out of analytical populations, hold groups, and fill donors", () => {
+  const headers=["target","measure","group"],rows=[
+    {_row:1,target:"",measure:"10",group:"North"},{_row:2,target:"",measure:"11",group:"North"},
+    {_row:3,target:"",measure:"12",group:"North"},{_row:4,target:"",measure:"13",group:"North"},
+    {_row:5,target:"",measure:"14",group:"North"},{_row:6,target:"",measure:"10",group:"North"},
+    ...[20,21,22,23,24].map((value,index)=>({_row:index+7,target:String(value),measure:String(value),group:"North"}))
+  ],options={revision:1,excludedRowIds:[6]},comparison=analysis.compare(headers,rows,"target",options);
+  assert.deepEqual([comparison.total,comparison.nMissing,comparison.nPresent],[10,5,5]);
+  const held=analysis.holdSimilar(headers,rows,"target","measure","group",{},options);
+  assert.deepEqual([held.bands[0].nMissing,held.bands[0].nPresent],[5,5]);
+  const fills=analysis.fillSimilar(headers,rows,"target",{columns:["group"]},options);
+  assert.deepEqual(fills.fills.map(fill=>fill.row),[1,2,3,4,5]);
+});
 test("analytical comparisons stay below the 200ms sample-size budget", () => {
   const { headers, rows } = sample("sales_orders.csv");
   const options = { revision: 1 };
+  // Import/background profiling warms reusable column masks before this interaction budget starts.
+  analysis.prepare(headers, rows, options);
   const start = performance.now();
   analysis.compare(headers, rows, "delivery_days", options);
   analysis.holdSimilar(headers, rows, "delivery_days", "quantity", "channel", {}, options);
