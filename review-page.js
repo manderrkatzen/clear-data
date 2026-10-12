@@ -61,6 +61,7 @@ function renderReviewPage() {
   app.querySelectorAll("[data-workspace-screen]").forEach(link=>link.onclick=event=>{event.preventDefault();go(link.dataset.workspaceScreen);});
   app.querySelector('[data-ui="top.undo"]')?.addEventListener("click",()=>{const change=state.changes[0];if(change)rollbackChange(change.id);render();});
   if(selected)ReviewCore.bindShared(selected);
+  app.querySelectorAll("button.text-button").forEach(button=>button.classList.add("link"));
 }
 function reviewIssueHtml(issue) { // CORE-14, CORE-15, CORE-16, CORE-20, CORE-49, CORE-61, CORE-62
   const session=ReviewCore.data(issue),module=ReviewCore.moduleFor(issue);module.init?.(issue,session);

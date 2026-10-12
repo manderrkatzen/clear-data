@@ -23,7 +23,7 @@ function reviewDistribution(column, afterRows, classification = null) {
   const source = identifier ? [] : interpretedNumericValues(state.original, column, null, true), working = identifier ? [] : interpretedNumericValues(state.rows, column), proposed = identifier ? [] : interpretedNumericValues(afterRows, column, classification);
   if (!source.length && !working.length && !proposed.length) {
     const series = [["Original", state.original], ["Working", state.rows], ...(afterRows !== state.rows ? [["Proposed", afterRows]] : [])];
-    return `<div class="comparison-metrics">${series.map(([name, rows]) => `<div><span>${name}</span><b>${new Set(rows.map(row => row[column]).filter(value => String(value ?? "").trim())).size} labels</b><small>${rows.filter(row => !String(row[column] ?? "").trim()).length} blanks</small></div>`).join("")}</div>`;
+    return `<div class="metrics">${series.map(([name, rows]) => `<div><span>${name}</span><b>${new Set(rows.map(row => row[column]).filter(value => String(value ?? "").trim())).size} labels</b><small>${rows.filter(row => !String(row[column] ?? "").trim()).length} blanks</small></div>`).join("")}</div>`;
   }
   const values = [source, working], names = ["Original source", "Working"];
   if (afterRows !== state.rows) { values.push(proposed); names.push("Proposed"); }

@@ -23,18 +23,19 @@ const base = process.env.BASE_URL || "http://localhost:4174";
         await page.locator("#cumulativeColumn").selectOption(column);
         await page.waitForFunction(column => {
           const section=document.querySelector(".cumulative-view");
-          return section?.querySelector("#cumulativeColumn")?.value===column && section.querySelectorAll(".distribution-bars i").length===32;
+          return section?.querySelector("#cumulativeColumn")?.value===column && section.querySelectorAll(".bars .bar").length===32;
         },column);
         const chart = await page.locator(".cumulative-view").evaluate(section => {
-          const bars = section.querySelector(".distribution-bars");
+          const bars = section.querySelector(".bars");
           return {
             column: section.querySelector("#cumulativeColumn").value,
-            legend: section.querySelector(".chart-legend")?.innerText || "",
-            binCount: bars?.children.length || 0,
-            markCount: bars?.querySelectorAll("i").length || 0,
-            visibleMarks: [...(bars?.querySelectorAll("i") || [])].filter(mark => mark.getBoundingClientRect().height > 0).length,
+            legend: section.querySelector(".legend")?.innerText || "",
+            binCount: section.querySelectorAll(".bars > .pairs").length,
+            markCount: bars?.querySelectorAll(".bar").length || 0,
+            visibleMarks: [...(bars?.querySelectorAll(".bar") || [])].filter(mark => mark.getBoundingClientRect().height > 0).length,
             height: bars?.getBoundingClientRect().height || 0,
-            axis: section.querySelector(".distribution-axis")?.innerText || ""
+            axis: section.querySelector('[aria-label="Distribution range"].pairs')?.innerText || "",
+            legacyClasses: [...section.querySelectorAll(".chart-legend,.distribution-bars,.distribution-axis,.analytical-histogram,.comparison-metrics")].length
           };
         });
         assert.equal(chart.column, column);
@@ -45,7 +46,17 @@ const base = process.env.BASE_URL || "http://localhost:4174";
         assert.ok(chart.visibleMarks > 0, `${file}/${column}: the distribution bars are invisible`);
         assert.ok(chart.height >= 100, `${file}/${column}: the chart has collapsed height`);
         assert.match(chart.axis, /1st–99th percentile/);
+        assert.equal(chart.legacyClasses, 0, `${file}/${column}: distribution uses a non-shared style class`);
         console.log(`PASS ${file}: ${column} distribution (${chart.visibleMarks} visible bars)`);
+      }
+      const categorical = await page.evaluate(() => cleaningProfile().columns.find(profile => !["number","integer","identifier"].includes(profile.role))?.column);
+      if (categorical) {
+        await page.locator("#cumulativeColumn").selectOption(categorical);
+        await page.waitForFunction(column => document.querySelector("#cumulativeColumn")?.value===column&&Boolean(document.querySelector(".cumulative-view .metrics")),categorical);
+        const summary=await page.locator(".cumulative-view .metrics").innerText();
+        assert.match(summary,/Original/);assert.match(summary,/Working/);assert.match(summary,/labels/);
+        assert.equal(await page.locator(".cumulative-view .comparison-metrics").count(),0);
+        console.log(`PASS ${file}: ${categorical} label distribution`);
       }
     }
 
@@ -65,14 +76,14 @@ const base = process.env.BASE_URL || "http://localhost:4174";
     await page.locator('[data-workspace-screen="data"]').click();
     await page.waitForSelector(".cumulative-view");
     await page.locator("#cumulativeColumn").selectOption("delivery_days__missing_pattern");
-    const effect = await page.evaluate(() => ({ original: interpretedNumericValues(state.original, "delivery_days__missing_pattern", null, true).length, working: interpretedNumericValues(state.rows, "delivery_days__missing_pattern").length, bins: document.querySelectorAll(".distribution-bars > div").length, visibleBars: [...document.querySelectorAll(".distribution-bars i")].filter(mark => mark.getBoundingClientRect().height > 0).length }));
+    const effect = await page.evaluate(() => ({ original: interpretedNumericValues(state.original, "delivery_days__missing_pattern", null, true).length, working: interpretedNumericValues(state.rows, "delivery_days__missing_pattern").length, bins: document.querySelectorAll(".cumulative-view .bars > .pairs").length, visibleBars: [...document.querySelectorAll(".cumulative-view .bars .bar")].filter(mark => mark.getBoundingClientRect().height > 0).length }));
     assert.ok(effect.working > effect.original, "The working distribution did not reflect the approved fill");
     assert.equal(effect.bins, 16);
     assert.ok(effect.visibleBars > 0);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(50);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390, "Mobile dataset distribution has horizontal overflow");
-    assert.ok(await page.locator(".distribution-bars i").first().evaluate(mark => mark.getBoundingClientRect().height > 0), "Mobile distribution bars are invisible");
+    assert.ok(await page.locator(".cumulative-view .bars .bar").evaluateAll(marks => marks.some(mark => mark.getBoundingClientRect().height > 0)), "Mobile distribution bars are invisible");
     assert.deepEqual(errors, []);
     console.log(`PASS approved fill updates delivery_days distribution (${effect.original} source → ${effect.working} working observations)`);
   } finally {

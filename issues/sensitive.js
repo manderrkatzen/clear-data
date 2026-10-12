@@ -34,7 +34,7 @@ ReviewModules.sensitive = (() => {
   }
   function showRows(issue) {
     const session = ReviewCore.data(issue), panel = document.createElement("dialog");
-    panel.innerHTML = `<header><h2>Affected sensitive rows</h2><button class="secondary" id="reviewCloseRows">Close</button></header><p>Examples stay masked here. The source snapshot remains local.</p>${samples(issue,session.preview.patches,lockedRows(issue,session))}`;
+    panel.innerHTML = `<header><h2>Affected sensitive rows</h2><button class="btn2" id="reviewCloseRows">Close</button></header><p>Examples stay masked here. The source snapshot remains local.</p>${samples(issue,session.preview.patches,lockedRows(issue,session))}`;
     ReviewCore.openRowsPanel(panel);
   }
   function bind(issue, session) {
