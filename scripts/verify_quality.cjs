@@ -426,6 +426,13 @@ test("AI rule row endpoint sends only the requested row projection and returns v
   finally{global.fetch=originalFetch;}
 });
 
+test("AI fix requests use an operation-specific response contract",async()=>{
+  const originalFetch=global.fetch,context={column:"satisfaction",type:"missing",role:"text",headers:["satisfaction","rating"],allowedFixes:["constant","mode","leave"],count:20,affected:3,values:[{value:"",count:3,locked:true}],samples:["LOW","HIGH"],groups:[],statistics:{}};
+  global.fetch=async(url,options)=>{const prompt=JSON.parse(options.body).prompt;assert.match(prompt,/operation/);assert.match(prompt,/never return clusters/i);assert.doesNotMatch(prompt,/clusters \(objects with values/);return new Response(JSON.stringify({response:JSON.stringify({note:"A constant fill best matches the request. Review the exact value before applying.",operation:"constant",params:{value:"LOW",blankMeansValue:false},reason:"Use the requested satisfaction label."})}),{status:200,headers:{"content-type":"application/json"}});};
+  try{const response=await reviewAi.handleReview(new Request("http://test/api/ai/review",{method:"POST",headers:{"cf-connecting-ip":"fix-contract-test"},body:JSON.stringify({mode:"fix",instruction:"Fill with LOW.",context})}),{AI_MODE:"local",AI_MAX_REQUESTS_PER_HOUR:20});assert.equal(response.status,200);assert.equal((await response.json()).result.operation,"constant");}
+  finally{global.fetch=originalFetch;}
+});
+
 test("body limits use UTF-8 bytes, including streamed requests", async () => {
   const body = JSON.stringify({ instruction: "é".repeat(40000) });
   await assert.rejects(ai.readPayload(new Request("http://test/api", { method: "POST", body })), (error) => error.status === 413);
