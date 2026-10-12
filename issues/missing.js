@@ -221,7 +221,7 @@ ReviewModules.missing = (() => {
     if(rows.length>aiRuleRowLimit){session.ruleError="Choose 200 or fewer missing cells in Explore.";renderPreservingReviewFocus();return;}
     if(!availableColumns.length){session.ruleError="No non-sensitive, non-identifier context columns are available for AI.";renderPreservingReviewFocus();return;}
     invalidateRuleSuggestions(session);const generation=++session.ruleGeneration;session.ruleBusy=true;session.ruleStatus="planning";session.ruleError="";session.rulePlan=null;session.ruleProposals=[];session.ruleColumns=[];renderPreservingReviewFocus();
-    const result=await ReviewCore.requestAi(issue,"rule-plan",{column:issue.column,role:ruleTargetRole(issue),meaning:columnPolicy(issue.column).meaning||"",headers:[issue.column,...availableColumns.map(entry=>entry.column)],availableColumns});
+    const result=await ReviewCore.requestAi(issue,"rule-plan",{column:issue.column,role:ruleTargetRole(issue),meaning:columnPolicy(issue.column).meaning||"",headers:[issue.column,...availableColumns.map(entry=>entry.column)],availableColumns},instruction);
     if(generation!==session.ruleGeneration)return;
     session.ruleBusy=false;
     if(!result){session.ruleError=`AI unavailable: ${session.aiReason||"error"}${session.aiLocalOnly?" · Sensitive values stay local":""}`;session.ruleStatus="error";renderPreservingReviewFocus();return;}
@@ -239,7 +239,7 @@ ReviewModules.missing = (() => {
       const batch=initial.slice(offset,offset+aiRuleBatchSize),safe=batch.filter(proposal=>Object.values(proposal.context).every(value=>value.length<=300&&!ReviewCore.containsSensitiveText(value))),unsafe=batch.filter(proposal=>!safe.includes(proposal));
       unsafe.forEach(proposal=>{proposal.status="unresolved";proposal.reason="A requested context value could not be safely shared with AI.";});
       if(!safe.length){if(!rowIds)session.ruleProgress.completed++;continue;session.ruleError="This row's requested context cannot be safely shared with AI.";session.ruleStatus="error";break;}
-      const rows=safe.map((proposal,index)=>({id:`r${index}`,values:proposal.context})),result=await ReviewCore.requestAi(issue,"rule-values",{column:issue.column,role:ruleTargetRole(issue),columns,rows});
+      const rows=safe.map((proposal,index)=>({id:`r${index}`,values:proposal.context})),result=await ReviewCore.requestAi(issue,"rule-values",{column:issue.column,role:ruleTargetRole(issue),columns,rows},session.ruleInstruction);
       if(generation!==session.ruleGeneration)return;
       if(!result){session.ruleError=`AI unavailable: ${session.aiReason||"error"}${session.aiLocalOnly?" · Sensitive values stay local":""}`;session.ruleStatus="error";break;}
       session.ruleProvider=session.aiProvider||session.ruleProvider||"configured provider";

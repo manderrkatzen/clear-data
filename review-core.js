@@ -139,16 +139,16 @@ var ReviewCore = (() => {
     return `<p class="meta review-ai-status" data-ui="review.ai.status" role="status">${pending?'<span class="review-spinner" aria-hidden="true"></span>':""}${escapeHtml(text)}</p>`;
   }
   function errorReason(response,payload) { const text=String(payload?.error || "").toLowerCase(),raw=Number(response.headers?.get("retry-after") || payload?.retryAfterSeconds || 3600),seconds=Number.isFinite(raw)?raw:3600;return response.status===429?`limit reached (resets in ${Math.max(1,Math.ceil(seconds/60))} min)`:response.status===503?"not configured":/verif|security|turnstile/.test(text)?"verification failed":/timed|timeout/.test(text)||response.status===504?"timed out":"error"; }
-  async function requestAi(issue,mode,context) {
-    const session=data(issue), source=state.original, revision=state.datasetRevision,fingerprint=()=>JSON.stringify([session.locked,session.locks,session.banding,session.instruction,session.range,session.tolerance,session.targetFormat,session.sourceDate,session.percent,kind(issue)==="outlier"?outlierDraft(issue):null]),scope=fingerprint();
+  async function requestAi(issue,mode,context,instructionOverride) {
+    const session=data(issue), source=state.original, revision=state.datasetRevision,instruction=typeof instructionOverride==="string"?instructionOverride:session.instruction||"",fingerprint=()=>JSON.stringify([session.locked,session.locks,session.banding,session.instruction,instruction,session.range,session.tolerance,session.targetFormat,session.sourceDate,session.percent,kind(issue)==="outlier"?outlierDraft(issue):null]),scope=fingerprint();
     session.aiMode=mode;
     // SENS-D-02: another issue on the same personal column must not bypass local-only review.
-    if (ReviewModules.sensitive?.isSensitiveColumn(issue.column) || containsSensitiveText({context,instruction:session.instruction || ""})) { session.aiRequested=true; session.aiStatus="error"; session.aiReason="error";session.aiLocalOnly=true;session.ai=null; renderPreservingReviewFocus(); return; }
+    if (ReviewModules.sensitive?.isSensitiveColumn(issue.column) || containsSensitiveText({context,instruction})) { session.aiRequested=true; session.aiStatus="error"; session.aiReason="error";session.aiLocalOnly=true;session.ai=null; renderPreservingReviewFocus(); return; }
     session.aiController?.abort(); const controller=new AbortController(); session.aiController=controller; session.aiStatus="pending"; session.aiReason=""; session.aiValidationError=false;session.aiLocalOnly=false;session.aiStale=false;session.ai=null; session.aiRequested=true; renderPreservingReviewFocus();
     try {
       const config=await fetch("/api/ai/review",{signal:controller.signal}).then(response=>response.json()); turnstileSiteKey=config.turnstileSiteKey||"";
       const token=await requestTurnstileToken(controller.signal);
-      const response=await fetch("/api/ai/review",{method:"POST",signal:controller.signal,headers:{"content-type":"application/json"},body:JSON.stringify({mode,instruction:session.instruction||"",context,turnstileToken:token})});
+      const response=await fetch("/api/ai/review",{method:"POST",signal:controller.signal,headers:{"content-type":"application/json"},body:JSON.stringify({mode,instruction,context,turnstileToken:token})});
       const payload=await response.json();
       if (!response.ok) { session.aiReason=errorReason(response,payload); session.aiValidationError=payload.error==="AI suggestion couldn't be used"; throw new Error(payload.error||"AI unavailable"); }
       if (source!==state.original || revision!==state.datasetRevision || controller!==session.aiController) return;

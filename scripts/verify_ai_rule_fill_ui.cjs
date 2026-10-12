@@ -16,11 +16,13 @@ const base = process.env.BASE_URL || "http://localhost:4174";
         if (url.pathname === "/api/ai/review" && route.request().method() === "POST") {
           const body = route.request().postDataJSON();
           if (body.mode === "rule-plan") {
+            assert.match(body.instruction, /rating is below 0\.5/);
             assert.equal(body.context.availableColumns.some(entry => /email|name|address/i.test(entry.column)), false);
             assert.equal("rows" in body.context, false, "the field-planning request contains no row data");
             return route.fulfill({ status: 200, json: { provider: "test", result: { columns: ["rating", "CustomerLTV"], explanation: "Use rating and CustomerLTV to suggest the satisfaction label.", needsClarification: false } } });
           }
           assert.equal(body.mode, "rule-values");
+          assert.match(body.instruction, /rating is below 0\.5/);
           assert.deepEqual(body.context.columns, ["rating", "CustomerLTV"]);
           for (const row of body.context.rows) {
             assert.deepEqual(Object.keys(row.values).sort(), ["CustomerLTV", "rating"]);
