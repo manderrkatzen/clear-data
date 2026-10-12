@@ -101,6 +101,7 @@
 .rc-table-scroll table { border-collapse:collapse; width:100%; font-size:14px; }
 .rc-table-scroll th { position:sticky; top:0; background:var(--rv-bg); color:var(--rv-ink-3); text-align:left; font-size:12px; font-weight:600; padding:8px 16px; white-space:nowrap; border-bottom:1px solid var(--rv-line); z-index:1; }
 .rc-table-scroll td { padding:8px 16px; border-bottom:1px solid var(--rv-line-2); white-space:nowrap; }
+#reviewAiRequest > label,#reviewAiRuleRequest > label { display:block; margin-bottom:12px; }
 #reviewAiRuleRequest .btn2 { min-height:40px; margin:4px 4px 0 0; }
 .rc-problem { color:var(--rv-gap); background:var(--rv-gap-soft); }
 .rc-removed { text-decoration:line-through; }
