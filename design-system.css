@@ -161,14 +161,16 @@ summary span { font-size: 13px; }
 .comparison-metrics span { font-size: 12px; font-weight: 600; color: #526783; }
 .comparison-metrics b { font-size: 16px; font-weight: 600; color: #264b80; }
 .comparison-metrics small { font-size: 13px; }
-.chart-legend { font-size: 12px; gap: 16px; color: #526783; }
-.chart-legend .source::before, .distribution-bars .source { background: #899bb4; }
-.chart-legend .working::before, .distribution-bars .working { background: #245bc5; }
-.chart-legend .proposed::before, .distribution-bars .proposed { background: #26966a; }
-.distribution-bars { height: 120px; gap: 5px; border-bottom-color: #bdcde3; }
-.distribution-bars > div { gap: 2px; }
-.distribution-bars i { flex: 1; width: auto; }
-.distribution-axis { font: 12px var(--font-ui); color: #4a6383; }
+.chart-legend { display:flex; align-items:center; flex-wrap:wrap; font-size:12px; gap:8px 16px; color:#526783; }
+.chart-legend > span { display:inline-flex; align-items:center; gap:6px; }
+.chart-legend > span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:2px; }
+.chart-legend .source::before, .distribution-bars .source { background:#899bb4; }
+.chart-legend .working::before, .distribution-bars .working { background:#245bc5; }
+.chart-legend .proposed::before, .distribution-bars .proposed { background:#26966a; }
+.distribution-bars { display:flex; align-items:stretch; height:120px; gap:5px; min-width:0; margin:12px 0 8px; border-bottom:1px solid #bdcde3; }
+.distribution-bars > div { display:flex; align-items:flex-end; flex:1; gap:2px; min-width:0; height:100%; }
+.distribution-bars i { display:block; flex:1 1 0; min-width:0; width:auto; border-radius:2px 2px 0 0; }
+.distribution-axis { display:flex; align-items:center; justify-content:space-between; gap:12px; font:12px var(--font-ui); color:#4a6383; }
 .cell-empty { color: #81502b; font-size: 13px; }
 .evidence { background: #f1f5fc; color: #405c82; border-radius: var(--radius); padding: 14px; }
 .change-card { border-radius: 8px; padding: 20px; }
