@@ -6,7 +6,7 @@ var ReviewCore = (() => {
   const kind = issue => issue.reviewType || "manual";
   function data(issue) {
     state.reviewPage ||= {};
-    const session=state.reviewPage[issueKey(issue)] ||= {tab:issue.status === "open" ? "explore" : "review",fix:"",locked:null,unlocked:[],locks:[],banding:{},mapping:{},value:"",preview:null,pending:false,error:"",note:"",noteOpen:false,more:false,ai:null,aiStatus:"idle",aiRequested:false,aiController:null,ruleOpen:false,ruleInstruction:"",rulePlan:null,ruleColumns:[],ruleProposals:[],ruleStatus:"idle",ruleError:"",ruleGeneration:0,generation:0,skipBlocked:false,acknowledgeConstraints:false,acknowledgeConflicts:false,byGroup:false,openGroups:{},extraColumns:[],showRows:{},sourceVersion:state.datasetRevision};
+    const session=state.reviewPage[issueKey(issue)] ||= {tab:issue.status === "open" ? "explore" : "review",fix:"",locked:null,unlocked:[],locks:[],banding:{},mapping:{},value:"",preview:null,pending:false,error:"",note:"",noteOpen:false,more:false,ai:null,aiStatus:"idle",aiRequested:false,aiController:null,aiValidationDetail:"",ruleOpen:false,ruleInstruction:"",rulePlan:null,ruleColumns:[],ruleProposals:[],ruleStatus:"idle",ruleError:"",ruleGeneration:0,generation:0,skipBlocked:false,acknowledgeConstraints:false,acknowledgeConflicts:false,byGroup:false,openGroups:{},extraColumns:[],showRows:{},sourceVersion:state.datasetRevision};
     if(session.sourceVersion!==state.datasetRevision) { // CORE-27, CORE-50, CORE-54: old evidence never becomes a current approval/proposal.
       session.sourceVersion=state.datasetRevision;session.generation++;session.ruleGeneration++;session.preview=null;session.pending=false;session.aiController?.abort();session.aiFixProposal=null;session.rulePlan=null;session.ruleProposals=[];session.ruleColumns=[];delete session.aiRuleApprovedIds;
       if(session.aiRequested){session.ai=null;session.aiStatus="error";session.aiReason="error";session.aiStale=true;}
@@ -135,7 +135,7 @@ var ReviewCore = (() => {
   }
   function aiStatus(issue,override = {}) { // CORE-53: visible progress and specific failure reason; local controls remain usable.
     const session={...data(issue),...override},pending=session.aiStatus==="pending";
-    const text=pending?"AI is checking…":session.aiStatus==="error"?`AI unavailable: ${session.aiReason || "error"}${session.aiValidationError?" · AI suggestion couldn't be used":""}${session.aiLocalOnly?" · Sensitive values stay local":""}${session.aiStale?" · Context changed; refresh the suggestion":""}`:session.ai?`AI · ${session.aiProvider || "configured provider"}`:session.aiUnavailableByConfig?"AI unavailable: not configured":"AI has not been requested";
+    const text=pending?"AI is checking…":session.aiStatus==="error"?`AI unavailable: ${session.aiReason || "error"}${session.aiValidationError?` · AI suggestion couldn't be used${session.aiValidationDetail?`: ${session.aiValidationDetail}`:""}`:""}${session.aiLocalOnly?" · Sensitive values stay local":""}${session.aiStale?" · Context changed; refresh the suggestion":""}`:session.ai?`AI · ${session.aiProvider || "configured provider"}`:session.aiUnavailableByConfig?"AI unavailable: not configured":"AI has not been requested";
     return `<p class="meta review-ai-status" data-ui="review.ai.status" role="status">${pending?'<span class="review-spinner" aria-hidden="true"></span>':""}${escapeHtml(text)}</p>`;
   }
   function errorReason(response,payload) { const text=String(payload?.error || "").toLowerCase(),raw=Number(response.headers?.get("retry-after") || payload?.retryAfterSeconds || 3600),seconds=Number.isFinite(raw)?raw:3600;return response.status===429?`limit reached (resets in ${Math.max(1,Math.ceil(seconds/60))} min)`:response.status===503?"not configured":/verif|security|turnstile/.test(text)?"verification failed":/timed|timeout/.test(text)||response.status===504?"timed out":"error"; }
@@ -144,13 +144,13 @@ var ReviewCore = (() => {
     session.aiMode=mode;
     // SENS-D-02: another issue on the same personal column must not bypass local-only review.
     if (ReviewModules.sensitive?.isSensitiveColumn(issue.column) || containsSensitiveText({context,instruction})) { session.aiRequested=true; session.aiStatus="error"; session.aiReason="error";session.aiLocalOnly=true;session.ai=null; renderPreservingReviewFocus(); return; }
-    session.aiController?.abort(); const controller=new AbortController(); session.aiController=controller; session.aiStatus="pending"; session.aiReason=""; session.aiValidationError=false;session.aiLocalOnly=false;session.aiStale=false;session.ai=null; session.aiRequested=true; renderPreservingReviewFocus();
+    session.aiController?.abort(); const controller=new AbortController(); session.aiController=controller; session.aiStatus="pending"; session.aiReason=""; session.aiValidationError=false;session.aiValidationDetail="";session.aiLocalOnly=false;session.aiStale=false;session.ai=null; session.aiRequested=true; renderPreservingReviewFocus();
     try {
       const config=await fetch("/api/ai/review",{signal:controller.signal}).then(response=>response.json()); turnstileSiteKey=config.turnstileSiteKey||"";
       const token=await requestTurnstileToken(controller.signal);
       const response=await fetch("/api/ai/review",{method:"POST",signal:controller.signal,headers:{"content-type":"application/json"},body:JSON.stringify({mode,instruction,context,turnstileToken:token})});
       const payload=await response.json();
-      if (!response.ok) { session.aiReason=errorReason(response,payload); session.aiValidationError=payload.error==="AI suggestion couldn't be used"; throw new Error(payload.error||"AI unavailable"); }
+      if (!response.ok) { session.aiReason=errorReason(response,payload); session.aiValidationError=payload.error==="AI suggestion couldn't be used";session.aiValidationDetail=String(payload.detail||"").slice(0,300); throw new Error(payload.error||"AI unavailable"); }
       if (source!==state.original || revision!==state.datasetRevision || controller!==session.aiController) return;
       if(scope!==fingerprint()){session.aiStatus="error";session.aiReason="error";session.aiStale=true;return;}
       session.ai=payload.result; session.aiProvider=payload.provider||"configured provider"; session.aiStatus="ready"; return payload.result;

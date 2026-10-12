@@ -213,6 +213,7 @@ ReviewModules.missing = (() => {
     return `<div class="card ai" id="reviewAiRuleRequest" data-ui="review.fix.ai.rule"><p class="meta">AI · ${ReviewComponents.text(session.ruleProvider||"configured provider")}</p><p>${ReviewComponents.text(plan.explanation)}</p><p class="meta">AI requested these fields. Choose what to share for the selected missing rows:</p><div>${fields}</div><p class="meta">Only checked fields and selected missing rows are sent. Other row fields stay in your browser.</p>${!session.ruleColumns.length?'<p class="meta">Choose at least one context field to continue.</p>':""}<button class="btn" id="reviewRuleGenerate" ${generationReason?`disabled title="${ReviewComponents.text(generationReason)}"`:""}>Request row suggestions</button>${rowLimitExceeded?`<p class="meta">Choose 200 or fewer missing cells in Explore to use AI suggestions.</p>`:""}${status}${proposals.length?`<p class="meta">Each row is a separate suggestion. Approve or skip rows here; the Apply button still previews and confirms every accepted value.</p>${pendingApproval?`<button class="btn2" id="reviewRuleApproveAll" ${session.ruleBusy?'disabled title="Wait for the current AI request to finish."':""}>Approve all ${pendingApproval} suggestions</button>`:""}${accepted?`<p class="meta">${accepted} row suggestions approved for the preview below.</p>`:""}${ReviewComponents.table({columns:[{key:"entry",label:"AI row suggestions"}],rows,ui:"review.fix.ai.rule.rows",card:false,rowAttrs:row=>({"data-ai-rule-row":row.rowId})})}`:""}</div>`;
   }
   function ruleTargetRole(issue){return cleaningProfile().columns.find(profile=>profile.column===issue.column)?.role||"text";}
+  function ruleRequestError(session){return session.aiValidationError?`AI suggestion couldn't be used${session.aiValidationDetail?`: ${session.aiValidationDetail}`:""}`:`AI unavailable: ${session.aiReason||"error"}${session.aiLocalOnly?" · Sensitive values stay local":""}`;}
   function invalidateRuleSuggestions(session){session.ruleGeneration++;session.ruleBusy=false;session.rulePlan=null;session.ruleColumns=[];session.ruleProposals=[];session.ruleStatus="idle";session.ruleError="";session.ruleProgress=null;delete session.aiRuleApprovedIds;if(session.fix==="ai-rule-fill")session.fix="";}
   async function requestRulePlan(issue,session){
     const instruction=String(session.ruleInstruction||"").trim(),rows=ReviewCore.affected(issue),availableColumns=availableRuleColumns(issue);
@@ -224,7 +225,7 @@ ReviewModules.missing = (() => {
     const result=await ReviewCore.requestAi(issue,"rule-plan",{column:issue.column,role:ruleTargetRole(issue),meaning:columnPolicy(issue.column).meaning||"",headers:[issue.column,...availableColumns.map(entry=>entry.column)],availableColumns},instruction);
     if(generation!==session.ruleGeneration)return;
     session.ruleBusy=false;
-    if(!result){session.ruleError=`AI unavailable: ${session.aiReason||"error"}${session.aiLocalOnly?" · Sensitive values stay local":""}`;session.ruleStatus="error";renderPreservingReviewFocus();return;}
+    if(!result){session.ruleError=ruleRequestError(session);session.ruleStatus="error";renderPreservingReviewFocus();return;}
     session.rulePlan=result;session.ruleProvider=session.aiProvider||"configured provider";session.ruleColumns=[...result.columns];session.ruleStatus=result.needsClarification?"clarification":"planned";renderPreservingReviewFocus();
   }
   async function requestRuleValues(issue,session,rowIds=null){
@@ -241,7 +242,7 @@ ReviewModules.missing = (() => {
       if(!safe.length){if(!rowIds)session.ruleProgress.completed++;continue;session.ruleError="This row's requested context cannot be safely shared with AI.";session.ruleStatus="error";break;}
       const rows=safe.map((proposal,index)=>({id:`r${index}`,values:proposal.context})),result=await ReviewCore.requestAi(issue,"rule-values",{column:issue.column,role:ruleTargetRole(issue),columns,rows},session.ruleInstruction);
       if(generation!==session.ruleGeneration)return;
-      if(!result){session.ruleError=`AI unavailable: ${session.aiReason||"error"}${session.aiLocalOnly?" · Sensitive values stay local":""}`;session.ruleStatus="error";break;}
+      if(!result){session.ruleError=ruleRequestError(session);session.ruleStatus="error";break;}
       session.ruleProvider=session.aiProvider||session.ruleProvider||"configured provider";
       result.suggestions.forEach(suggestion=>{const proposal=safe.find((entry,index)=>`r${index}`===suggestion.id);if(proposal){proposal.value=suggestion.value===null?null:ReviewCore.numericType(issue.column)?CleaningEngine.parseNumber(suggestion.value,columnPolicy(issue.column)).toFixed(ReviewCore.precision(issue.column)):suggestion.value;proposal.reason=suggestion.reason;proposal.status=suggestion.value===null?"unresolved":"suggested";}});
       if(!rowIds)session.ruleProgress.completed++;

@@ -189,8 +189,8 @@ async function handleReview(request,env) {
       const uniquenessPrompt=`For the uniqueness task, decide whether this kind of field SHOULD identify one record per row. Do not decide whether the current file happens to contain duplicates: repeated values are present by definition because this issue is under review, and their presence is not evidence that repeats are normal. Ignore the detector suffix "__duplicates" when interpreting a column name. An order_id, invoice_id, transaction_id, or person-specific contact identifier should usually be unique (answer "yes") even when duplicates were observed. Amounts, prices, measurements, ages, dates, ratings, and categories should not be unique (answer "no"). If the field semantics are genuinely unclear, use confidence below 80. Return one JSON object with exactly these fields: {"note":"one short sentence","uniqueness":{"should_be_unique":"yes","confidence":94,"reason":"Order identifiers should differ per order."}}. Use "yes" or "no" only. Confidence must be an integer from 0 to 100, not a decimal or percentage string; it is a model-assessed ranking, not a calibrated probability. Reason must be no more than 80 characters. Use only the submitted column context and bounded samples. Context: ${JSON.stringify(input.context)}`;
      const raw = await ai.askProvider("",{},env,{prompt:input.mode==="uniqueness"?uniquenessPrompt:prompt,maxTokens:input.mode==="rule-values"?Math.min(6000,400+input.context.rows.length*120):2200});
       let result;
-    try { result=validateResult(normalizeUniqueness(ai.parsePlan(raw)),input); }
-    catch { return ai.json({error:"AI suggestion couldn't be used"},422); }
+     try { result=validateResult(normalizeUniqueness(ai.parsePlan(raw)),input); }
+     catch(error) { return ai.json({error:"AI suggestion couldn't be used",detail:String(error.message||"Invalid AI response.").slice(0,300)},422); }
     return ai.json({result,provider:ai.providerConfig(env).provider});
   } catch (error) { return ai.json({error:error.message || "AI unavailable"},["AbortError","TimeoutError"].includes(error.name) ? 504 : error.status || 422); }
 }
