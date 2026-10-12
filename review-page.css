@@ -101,6 +101,13 @@
 .rc-table-scroll table { border-collapse:collapse; width:100%; font-size:14px; }
 .rc-table-scroll th { position:sticky; top:0; background:var(--rv-bg); color:var(--rv-ink-3); text-align:left; font-size:12px; font-weight:600; padding:8px 16px; white-space:nowrap; border-bottom:1px solid var(--rv-line); z-index:1; }
 .rc-table-scroll td { padding:8px 16px; border-bottom:1px solid var(--rv-line-2); white-space:nowrap; }
+/* CORE-58 / CORE-63: bound generated review lists; expanded content scrolls in its own region. */
+body.ui-pages-active .vals > div > .card { max-height:min(45vh,360px); overflow-y:auto; overscroll-behavior:contain; }
+body.ui-pages-active .scroll-x:has(> table) { max-height:min(45vh,360px); overflow:auto; overscroll-behavior:contain; }
+body.ui-pages-active .scroll-x:has(> table) th { position:sticky; top:0; z-index:1; background:var(--rv-bg); }
+body.ui-pages-active .scroll-x[data-ui="review.table"]:has(> .grp) { max-height:min(55vh,480px); overflow:auto; overscroll-behavior:contain; }
+body.ui-pages-active [data-ui="review.explore.missing.sheet"]:not(.scroll-x) { max-height:min(55vh,480px); overflow-y:auto; overscroll-behavior:contain; scrollbar-color:var(--rv-before) transparent; }
+body.ui-pages-active [data-ui="review.explore.missing.sheet"]:not(.scroll-x) .scroll-x:has(> table),body.ui-pages-active [data-ui="review.table"] .scroll-x:has(> table) { max-height:none; }
 #reviewAiRequest > label,#reviewAiRuleRequest > label { display:block; margin-bottom:12px; }
 #reviewAiRuleRequest .btn2 { min-height:40px; margin:4px 4px 0 0; }
 .rc-problem { color:var(--rv-gap); background:var(--rv-gap-soft); }

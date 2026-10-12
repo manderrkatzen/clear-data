@@ -40,7 +40,8 @@ th, td { text-align: left; border-bottom: 1px solid var(--line); }
 .completeness-meter i { display: block; height: 100%; }
 .coverage-note { margin: 20px 0; }
 .table-wrap { overflow: auto; }
-.change-list { display: grid; gap: 18px; }
+/* CORE-63: decision history stays inside a bounded local scroll region. */
+.change-list { display: grid; gap: 18px; max-height: min(70dvh, 720px); overflow-y: auto; overscroll-behavior: contain; padding-inline-end: 8px; }
 .change-card { background: var(--panel); border: 1px solid var(--line); }
 .change-card header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
 .change-card p { margin: 8px 0; }
