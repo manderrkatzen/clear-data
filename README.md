@@ -122,6 +122,14 @@ node --test scripts/verify_next_capabilities.cjs
 node scripts/verify_next_performance.cjs
 ```
 
+To make one real provider request through the configured Worker (or set `BASE_URL` to a local server), run the live OpenAI/Ollama smoke check:
+
+```bash
+node scripts/verify_ai_provider.cjs
+```
+
+This sends a synthetic, one-row fill request and verifies the provider returns a validated proposal. If Turnstile is enabled, provide a valid `TURNSTILE_TOKEN`.
+
 CSV import supports quoted multiline fields and rejects invalid headers or malformed quoting without replacing the current workspace. Numerical previews use the same rounded values as approval. Report counts distinguish approved decisions from actual modified rows and cells. Rollback preserves later approved values and refreshes findings.
 
 Outlier approval saves the displayed definition and treats only the explicit scope.
