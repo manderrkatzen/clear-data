@@ -182,6 +182,11 @@ test("4.3 manual corrections expose similar-row fills only for numeric missing s
   assert.ok(w.value("reviewOperations(missing)").includes("groupwise")); assert.ok(w.value("reviewOperations(missing)").includes("knn"));
   assert.ok(!w.value("reviewOperations(present)").includes("knn"));
 });
+test("AI row-value provenance exports the approved per-cell method",()=>{
+  const original=[{_row:1,satisfaction:"",rating:"0.2"},{_row:2,satisfaction:"",rating:"0.8"}],rows=[{_row:1,satisfaction:"LOW",rating:"0.2"},{_row:2,satisfaction:"",rating:"0.8"}],change={treatment:{operation:"rowValues",aiRuleEvidence:[{rowId:1,columns:["rating"],values:{rating:"0.2"},value:"LOW",reason:"Below the requested threshold."}]},patches:[{rowId:1,column:"satisfaction",before:"",after:"LOW"}],interpretationValues:[{rowId:1,column:"satisfaction",value:"",meaning:"legitimate"}]};
+  const exported=capabilities.exportData(["satisfaction","rating"],rows,[change],original,{includeFlags:true,includeMethods:true});
+  assert.equal(exported.rows[0].satisfaction_imputation_method,"ai_suggested");assert.equal(exported.rows[0].satisfaction_imputed,"1");assert.equal(exported.rows[1].satisfaction_imputation_method,"");
+});
 test("4.4 scorecards measure active-rule validity and dominant representation consistency", () => {
   const rows = [{ _row: 1, age: "20", label: "Active", date: "2025-01-01" }, { _row: 2, age: "150", label: "active", date: "01/02/2025" }, { _row: 3, age: "30", label: "Active", date: "2025-01-03" }];
   const rules = { schema: [{ column: "age", type: "integer", required: false, minimum: 0, maximum: 120, allowed: [] }] };

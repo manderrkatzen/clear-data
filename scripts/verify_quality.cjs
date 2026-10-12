@@ -399,6 +399,33 @@ test("repeated-value uniqueness assessment is bounded and requires explicit vali
   assert.throws(() => reviewAi.validateRequest({ mode: "uniqueness", context: { column: "email", type: "sensitive", role: "text", headers: ["email"], allowedFixes: ["keep"], count: 10, affected: 2, values: [], samples: [], groups: [], statistics: {}, uniqueness: { rows: 10, distinct: 9, repeatedValues: 1 } } }));
 });
 
+test("AI rule fill requests only reviewed columns and validates one typed suggestion per temporary row ID", () => {
+  const planInput=reviewAi.validateRequest({mode:"rule-plan",instruction:"Use rating and lifetime value to choose satisfaction.",context:{column:"satisfaction",role:"text",headers:["satisfaction","rating","CustomerLTV","email"],availableColumns:[{column:"rating",role:"number"},{column:"CustomerLTV",role:"number"}]}});
+  assert.deepEqual(reviewAi.validateResult({columns:["rating","CustomerLTV"],explanation:"Use rating and CustomerLTV to choose the satisfaction label.",needsClarification:false},planInput).columns,["rating","CustomerLTV"]);
+  assert.throws(()=>reviewAi.validateResult({columns:["email"],explanation:"Use email.",needsClarification:false},planInput),/unknown or disallowed/);
+  assert.throws(()=>reviewAi.validateRequest({mode:"rule-plan",instruction:"Use contact details.",context:{...planInput.context,availableColumns:[{column:"email",role:"text"}]}}),/sensitive column/);
+  assert.throws(()=>reviewAi.validateRequest({mode:"rule-plan",instruction:"Fill the address.",context:{...planInput.context,column:"email",headers:["email"],availableColumns:[{column:"rating",role:"number"}]}}),/non-sensitive target/);
+  assert.throws(()=>reviewAi.validateRequest({mode:"rule-plan",instruction:"Use the ID.",context:{...planInput.context,headers:[...planInput.context.headers,"order_id"],availableColumns:[{column:"order_id",role:"identifier"}]}}),/sensitive column/);
+
+  const valueInput=reviewAi.validateRequest({mode:"rule-values",instruction:"Low rating means LOW.",context:{column:"satisfaction",role:"text",columns:["rating","CustomerLTV"],rows:[{id:"r0",values:{rating:"0.4",CustomerLTV:"0.3"}},{id:"r1",values:{rating:"0.8",CustomerLTV:"0.9"}}]}});
+  const result=reviewAi.validateResult({suggestions:[{id:"r1",value:"HIGH",reason:"The rating is above the requested threshold."},{id:"r0",value:"LOW",reason:"The rating is below the requested threshold."}]},valueInput);
+  assert.deepEqual(result.suggestions.map(entry=>entry.id),["r1","r0"]);
+  assert.throws(()=>reviewAi.validateResult({suggestions:[{id:"r0",value:"LOW",reason:"Below the threshold."},{id:"r0",value:"HIGH",reason:"Duplicate ID."}]},valueInput),/invalid row suggestion/);
+  assert.throws(()=>reviewAi.validateResult({suggestions:[{id:"r0",value:"LOW",reason:"Below the threshold."}]},valueInput),/cover every submitted row/);
+  assert.throws(()=>reviewAi.validateRequest({mode:"rule-values",instruction:"Use rating.",context:{...valueInput.context,rows:[{id:"r0",values:{rating:"0.4",CustomerLTV:"0.3",email:"private@example.com"}}]}}),/Invalid row-wise suggestion record/);
+  assert.throws(()=>reviewAi.validateRequest({mode:"rule-values",instruction:"Use rating.",context:{...valueInput.context,rows:[{id:"_row:1",values:{rating:"0.4",CustomerLTV:"0.3"}}]}}),/Invalid row-wise suggestion record/);
+  assert.throws(()=>reviewAi.validateRequest({mode:"rule-values",instruction:"Use rating.",context:{...valueInput.context,columns:["rating"],rows:[{id:"r0",values:{rating:"person@example.com"}}]}}),/Sensitive or oversized/);
+  const numericInput=reviewAi.validateRequest({mode:"rule-values",instruction:"Estimate the score.",context:{column:"score",role:"number",columns:["rating"],rows:[{id:"r0",values:{rating:"4"}}]}});
+  assert.throws(()=>reviewAi.validateResult({suggestions:[{id:"r0",value:"high",reason:"The score is high."}]},numericInput),/target number type/);
+});
+
+test("AI rule row endpoint sends only the requested row projection and returns validated suggestions", async () => {
+  const originalFetch=global.fetch,payload={mode:"rule-values",instruction:"LOW below 0.5.",context:{column:"satisfaction",role:"text",columns:["rating"],rows:[{id:"r0",values:{rating:"0.2"}}]}};
+  global.fetch=async(url,options)=>{const provider=JSON.parse(options.body);assert.match(provider.prompt,/"rating":"0.2"/);assert.doesNotMatch(provider.prompt,/private@example\.com|internal_note|_row/);return new Response(JSON.stringify({response:JSON.stringify({suggestions:[{id:"r0",value:"LOW",reason:"Rating is below the requested threshold."}]})}),{status:200,headers:{"content-type":"application/json"}});};
+  try{const response=await reviewAi.handleReview(new Request("http://test/api/ai/review",{method:"POST",headers:{"cf-connecting-ip":"rule-fill-test"},body:JSON.stringify(payload)}),{AI_MODE:"local",AI_MAX_REQUESTS_PER_HOUR:20});assert.equal(response.status,200);assert.equal((await response.json()).result.suggestions[0].value,"LOW");}
+  finally{global.fetch=originalFetch;}
+});
+
 test("body limits use UTF-8 bytes, including streamed requests", async () => {
   const body = JSON.stringify({ instruction: "é".repeat(40000) });
   await assert.rejects(ai.readPayload(new Request("http://test/api", { method: "POST", body })), (error) => error.status === 413);

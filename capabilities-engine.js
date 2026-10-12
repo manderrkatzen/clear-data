@@ -158,6 +158,7 @@ var CapabilitiesEngine = (() => {
         const row = current.get(patch.rowId); if (!row) continue;
         const key = `${patch.rowId}:${patch.column}`, status = cleaning.observationState(row, patch.column, policy(patch.column), meanings);
         let method = null;
+        if(operation==="rowValues"&&change.treatment?.aiRuleEvidence?.some(entry=>entry.rowId===patch.rowId&&entry.value===patch.after))method="ai_suggested";
         if (["mean", "median", "groupMedian", "groupwise", "knn"].includes(operation)) method = fills.get(patch.rowId)?.source === "global" ? "global_fallback" : ["groupMedian", "groupwise"].includes(operation) ? "group" : operation;
         if (operation === "constant" && (["missing", "blank_unreviewed"].includes(status) || change.interpretation === "missing")) method = "constant";
         if (operation === "recalculate") method = "recalculated";
@@ -176,6 +177,7 @@ var CapabilitiesEngine = (() => {
         const status = cleaning.observationState(row, entry.column, policy(entry.column), meanings);
         const eligible = ["missing", "blank_unreviewed"].includes(status);
         let method = null;
+        if(operation==="rowValues"&&change.treatment?.aiRuleEvidence?.some(proposal=>proposal.rowId===entry.rowId&&proposal.value===row[entry.column]))method="ai_suggested";
         if (eligible && ["mean", "median", "groupMedian", "groupwise", "knn"].includes(operation)) method = fills.get(entry.rowId)?.source === "global" ? "global_fallback" : ["groupMedian", "groupwise"].includes(operation) ? "group" : operation;
         if (operation === "constant" && (eligible || change.interpretation === "missing")) method = "constant";
         if (operation === "recalculate") method = "recalculated";

@@ -6,9 +6,9 @@ var ReviewCore = (() => {
   const kind = issue => issue.reviewType || "manual";
   function data(issue) {
     state.reviewPage ||= {};
-    const session=state.reviewPage[issueKey(issue)] ||= {tab:issue.status === "open" ? "explore" : "review",fix:"",locked:null,unlocked:[],locks:[],banding:{},mapping:{},value:"",preview:null,pending:false,error:"",note:"",noteOpen:false,more:false,ai:null,aiStatus:"idle",aiRequested:false,aiController:null,generation:0,skipBlocked:false,acknowledgeConstraints:false,acknowledgeConflicts:false,byGroup:false,openGroups:{},extraColumns:[],showRows:{},sourceVersion:state.datasetRevision};
+    const session=state.reviewPage[issueKey(issue)] ||= {tab:issue.status === "open" ? "explore" : "review",fix:"",locked:null,unlocked:[],locks:[],banding:{},mapping:{},value:"",preview:null,pending:false,error:"",note:"",noteOpen:false,more:false,ai:null,aiStatus:"idle",aiRequested:false,aiController:null,ruleOpen:false,ruleInstruction:"",rulePlan:null,ruleColumns:[],ruleProposals:[],ruleStatus:"idle",ruleError:"",ruleGeneration:0,generation:0,skipBlocked:false,acknowledgeConstraints:false,acknowledgeConflicts:false,byGroup:false,openGroups:{},extraColumns:[],showRows:{},sourceVersion:state.datasetRevision};
     if(session.sourceVersion!==state.datasetRevision) { // CORE-27, CORE-50, CORE-54: old evidence never becomes a current approval/proposal.
-      session.sourceVersion=state.datasetRevision;session.generation++;session.preview=null;session.pending=false;session.aiController?.abort();session.aiFixProposal=null;
+      session.sourceVersion=state.datasetRevision;session.generation++;session.ruleGeneration++;session.preview=null;session.pending=false;session.aiController?.abort();session.aiFixProposal=null;session.rulePlan=null;session.ruleProposals=[];session.ruleColumns=[];delete session.aiRuleApprovedIds;
       if(session.aiRequested){session.ai=null;session.aiStatus="error";session.aiReason="error";session.aiStale=true;}
       ReviewModules[kind(issue)]?.invalidate?.(session);
     }
@@ -30,8 +30,8 @@ var ReviewCore = (() => {
   function total(rows,column = metricColumn()) { if (!column) return rows.length; return ReviewCharts.numeric(rows,column).reduce((sum,value)=>sum+value,0); }
   function money(value,column = metricColumn()) { return format(value,column,{money:Boolean(column && /usd|revenue|sales|amount|spend|cost|price|total/i.test(column)),decimals:column ? precision(column) : 0}); }
   function affected(issue) {const session=data(issue),rows=state.headers.includes(issue.column)?moduleFor(issue).lockedRows(issue,session):[];if(!Array.isArray(session.applyRowIds))return rows;const ids=new Set(session.applyRowIds);return rows.filter(row=>ids.has(row._row));}
-  function exploreScope(issue) {return state.headers.includes(issue.column)?moduleFor(issue).exploreRows?.(issue,data(issue)) || affected(issue):[];}
-  function measure(issue) { const rows = affected(issue), metric = metricColumn(), carry = total(rows,metric), whole = total(detectorRows(),metric); return {rows,metric,carry,whole,share:whole ? carry/whole*100 : 0}; }
+  function exploreScope(issue) {const session=data(issue),rows=state.headers.includes(issue.column)?moduleFor(issue).exploreRows?.(issue,session) || affected(issue):[];return session.tab==="fix"&&session.fix==="ai-rule-fill"&&Array.isArray(session.aiRuleApprovedIds)?rows.filter(row=>session.aiRuleApprovedIds.includes(row._row)):rows;}
+  function measure(issue,rowIds=null) { const session=data(issue),available=affected(issue),selectedIds=Array.isArray(rowIds)?rowIds:session.tab==="fix"&&session.fix==="ai-rule-fill"?session.aiRuleApprovedIds:null,rows=Array.isArray(selectedIds)?available.filter(row=>selectedIds.includes(row._row)):available, metric = metricColumn(), carry = total(rows,metric), whole = total(detectorRows(),metric); return {rows,metric,carry,whole,share:whole ? carry/whole*100 : 0}; }
   function optionList(issue) { // CORE-24, CORE-50: selecting a validated AI option accepts parameters, never applies data.
     const session=data(issue),options=moduleFor(issue).getFixOptions(issue,session),proposal=session.aiFixProposal,original=proposal && options.find(option=>option.key===proposal.operation);
     if(original)options.push({...original,key:`ai:${original.key}`,label:`AI: ${original.label}`,more:false,compute:context=>{
@@ -77,9 +77,9 @@ var ReviewCore = (() => {
       if(selected.disabled)throw new Error(selected.disabled);
       const parameters = await selected.compute({issue,session,rows:affected(issue)});
       if(generation!==session.generation || revision!==state.datasetRevision)return;
-      const draft = reviewDraft(issue), rowIds = affected(issue).map(row=>row._row);
+      const draft = reviewDraft(issue), rowIds =selected.key==="ai-rule-fill"&&Array.isArray(parameters.rowIds)?parameters.rowIds:affected(issue).map(row=>row._row);
       draft.requiresConflictAcknowledgement=Boolean(parameters.requiresConflictAcknowledgement);
-      Object.assign(draft,{...parameters,scope:{mode:"selected",rowIds},interpretation:parameters.interpretation || (parameters.operation === "retain" ? "legitimate" : kind(issue) === "missing" ? "missing" : "error"),lockedMissing:kind(issue) === "missing",note:session.note,decimals:parameters.decimals ?? precision(issue.column),groupColumns:session.locks,skipBlocked:session.skipBlocked,acknowledgeConstraints:session.acknowledgeConstraints,acknowledgeConflicts:parameters.requiresConflictAcknowledgement?true:session.acknowledgeConflicts}); delete draft.previewFingerprint;
+      Object.assign(draft,{...parameters,scope:{mode:"selected",rowIds},interpretation:parameters.interpretation || (parameters.operation === "retain" ? "legitimate" : kind(issue) === "missing" ? "missing" : "error"),lockedMissing:kind(issue) === "missing",note:session.note,decimals:parameters.decimals ?? precision(issue.column),groupColumns:session.locks,skipBlocked:session.skipBlocked,acknowledgeConstraints:session.acknowledgeConstraints,acknowledgeConflicts:parameters.requiresConflictAcknowledgement?true:session.acknowledgeConflicts});delete draft.rowIds;delete draft.previewFingerprint;
       if (["groupwise","knn"].includes(draft.operation)) { const classifications = effectiveClassifications().concat(affected(issue).map(row=>({rowId:row._row,column:issue.column,value:row[issue.column],meaning:"missing"}))); draft.similarResult = await analyticalTask("fill",issue.column,{params:{...draft.similar,method:draft.operation,rowIds},options:{...analyticalOptions(),classifications}}); }
       if (generation !== session.generation || revision !== state.datasetRevision) return;
       session.preview = guidedPreview(issue,draft);for(const key of ["addedRows","addedColumns","removedColumns","rowLineage"])session.preview[key] ||= [];if(parameters.parseBlocked?.length){const reasons=new Map(parameters.parseBlocked.map(entry=>[entry.rowId,entry.reason]));session.preview.blocked=session.preview.blocked.map(entry=>({...entry,reason:reasons.get(entry.rowId)||entry.reason}));} session.fingerprint = session.preview.fingerprint; session.selectedCount = rowIds.length;
@@ -90,7 +90,7 @@ var ReviewCore = (() => {
     const session = data(issue), draft = reviewDraft(issue), option = choice(issue);
     if(issue.reviewType==="duplicate-values"&&!session.uniqueAnswerGiven)return notify("Choose whether these repeated values should be unique in Explore before applying a fix.");
     const targetRole=cleaningProfile().columns.find(profile=>profile.column===issue.column)?.role;
-    const targetPolicy=structuredClone(columnPolicy(issue.column)),targetPrecision=precision(issue.column),moduleDetails=moduleFor(issue).decisionMetadata?.(issue,session,session.preview) || {};
+    const targetPolicy=structuredClone(columnPolicy(issue.column)),targetPrecision=precision(issue.column),moduleDetails={...(moduleFor(issue).decisionMetadata?.(issue,session,session.preview)||{}),...(Array.isArray(draft.aiRuleEvidence)?{aiRuleColumns:[...draft.aiRuleEvidence[0].columns],aiRuleInstruction:draft.aiRuleInstruction||"",aiRulePlan:draft.aiRulePlan||"",aiRuleProvider:draft.aiRuleProvider||"configured provider"}:{})};
     const gate=document.getElementById("reviewApply")?.dataset.gateReason;if(gate)return notify(gate);
     if (!session.preview || session.pending || session.fingerprint !== guidedFingerprint(issue,draft)) return notify("The preview changed. Check the selected fix again.");
     if (option.requiresNote && !session.note.trim()) return notify("Add a note explaining this choice.");
@@ -117,7 +117,8 @@ var ReviewCore = (() => {
     const session=data(issue),preview=session.preview;
     const settings=`${preview?.blocked.length?`<p>${preview.blocked.length} entries cannot be fixed: ${ReviewComponents.text(preview.blocked[0].reason)}. <button class="text-button" id="reviewBlockedList">See the list</button></p><label><input id="reviewSkipBlocked" type="checkbox" ${session.skipBlocked?"checked":""}>Apply to the rest</label>`:""}${preview?.constraints.length?`<label><input id="reviewConstraints" type="checkbox" ${session.acknowledgeConstraints?"checked":""}>I reviewed ${preview.constraints.length} new rule violations</label>`:""}${reviewDraft(issue).requiresConflictAcknowledgement?`<label><input id="duplicateConflictAck" type="checkbox" ${session.acknowledgeConflicts?"checked":""}>I reviewed which copies are kept</label>`:""}${session.noteOpen?`<label>Note<input id="reviewNote" maxlength="2000" value="${escapeHtml(session.note)}"></label>`:""}`;
     const aiRequest=session.askOpen&&moduleFor(issue).aiFix?`<label for="reviewAiInstruction"><span class="tag">AI suggestion</span><br>What should the fix consider?<textarea class="input" id="reviewAiInstruction" style="display:block;width:min(100%, 32rem);text-align:left;font-variant-numeric:normal;resize:vertical;margin-top:8px" maxlength="300" rows="3" aria-label="What should the fix consider?" placeholder="Add a preference or constraint for the recommendation">${escapeHtml(session.instruction||"")}</textarea></label><button class="btn" id="reviewSuggestAi">Suggest a fix</button>${aiStatus(issue)}`:"";
-    return ReviewComponents.options(issue,optionList(issue),session,preview,settings,aiRequest);
+    const aiRuleRequest=moduleFor(issue).aiRuleRequestHtml?.(issue,session)||"";
+    return ReviewComponents.options(issue,optionList(issue),session,preview,settings,aiRequest,aiRuleRequest);
   }
   function fixHtml(issue) { // CORE-18, CORE-21, CORE-22, CORE-23, CORE-24, CORE-26, CORE-27, CORE-28
     const session=data(issue),option=choice(issue),preview=session.preview;
@@ -192,6 +193,8 @@ var ReviewCore = (() => {
     document.querySelectorAll(".opt[data-o]").forEach(option=>option.onclick=event=>{if(event.target.closest("button,input,select"))return;session.fix=option.dataset.o;session.skipBlocked=false;compute(issue);});
     bind("reviewMore","change",event=>{if(event.target.value){session.fix=event.target.value;session.skipBlocked=false;compute(issue);}});
     bind("reviewAskAi","click",()=>{session.askOpen=!session.askOpen;renderPreservingReviewFocus();if(session.askOpen)document.getElementById("reviewAiInstruction")?.focus();});
+    bind("reviewAskAiRule","click",()=>{session.ruleOpen=!session.ruleOpen;renderPreservingReviewFocus();if(session.ruleOpen)document.getElementById("reviewRuleInstruction")?.focus();});
+    bind("reviewRuleInstruction","input",event=>{session.ruleInstruction=event.target.value;});
     bind("reviewChooseFillGroups","click",()=>{const groups=document.querySelector(".missing-fill-groups");if(groups){session.fillGroupsOpen=true;groups.open=true;document.getElementById("missingAddLock")?.focus();}});
     bind("reviewImpactMetric","change",event=>{state.primaryReviewMetric=event.target.value;Object.values(state.reviewPage||{}).forEach(entry=>{entry.preview=null;});markProjectDirty();compute(issue);});
     bind("reviewMetricSettings","click",()=>{const panel=document.createElement("dialog");panel.innerHTML=`<header><h2>Impact metric</h2><button id="reviewCloseRows">Close</button></header>${impactMetricHtml()}`;openRowsPanel(panel,"reviewMetricSettings");panel.querySelector("details").open=true;panel.querySelector("#reviewImpactMetric").onchange=event=>{state.primaryReviewMetric=event.target.value;Object.values(state.reviewPage||{}).forEach(entry=>{entry.preview=null;});markProjectDirty();compute(issue);};});
