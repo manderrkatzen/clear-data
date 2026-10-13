@@ -167,6 +167,8 @@ body.ui-pages-active [data-ui="review.explore.missing.sheet"]:not(.scroll-x) .sc
 .review-chart-legend { display:flex; flex-wrap:wrap; gap:12px; color:var(--rv-ink-3); font-size:12px; margin-bottom:8px; }
 .review-chart-legend .before::before,.review-chart-legend .after::before,.review-chart-legend .filled::before { content:""; display:inline-block; width:8px; height:8px; margin-inline-end:4px; background:var(--rv-before); }
 .review-chart-legend .after::before,.review-chart-legend .filled::before { background:var(--rv-accent); }
+.review-chart-legend .after::before { opacity:.4; }
+.review-chart-legend .filled::before { opacity:1; }
 .review-chart-edges { color:var(--rv-ink-3); font-size:12px; }
 .review-category-bars { display:grid; gap:12px; }
 .review-category-bars > div { display:grid; grid-template-columns:150px minmax(0,1fr) 120px; gap:12px; font-size:14px; }
