@@ -27,7 +27,11 @@
         <div class="sidebar-bottom"><button class="batch-card" id="batchButton" disabled><span><strong>Continue review</strong><em>Open the findings queue</em></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button></div>
       </aside>
       <main>
-        <header class="topbar"><div><p class="eyebrow" id="topEyebrow">DATA SOURCE</p><strong id="datasetName">No dataset loaded</strong></div><div class="header-actions"><span class="status-badge neutral" id="versionBadge">Original</span><span class="status-badge warning hidden" id="headerIssues">0 unresolved</span><button class="ghost hidden" id="undoButton">Undo last change</button><button class="primary hidden" id="contextAction">Open in View</button></div></header>
+        <header class="topbar"><div><p class="eyebrow" id="topEyebrow">DATA SOURCE</p><strong id="datasetName">No dataset loaded</strong></div><div class="header-actions"><button class="status-badge neutral" id="versionBadge" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="originalPreview" title="Preview original data">Original</button><span class="status-badge warning hidden" id="headerIssues">0 unresolved</span><button class="ghost hidden" id="undoButton">Undo last change</button><button class="primary hidden" id="contextAction">Open in View</button></div></header>
+        <section id="originalPreview" role="region" aria-label="Original data preview" aria-describedby="originalPreviewSummary" hidden>
+          <header><div><strong>Original data</strong><span id="originalPreviewSummary"></span></div><button class="ghost" id="closeOriginalPreview" type="button" aria-label="Close original data preview">Close</button></header>
+          <div class="table-wrap" id="originalPreviewViewport" tabindex="0" aria-label="Scrollable original data table"></div>
+        </section>
         <div id="screen" class="screen"></div>
       </main>
     </div>

@@ -122,6 +122,7 @@ function metrics() {
 function refreshChrome() {
   $("#datasetName").textContent = state.fileName || "No dataset loaded";
   $("#versionBadge").textContent = state.changes.length ? "Working version" : "Original";
+  $("#versionBadge").disabled = !state.original.length;
   $("#navIssueCount").textContent = openCount();
   $("#headerIssues").textContent = `${openCount()} open findings`;
   $("#navChangeCount").textContent = state.changes.length;
@@ -131,6 +132,71 @@ function refreshChrome() {
   $("#contextAction").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
   $("#headerIssues").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
 }
+let originalPreviewCloseTimer = 0, originalPreviewPinned = false, originalPreviewRowsShown = 0, suppressOriginalPreviewFocus = false, originalPreviewKeyboardMode = false;
+const originalPreviewBatchSize = 250;
+function renderOriginalPreviewRows() {
+  const viewport = $("#originalPreviewViewport");
+  if (!state.original.length || !viewport) return;
+  const headers = state.originalHeaders || state.headers;
+  const rows = state.original;
+  const end = Math.min(originalPreviewRowsShown, rows.length);
+  const content = rows.slice(0, end).map((row) => `<tr><th scope="row">${escapeHtml(row._row)}</th>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`).join("");
+  viewport.innerHTML = `<table id="originalPreviewTable"><thead><tr><th scope="col">#</th>${headers.map((header) => `<th scope="col">${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${content}</tbody></table>${end < rows.length ? `<button class="secondary" id="loadMoreOriginalRows" type="button">Show next ${Math.min(originalPreviewBatchSize, rows.length - end).toLocaleString()} rows</button>` : ""}`;
+  $("#originalPreviewSummary").textContent = `${end.toLocaleString()} of ${rows.length.toLocaleString()} original rows · ${headers.length.toLocaleString()} columns`;
+  const loadMore = $("#loadMoreOriginalRows");
+  if (loadMore) loadMore.onclick = () => { originalPreviewRowsShown = Math.min(originalPreviewRowsShown + originalPreviewBatchSize, rows.length); renderOriginalPreviewRows(); $("#loadMoreOriginalRows")?.focus(); };
+}
+function showOriginalPreview({ pinned = false } = {}) {
+  if (!state.original.length) return;
+  clearTimeout(originalPreviewCloseTimer);
+  originalPreviewPinned = pinned;
+  if ($("#originalPreview").hidden) {
+    originalPreviewRowsShown = Math.min(originalPreviewBatchSize, state.original.length);
+    renderOriginalPreviewRows();
+    $("#originalPreview").hidden = false;
+  }
+  $("#versionBadge").setAttribute("aria-expanded", "true");
+}
+function hideOriginalPreview({ restoreFocus = false } = {}) {
+  clearTimeout(originalPreviewCloseTimer);
+  originalPreviewPinned = false;
+  $("#originalPreview").hidden = true;
+  $("#versionBadge").setAttribute("aria-expanded", "false");
+  if (restoreFocus && document.activeElement !== $("#versionBadge")) { suppressOriginalPreviewFocus = true; $("#versionBadge").focus(); }
+}
+function scheduleOriginalPreviewClose() {
+  clearTimeout(originalPreviewCloseTimer);
+  originalPreviewCloseTimer = window.setTimeout(() => {
+    const preview = $("#originalPreview"), trigger = $("#versionBadge");
+    if (originalPreviewPinned || preview.matches(":hover") || trigger.matches(":hover") || originalPreviewKeyboardMode && (preview.contains(document.activeElement) || trigger === document.activeElement)) return;
+    hideOriginalPreview();
+  }, 180);
+}
+$("#versionBadge").addEventListener("pointerenter", (event) => { if (event.pointerType === "touch") return; originalPreviewKeyboardMode = false; showOriginalPreview(); });
+$("#versionBadge").addEventListener("pointerleave", scheduleOriginalPreviewClose);
+$("#versionBadge").addEventListener("focus", () => { if (suppressOriginalPreviewFocus) suppressOriginalPreviewFocus = false; else { originalPreviewKeyboardMode = true; showOriginalPreview(); } });
+$("#versionBadge").addEventListener("blur", scheduleOriginalPreviewClose);
+$("#versionBadge").addEventListener("pointerdown", (event) => {
+  if (event.pointerType !== "touch") return;
+  if (originalPreviewPinned) hideOriginalPreview();
+  else showOriginalPreview({ pinned: true });
+});
+$("#versionBadge").addEventListener("click", (event) => {
+  if (event.detail === 0) {
+    if (originalPreviewPinned) hideOriginalPreview();
+    else showOriginalPreview({ pinned: true });
+  }
+});
+$("#originalPreview").addEventListener("pointerenter", () => { originalPreviewKeyboardMode = false; clearTimeout(originalPreviewCloseTimer); });
+$("#originalPreview").addEventListener("pointerleave", scheduleOriginalPreviewClose);
+$("#originalPreview").addEventListener("focusin", () => clearTimeout(originalPreviewCloseTimer));
+$("#originalPreview").addEventListener("focusout", scheduleOriginalPreviewClose);
+$("#closeOriginalPreview").addEventListener("click", () => hideOriginalPreview({ restoreFocus: true }));
+const closeOriginalPreviewOnEscape = (event) => {
+  if (event.key === "Escape" && !$("#originalPreview").hidden) hideOriginalPreview({ restoreFocus: true });
+};
+$("#versionBadge").addEventListener("keydown", closeOriginalPreviewOnEscape);
+$("#originalPreview").addEventListener("keydown", closeOriginalPreviewOnEscape);
 let renderingWorkspace = false, workspaceRenderQueued = false;
 function render() {
   // CORE-17, CORE-22: input blur/change may request another render during a background DOM replacement.
