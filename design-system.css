@@ -65,12 +65,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .ghost { color: var(--muted); }
 .ghost:hover:not(:disabled) { background: #edf2f8; color: var(--ink); }
 .status-badge { border-radius: 4px; font: 600 12px var(--font-ui); padding: 4px 8px; background: #edf1f7; color: #4b5f7b; }
-#versionBadge { border: 1px solid transparent; cursor: pointer; }
-#versionBadge:hover:not(:disabled) { border-color: #becbdc; background: #e6edf7; }
-#versionBadge:disabled { cursor: not-allowed; }
 .status-badge.warning { color: #765019; background: var(--amber-bg); }
 .status-badge.success { color: #1f6448; background: #e8f6ee; }
-#originalPreview { position: fixed; z-index: 40; top: 50%; left: 50%; display: flex; flex-direction: column; width: min(75vw, 1200px); height: min(75vh, 820px); transform: translate(-50%, -50%); overflow: hidden; border: 1px solid #becbdc; border-radius: 8px; background: white; box-shadow: 0 8px 24px #142c4d26; }
+#originalPreview { position: fixed; z-index: 1100; top: 50%; left: 50%; display: flex; flex-direction: column; width: min(75vw, 1200px); height: min(75vh, 820px); transform: translate(-50%, -50%); overflow: hidden; border: 1px solid #becbdc; border-radius: 8px; background: white; box-shadow: 0 8px 24px #142c4d26; }
 #originalPreview[hidden] { display: none; }
 #originalPreview > header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 18px; border-bottom: 1px solid var(--line); background: white; }
 #originalPreview > header > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; min-width: 0; }
@@ -248,7 +245,6 @@ table, .metric-grid strong { font-variant-numeric: tabular-nums; }
   .screen { padding: 20px 14px 26px; }
   .topbar { padding: 11px 14px; }
   .header-actions .status-badge, .header-actions .ghost { display: none; }
-  .header-actions #versionBadge { display: inline-block; }
   .header-actions .primary { padding: 9px 12px; font-size: 13px; }
   .page-head h1 { font-size: 26px; }
   .page-head { margin-bottom: 18px; }
@@ -267,7 +263,7 @@ table, .metric-grid strong { font-variant-numeric: tabular-nums; }
   dialog { padding: 20px; }
 }
 @media (max-width: 700px) {
-  #originalPreview { width: 90vw; height: 78vh; }
+  #originalPreview { top:auto; bottom:2vh; width:90vw; height:78vh; transform:translateX(-50%); }
   #originalPreview > header { padding: 12px; }
   #originalPreviewTable th, #originalPreviewTable td { padding: 8px; }
 }

@@ -122,7 +122,7 @@ function metrics() {
 function refreshChrome() {
   $("#datasetName").textContent = state.fileName || "No dataset loaded";
   $("#versionBadge").textContent = state.changes.length ? "Working version" : "Original";
-  $("#versionBadge").disabled = !state.original.length;
+  if (state.screen !== "issues" && !$("#originalPreview").hidden) hideOriginalPreview();
   $("#navIssueCount").textContent = openCount();
   $("#headerIssues").textContent = `${openCount()} open findings`;
   $("#navChangeCount").textContent = state.changes.length;
@@ -132,8 +132,13 @@ function refreshChrome() {
   $("#contextAction").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
   $("#headerIssues").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
 }
-let originalPreviewCloseTimer = 0, originalPreviewPinned = false, originalPreviewRowsShown = 0, suppressOriginalPreviewFocus = false, originalPreviewKeyboardMode = false;
+let originalPreviewCloseTimer = 0, originalPreviewPinned = false, originalPreviewRowsShown = 0, suppressOriginalPreviewFocus = false, originalPreviewKeyboardMode = false, originalPreviewTrigger = null;
 const originalPreviewBatchSize = 250;
+function clearOriginalPreviewCloseTimer() {
+  if (originalPreviewCloseTimer && typeof clearTimeout === "function") clearTimeout(originalPreviewCloseTimer);
+  else if (originalPreviewCloseTimer) window.clearTimeout?.(originalPreviewCloseTimer);
+  originalPreviewCloseTimer = 0;
+}
 function renderOriginalPreviewRows() {
   const viewport = $("#originalPreviewViewport");
   if (!state.original.length || !viewport) return;
@@ -146,56 +151,63 @@ function renderOriginalPreviewRows() {
   const loadMore = $("#loadMoreOriginalRows");
   if (loadMore) loadMore.onclick = () => { originalPreviewRowsShown = Math.min(originalPreviewRowsShown + originalPreviewBatchSize, rows.length); renderOriginalPreviewRows(); $("#loadMoreOriginalRows")?.focus(); };
 }
-function showOriginalPreview({ pinned = false } = {}) {
+function showOriginalPreview({ pinned = false, trigger = originalPreviewTrigger } = {}) {
   if (!state.original.length) return;
-  clearTimeout(originalPreviewCloseTimer);
+  if (trigger) originalPreviewTrigger = trigger;
+  clearOriginalPreviewCloseTimer();
   originalPreviewPinned = pinned;
   if ($("#originalPreview").hidden) {
     originalPreviewRowsShown = Math.min(originalPreviewBatchSize, state.original.length);
     renderOriginalPreviewRows();
     $("#originalPreview").hidden = false;
   }
-  $("#versionBadge").setAttribute("aria-expanded", "true");
+  originalPreviewTrigger?.setAttribute("aria-expanded", "true");
 }
 function hideOriginalPreview({ restoreFocus = false } = {}) {
-  clearTimeout(originalPreviewCloseTimer);
+  clearOriginalPreviewCloseTimer();
   originalPreviewPinned = false;
   $("#originalPreview").hidden = true;
-  $("#versionBadge").setAttribute("aria-expanded", "false");
-  if (restoreFocus && document.activeElement !== $("#versionBadge")) { suppressOriginalPreviewFocus = true; $("#versionBadge").focus(); }
+  originalPreviewTrigger?.setAttribute("aria-expanded", "false");
+  if (restoreFocus && originalPreviewTrigger?.isConnected && document.activeElement !== originalPreviewTrigger) { suppressOriginalPreviewFocus = true; originalPreviewTrigger.focus(); }
 }
 function scheduleOriginalPreviewClose() {
-  clearTimeout(originalPreviewCloseTimer);
+  clearOriginalPreviewCloseTimer();
   originalPreviewCloseTimer = window.setTimeout(() => {
-    const preview = $("#originalPreview"), trigger = $("#versionBadge");
-    if (originalPreviewPinned || preview.matches(":hover") || trigger.matches(":hover") || originalPreviewKeyboardMode && (preview.contains(document.activeElement) || trigger === document.activeElement)) return;
+    const preview = $("#originalPreview"), trigger = originalPreviewTrigger;
+    if (originalPreviewPinned || preview.matches(":hover") || trigger?.matches(":hover") || originalPreviewKeyboardMode && (preview.contains(document.activeElement) || trigger === document.activeElement)) return;
     hideOriginalPreview();
-  }, 180);
+  }, 400);
 }
-$("#versionBadge").addEventListener("pointerenter", (event) => { if (event.pointerType === "touch") return; originalPreviewKeyboardMode = false; showOriginalPreview(); });
-$("#versionBadge").addEventListener("pointerleave", scheduleOriginalPreviewClose);
-$("#versionBadge").addEventListener("focus", () => { if (suppressOriginalPreviewFocus) suppressOriginalPreviewFocus = false; else { originalPreviewKeyboardMode = true; showOriginalPreview(); } });
-$("#versionBadge").addEventListener("blur", scheduleOriginalPreviewClose);
-$("#versionBadge").addEventListener("pointerdown", (event) => {
-  if (event.pointerType !== "touch") return;
-  if (originalPreviewPinned) hideOriginalPreview();
-  else showOriginalPreview({ pinned: true });
-});
-$("#versionBadge").addEventListener("click", (event) => {
-  if (event.detail === 0) {
+const originalPreviewBoundTriggers = new WeakSet();
+function bindOriginalPreviewTrigger(trigger) {
+  if (!trigger || originalPreviewBoundTriggers.has(trigger)) return;
+  originalPreviewBoundTriggers.add(trigger);
+  let ignoreClickUntil = 0;
+  trigger.addEventListener("pointerenter", (event) => { if (event.pointerType === "touch") return; originalPreviewKeyboardMode = false; showOriginalPreview({ trigger }); });
+  trigger.addEventListener("pointerleave", scheduleOriginalPreviewClose);
+  trigger.addEventListener("focus", () => { if (suppressOriginalPreviewFocus) suppressOriginalPreviewFocus = false; else { originalPreviewKeyboardMode = true; showOriginalPreview({ trigger, pinned: originalPreviewPinned }); } });
+  trigger.addEventListener("blur", scheduleOriginalPreviewClose);
+  trigger.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "touch") return;
+    ignoreClickUntil = Date.now() + 800;
     if (originalPreviewPinned) hideOriginalPreview();
-    else showOriginalPreview({ pinned: true });
-  }
-});
-$("#originalPreview").addEventListener("pointerenter", () => { originalPreviewKeyboardMode = false; clearTimeout(originalPreviewCloseTimer); });
+    else showOriginalPreview({ pinned: true, trigger });
+  });
+  trigger.addEventListener("click", (event) => {
+    if (Date.now() < ignoreClickUntil) { ignoreClickUntil = 0; return; }
+    if (originalPreviewPinned) hideOriginalPreview({ restoreFocus: true });
+    else showOriginalPreview({ pinned: true, trigger });
+  });
+  trigger.addEventListener("keydown", closeOriginalPreviewOnEscape);
+}
+$("#originalPreview").addEventListener("pointerenter", () => { originalPreviewKeyboardMode = false; clearOriginalPreviewCloseTimer(); });
 $("#originalPreview").addEventListener("pointerleave", scheduleOriginalPreviewClose);
-$("#originalPreview").addEventListener("focusin", () => clearTimeout(originalPreviewCloseTimer));
+$("#originalPreview").addEventListener("focusin", clearOriginalPreviewCloseTimer);
 $("#originalPreview").addEventListener("focusout", scheduleOriginalPreviewClose);
 $("#closeOriginalPreview").addEventListener("click", () => hideOriginalPreview({ restoreFocus: true }));
 const closeOriginalPreviewOnEscape = (event) => {
   if (event.key === "Escape" && !$("#originalPreview").hidden) hideOriginalPreview({ restoreFocus: true });
 };
-$("#versionBadge").addEventListener("keydown", closeOriginalPreviewOnEscape);
 $("#originalPreview").addEventListener("keydown", closeOriginalPreviewOnEscape);
 let renderingWorkspace = false, workspaceRenderQueued = false;
 function render() {

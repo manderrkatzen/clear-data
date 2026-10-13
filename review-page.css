@@ -11,6 +11,7 @@
 .screen:has(.review-page) { padding:0; max-width:none; }
 .app-shell:has(.review-page) { grid-template-columns:168px minmax(0,1fr); }
 .app-shell:has(.review-page) .topbar { height:60px; min-height:60px; }
+.top [data-original-preview-trigger] { flex-shrink:0; white-space:nowrap; }
 .app-shell:has(.review-page) .eyebrow, .app-shell:has(.review-page) .product-label, .app-shell:has(.review-page) .sidebar-bottom { display:none; }
 .app-shell:has(.review-page) .sidebar { padding:24px 16px; }
 .app-shell:has(.review-page) .brand { font-size:22px; }
@@ -243,8 +244,9 @@ body.ui-pages-active .main { min-height:0; overflow-y:auto; overscroll-behavior:
   body.ui-pages-active .nav { display:flex; align-items:center; gap:4px; min-width:0; overflow-x:auto; padding:8px 12px; }
   body.ui-pages-active .nav .brand { flex:0 0 auto; padding:0 8px 0 0; font-size:18px; white-space:nowrap; }
   body.ui-pages-active .nav a { flex:0 0 auto; min-height:40px; margin:0; padding:8px 10px; white-space:nowrap; }
-  body.ui-pages-active .shell { grid-template-rows:56px auto; width:100%; min-width:0; height:auto; min-height:calc(100dvh - 56px); overflow:visible; }
-  body.ui-pages-active .top { min-width:0; padding-inline:16px; }
+  body.ui-pages-active .shell { grid-template-rows:auto auto; width:100%; min-width:0; height:auto; min-height:calc(100dvh - 56px); overflow:visible; }
+  body.ui-pages-active .top { min-width:0; min-height:56px; height:auto; flex-wrap:wrap; gap:8px 12px; padding:8px 16px; }
+  body.ui-pages-active .top .file { flex:1 1 100%; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   body.ui-pages-active .body { grid-template-columns:minmax(0,1fr); width:100%; height:auto; min-width:0; min-height:0; overflow:visible; }
   body.ui-pages-active .issues { min-width:0; max-height:190px; padding:8px 0; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch; border-right:0; border-bottom:1px solid var(--line); }
   body.ui-pages-active .issues .hd { position:sticky; top:-8px; z-index:2; margin:0 16px 6px; padding:4px 0; background:var(--surface); }
