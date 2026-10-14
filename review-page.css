@@ -239,6 +239,25 @@ body.ui-pages-active .shell { grid-template-rows:56px minmax(0,1fr); height:100%
 body.ui-pages-active .body { height:100%; min-height:0; overflow:hidden; }
 body.ui-pages-active .issues { min-height:0; }
 body.ui-pages-active .main { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+/* Reference templates share the application's control and evidence palette. */
+body.ui-pages-active { --bg:var(--paper); --surface:var(--panel); --ink-2:var(--muted); --ink-3:var(--muted); --accent:var(--blue); --accent-soft:var(--blue-soft); --nav:var(--rail); --rv-accent:var(--blue); }
+body.ui-pages-active .btn, body.ui-pages-active .btn2 { min-height:40px; border-radius:var(--radius); font-size:14px; }
+body.ui-pages-active .btn:hover:not(:disabled) { background:#1b49a4; }
+body.ui-pages-active .btn2:hover:not(:disabled) { background:var(--blue-soft); border-color:var(--blue); }
+body.ui-pages-active .link, body.ui-pages-active .text-button { line-height:1.5; text-underline-offset:3px; }
+body.ui-pages-active .link:hover:not(:disabled), body.ui-pages-active .text-button:hover:not(:disabled) { text-decoration:underline; }
+body.ui-pages-active .opt .title { min-width:0; overflow-wrap:anywhere; }
+body.ui-pages-active .question, body.ui-pages-active .toolbar, body.ui-pages-active .moreopts { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; }
+body.ui-pages-active .moreopts .link { margin:0; }
+body.ui-pages-active .main input:not([type=checkbox]):not([type=radio]):not([type=range]), body.ui-pages-active .main select, body.ui-pages-active .main textarea { border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink); max-width:100%; min-width:0; padding:6px 8px; font:14px var(--font-ui); }
+body.ui-pages-active .inline-edit { max-width:100%; }
+body.ui-pages-active .inline-edit input { min-height:28px; border:0; padding:2px 0; }
+body.ui-pages-active .foot { position:static; flex-shrink:0; background:var(--paper); backdrop-filter:none; }
+body.ui-pages-active .content { padding-bottom:32px; min-width:0; }
+body.ui-pages-active .main > .content { overflow-y:auto; min-height:0; }
+body.ui-pages-active .review-chart-legend { color:var(--muted); }
+body.ui-pages-active .mono { font-family:ui-monospace,monospace; }
+body.ui-pages-active button:focus-visible, body.ui-pages-active a:focus-visible, body.ui-pages-active [tabindex="0"]:focus-visible { outline:3px solid #83a9f1; outline-offset:2px; }
 @media (max-width:800px) {
   body.ui-pages-active { height:auto; min-height:100dvh; overflow-x:hidden; overflow-y:auto; overscroll-behavior-y:contain; -webkit-overflow-scrolling:touch; }
   #screen.reference-screen { position:relative; inset:auto; min-height:100dvh; overflow:visible; z-index:auto; }
@@ -255,12 +274,15 @@ body.ui-pages-active .main { min-height:0; overflow-y:auto; overscroll-behavior:
   body.ui-pages-active .issues .col { max-width:calc(100vw - 24px); padding:8px 16px 2px; overflow-wrap:anywhere; white-space:normal; }
   body.ui-pages-active .issues .item { min-height:36px; padding:6px 16px 6px 28px; }
   body.ui-pages-active .main { min-width:0; min-height:620px; overflow:visible; }
+  body.ui-pages-active .main > .content { overflow:visible; }
   body.ui-pages-active .content { min-width:0; padding:24px 16px calc(var(--foot-h) + 24px); }
   body.ui-pages-active .wrap { min-width:0; }
   body.ui-pages-active .foot { padding:12px 16px; }
   body.ui-pages-active .foot .in { flex-wrap:wrap; gap:8px 12px; }
   body.ui-pages-active .foot .sum { flex:1 1 100%; }
   body.ui-pages-active .foot .btn { width:100%; min-height:44px; text-align:center; }
+  body.ui-pages-active .content { padding-bottom:24px; }
+  body.ui-pages-active .btn2, body.ui-pages-active .moreopts .link, body.ui-pages-active .foot .link { min-height:44px; display:inline-flex; align-items:center; }
 }
 @media (max-width:620px) {
   body.ui-pages-active .head { flex-wrap:wrap; gap:8px 16px; }

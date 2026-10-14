@@ -308,6 +308,12 @@ There are no raster assets in the new visual system. Its assets are inline SVG p
 
 ## Components
 
+### Shared workspace foundations
+
+The general design layer owns fields, checkbox-label spacing, field grids, Explore's search toolbar, spreadsheet header padding, and Dataset's distribution legend/axis layout. These definitions remain available when the Review reference stylesheet is disabled. Review's reference shell aliases its action, surface, and secondary-text colors to the application tokens; shared evidence tokens are defined at root so chart legends never depend on a `.review-page` ancestor. Review buttons retain the common six-pixel control radius and keyboard focus treatment.
+
+Review's action footer occupies a separate layout region instead of overlapping evidence with a sticky overlay. Desktop evidence scrolls in the content region above it; mobile content flows naturally and the footer follows the evidence. Exact-copy review exposes expandable source comparisons and selectable copy groups through the shared selection template.
+
 ### Native buttons
 
 Blue primary, white secondary, and muted ghost actions share restrained corners, padding, and weight from frontmatter. General minimum height is (40px); navigation retains larger contextual minimums. Review uses the shared blue primary Apply and white secondary Undo. Fix choices use (9px 13px) padding, a blue selected outline, and soft backing. Text actions use (13px) text and (5px 0) padding. Hover values are separate frontmatter variants. Disabled buttons retain opacity (.5) and `cursor: not-allowed`; the shared Apply gate supplies a reason in its title.
