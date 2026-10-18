@@ -44,6 +44,7 @@ function restoreReviewReferenceShell(){
   screen.classList.remove("reference-screen");document.querySelector(".app-shell")?.classList.remove("reference-hidden");document.querySelector("#reviewReferenceStyles").disabled=true;document.body.classList.remove("ui-pages-active");reviewReferenceMounted=false;
 }
 function renderReviewPage() {
+  ReviewComponents.beginGroupedRender();
   $("#topEyebrow").textContent="REVIEW";
   if(!reviewScreenParent){reviewScreenParent=screen.parentNode;reviewScreenNext=screen.nextSibling;}
   screen.classList.add("reference-screen");document.body.append(screen);document.body.classList.add("ui-pages-active");document.querySelector(".app-shell")?.classList.add("reference-hidden");document.querySelector("#reviewReferenceStyles").disabled=false;
@@ -62,6 +63,7 @@ function renderReviewPage() {
   app.querySelectorAll("[data-workspace-screen]").forEach(link=>link.onclick=event=>{event.preventDefault();go(link.dataset.workspaceScreen);});
   app.querySelector('[data-ui="top.undo"]')?.addEventListener("click",()=>{const change=state.changes[0];if(change)rollbackChange(change.id);render();});
   if(selected)ReviewCore.bindShared(selected);
+  ReviewComponents.bindGroupBrowsers(app);
   app.querySelectorAll("button.text-button").forEach(button=>button.classList.add("link"));
 }
 function reviewIssueHtml(issue) { // CORE-14, CORE-15, CORE-16, CORE-20, CORE-49, CORE-61, CORE-62

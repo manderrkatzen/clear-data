@@ -25,17 +25,49 @@ var ReviewComponents = (() => {
     return `<div class="vals${ai?"":" solo"}" data-ui="review.select"><div><div class="card" data-ui="${ui}" ${scrollRegion?'tabindex="0"':""} role="region" aria-label="Selectable review values">${rows||`<p class="meta">${text(empty)}</p>`}</div>${total?`<div class="total" data-ui="review.select.total">${text(total)}</div>`:""}${items.length>visible.length?`<button class="link" data-review-show-all="${ui}">Show all ${items.length} values</button>`:""}</div>${ai?`<aside class="card ai">${ai}</aside>`:""}</div>`;
   }
   // C4 / LAY-12: real cells; numeric alignment is shared; raw source text is never rewritten by copy rules.
-  function table({columns,rows,ui="review.table",card=true,limit=Infinity,empty="No example rows are available.",rowAttrs}={}){ // CORE-58: shared tables keep long row sets inside their own scroller.
-    const session=ReviewCore.current()?ReviewCore.data(ReviewCore.current()):{};limit=session.expandedLists?.[ui]?Infinity:Math.min(limit,200);
+  function table({columns,rows,ui="review.table",card=true,limit=Infinity,empty="No example rows are available.",rowAttrs,progressive=false}={}){ // CORE-58: shared tables keep long row sets inside their own scroller.
+    const session=ReviewCore.current()?ReviewCore.data(ReviewCore.current()):{};limit=progressive?limit:session.expandedLists?.[ui]?Infinity:Math.min(limit,200);
     const cell=(value,key)=>value&&typeof value==="object"&&!Array.isArray(value)?`${value.control||""}${value.raw?`<code>${escapeHtml(value.value)}</code>`:escapeHtml(value.value??"")}`:escapeHtml((key==="row"||key==="_row")&&Number.isInteger(Number(value))?rowLabel(value):value??"");
     return `<div class="${card?"card":""} scroll-x" data-ui="${ui}" tabindex="0"><table><thead><tr>${columns.map(column=>`<th scope="col" class="${column.numeric&&!/^(?:row|_row)$/i.test(column.key)?"r":""}">${text(column.label)}</th>`).join("")}</tr></thead><tbody>${rows.slice(0,limit).map(row=>`<tr${attrs(rowAttrs?.(row))}>${columns.map(column=>{const value=row[column.key],numeric=column.numeric&&!/^(?:row|_row)$/i.test(column.key);return `<td class="${numeric?"r num":""} ${value?.problem?"gap":""} ${value?.removed?"old":""}">${cell(value,column.key)}</td>`;}).join("")}</tr>`).join("")||`<tr><td colspan="${columns.length}">${text(empty)}</td></tr>`}</tbody></table>${rows.length>limit?`<div class="more"><button class="link" data-review-show-all="${ui}">Show all ${rows.length} rows</button></div>`:""}</div>`;
   }
-  function groupedTable(groups,{columns,target,ui="review.table",selectedIds=new Set(),overall=0,limit=6,session,card=true,path=[]}={}){
-    return `<div class="${card?"card":""}" data-ui="${ui}"${card?' tabindex="0" role="region" aria-label="Grouped review results"':""}>${groups.map((group,index)=>{
-      const key=JSON.stringify(path.concat(group.labels||[group.label])),open=session.openGroups[key]??index<3,problem=group.rows.filter(row=>selectedIds.has(row._row)),normal=group.rows.filter(row=>!selectedIds.has(row._row)),max=session.groupLimits?.[key]||limit,shown=open?problem.slice(0,max-2).concat(normal.slice(0,max===limit?2:Math.max(2,max-problem.length))):[],rate=problem.length/Math.max(1,group.rows.length)*100;
-      const mapped=shown.map(row=>Object.fromEntries(columns.map(column=>[column.key,column.key==="_row"?row._row:{value:String(row[column.key]??"").trim()?row[column.key]:"—",raw:true,problem:column.key===target&&selectedIds.has(row._row)}])));
-      return `<div class="grp${open?" open":""}" data-ui="review.explore.missing.group" data-group="${escapeHtml(key)}"><div class="ghead" role="button" tabindex="0"><span>▸</span><span class="t">${text(group.label)} <span>· ${group.rows.length} rows</span></span><span class="n num">${problem.length} missing</span><span class="rate num">${rate.toFixed(1)}% <i><b style="width:${rate}%"></b><u style="left:${overall*100}%"></u></i></span></div>${open?`<div class="body-rows">${group.children?groupedTable(group.children,{columns,target,ui,selectedIds,overall,limit,session,card:false,path:path.concat(group.labels||[group.label])}):table({columns,rows:mapped,card:false})}${!group.children&&group.rows.length>shown.length?`<div class="more"><button class="link" data-group-show="${escapeHtml(key)}">${Math.max(0,problem.length-(max-2))} more missing · ${normal.length} present rows</button></div>`:""}</div>`:""}</div>`;
-    }).join("")}</div>`;
+  // GROUP-01…05: inspection tabs never alter locks or treatment scope. Only active rows are mounted.
+  const groupBrowsers=new Map(),groupBatch=100;
+  function beginGroupedRender(){groupBrowsers.clear();}
+  function groupBrowser(groups,{ui="review.groups",session,columns,rowMap=row=>row,header=()=>"",panel,empty="No groups to inspect."}={}){
+    session ||= ReviewCore.data(ReviewCore.current());
+    session.groupBrowsers ||= {};
+    const view=session.groupBrowsers[ui] ||= {active:"",positions:{},limits:{},tabScroll:0};
+    const keys=groups.map(group=>JSON.stringify(group.key??group.value??group.labels??group.label));
+    let active=keys.indexOf(view.active);if(active<0)active=0;view.active=keys[active]||"";
+    if(!groups.length)return `<p class="meta">${text(empty)}</p>`;
+    const group=groups[active],key=keys[active],shown=Math.min(group.rows.length,view.limits[key]||groupBatch);
+    const id=`groups-${Array.from(ui).reduce((hash,char)=>(Math.imul(hash,31)+char.charCodeAt(0))>>>0,7).toString(36)}`;
+    groupBrowsers.set(ui,{view,groups,keys,active,shown});
+    const content=panel?panel(group,active):table({columns,rows:group.rows.slice(0,shown).map(row=>rowMap(row,group)),card:false,progressive:true,ui:`${ui}.rows`}),summary=header(group,active);
+    return `<div class="card group-browser" data-group-browser="${escapeHtml(ui)}" data-ui="${escapeHtml(ui)}"><div class="group-tabs" role="tablist" aria-label="Row groups" aria-orientation="horizontal">${groups.map((entry,index)=>`<button type="button" role="tab" id="${id}-tab-${index}" aria-controls="${id}-panel" aria-selected="${index===active}" tabindex="${index===active?0:-1}" data-group-tab="${index}" title="${text(entry.label??entry.value??`Group ${index+1}`)}"><span>${text(entry.label??entry.value??`Group ${index+1}`)}</span><small>${entry.rows.length.toLocaleString()}</small></button>`).join("")}</div><div id="${id}-panel" role="tabpanel" aria-labelledby="${id}-tab-${active}">${summary?`<div class="group-summary">${summary}</div>`:""}${content}${!panel?`<p class="group-progress" role="status">${shown.toLocaleString()} of ${group.rows.length.toLocaleString()} rows${shown<group.rows.length?" · Scroll for more":""}</p>`:""}</div></div>`;
+  }
+  function bindGroupBrowsers(root){
+    root.querySelectorAll("[data-group-browser]").forEach(host=>{
+      const config=groupBrowsers.get(host.dataset.groupBrowser);if(!config)return;
+      const {view,keys,active,groups}=config,tabs=host.querySelector(":scope > .group-tabs"),buttons=[...tabs.querySelectorAll("[data-group-tab]")];
+      tabs.scrollLeft=view.tabScroll||0;
+      tabs.addEventListener("scroll",()=>{view.tabScroll=tabs.scrollLeft;},{passive:true});
+      const select=index=>{if(index===active)return;view.active=keys[index];renderPreservingReviewFocus();const next=document.getElementById(buttons[index].id);next?.focus({preventScroll:true});next?.scrollIntoView({block:"nearest",inline:"nearest"});};
+      buttons.forEach((button,index)=>{
+        button.onclick=()=>select(index);
+        button.onkeydown=event=>{let next=index;if(event.key==="ArrowRight")next=(index+1)%buttons.length;else if(event.key==="ArrowLeft")next=(index+buttons.length-1)%buttons.length;else if(event.key==="Home")next=0;else if(event.key==="End")next=buttons.length-1;else return;event.preventDefault();event.stopPropagation();select(next);};
+      });
+      const scroller=host.querySelector(":scope > [role=tabpanel] > .scroll-x");if(!scroller)return;
+      const position=view.positions[keys[active]]||{top:0,left:0};scroller.scrollTop=position.top;scroller.scrollLeft=position.left;
+      scroller.setAttribute("aria-label",`Rows in ${groups[active].label??groups[active].value??"selected group"}`);
+      scroller.addEventListener("scroll",()=>{
+        view.positions[keys[active]]={top:scroller.scrollTop,left:scroller.scrollLeft};
+        if(config.shown<groups[active].rows.length&&scroller.scrollTop+scroller.clientHeight>=scroller.scrollHeight-80){view.limits[keys[active]]=config.shown+groupBatch;renderPreservingReviewFocus();}
+      },{passive:true});
+    });
+  }
+  function groupedTable(groups,{columns,target,ui="review.table",selectedIds=new Set(),overall=0,session,path=[]}={}){
+    return groupBrowser(groups.map(group=>({...group,rows:group.rows.filter(row=>selectedIds.has(row._row)).concat(group.rows.filter(row=>!selectedIds.has(row._row)))})),{ui,session,columns,rowMap:row=>Object.fromEntries(columns.map(column=>[column.key,column.key==="_row"?row._row:{value:String(row[column.key]??"").trim()?row[column.key]:"—",raw:true,problem:column.key===target&&selectedIds.has(row._row)}])),header:group=>{const missing=group.rows.filter(row=>selectedIds.has(row._row)).length;return `<strong>${text(group.label)}</strong><span>${missing.toLocaleString()} selected gaps · ${(missing/Math.max(1,group.rows.length)*100).toFixed(1)}% of this group · ${(overall*100).toFixed(1)}% overall</span>`;},...(groups.some(group=>group.children)?{panel:group=>group.children?groupedTable(group.children,{columns,target,selectedIds,overall,session,path:path.concat(group.label),ui:`${ui}.${JSON.stringify(path.concat(group.label))}`}):""}:{})});
   }
   // C5 / LAY-04: control markup is content, but positioning belongs to this toolbar.
   function toolbar(label,controls,ui="review.toolbar"){return `<div class="toolbar" data-ui="${ui}">${text(label)} ${controls}</div>`;}
@@ -106,5 +138,5 @@ var ReviewComponents = (() => {
   }
   function fix(issue,content){const change=content.change?`<div class="scroll-x" data-ui="review.fix.preview">${content.change}</div>`:"";return `${lead(content.lead,content.sub)}${section("Options",content.options,"options")}${section("What changes",change,"change")}${footer({links:`<button class="link" id="reviewRows">See the ${ReviewCore.exploreScope(issue).length} rows</button><button class="link" id="reviewAddNote">Add a note</button><span class="meta" id="reviewApplyReason" data-ui="review.fix.apply-reason" role="status" hidden></span>`,label:content.action,id:"reviewApply",action:"apply"})}`;}
   function review(issue,content){return `${lead(content.lead,content.sub)}${section("Numbers",content.change,"numbers")}${section("Examples",content.examples,"examples")}${footer({links:'<button class="link" id="reviewNext">Next issue →</button>',label:`Undo ${content.count??0} changes`,id:"reviewUndo",action:"undo"})}`;}
-  return {plain,text,attrs,noun,count,rowLabel,short,lead,headline,selection,table,groupedTable,toolbar,change,changedLabels,preferred,options,footer,explore,fix,review,actionLabel};
+  return {plain,text,attrs,noun,count,rowLabel,short,lead,headline,selection,table,groupedTable,groupBrowser,beginGroupedRender,bindGroupBrowsers,toolbar,change,changedLabels,preferred,options,footer,explore,fix,review,actionLabel};
 })();

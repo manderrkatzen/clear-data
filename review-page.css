@@ -107,8 +107,8 @@ body.ui-pages-active .vals > div > .card { max-height:min(45vh,360px); overflow-
 body.ui-pages-active .scroll-x:has(> table) { max-height:min(45vh,360px); overflow:auto; overscroll-behavior:contain; }
 body.ui-pages-active .scroll-x:has(> table) th { position:sticky; top:0; z-index:1; background:var(--rv-bg); }
 body.ui-pages-active .scroll-x[data-ui="review.table"]:has(> .grp) { max-height:min(55vh,480px); overflow:auto; overscroll-behavior:contain; }
-body.ui-pages-active [data-ui="review.explore.missing.sheet"]:not(.scroll-x) { max-height:min(55vh,480px); overflow-y:auto; overscroll-behavior:contain; scrollbar-color:var(--rv-before) transparent; }
-body.ui-pages-active [data-ui="review.explore.missing.sheet"]:not(.scroll-x) .scroll-x:has(> table),body.ui-pages-active [data-ui="review.table"] .scroll-x:has(> table) { max-height:none; }
+body.ui-pages-active [data-ui="review.explore.missing.sheet"]:not(.scroll-x):not(.group-browser) { max-height:min(55vh,480px); overflow-y:auto; overscroll-behavior:contain; scrollbar-color:var(--rv-before) transparent; }
+body.ui-pages-active [data-ui="review.explore.missing.sheet"]:not(.scroll-x):not(.group-browser) .scroll-x:has(> table),body.ui-pages-active [data-ui="review.table"]:not(.group-browser) .scroll-x:has(> table) { max-height:none; }
 #reviewAiRequest > label,#reviewAiRuleRequest > label { display:block; margin-bottom:12px; }
 #reviewAiRuleRequest .btn2 { min-height:40px; margin:4px 4px 0 0; }
 .rc-problem { color:var(--rv-gap); background:var(--rv-gap-soft); }
@@ -256,6 +256,21 @@ body.ui-pages-active .foot { position:static; flex-shrink:0; background:var(--pa
 body.ui-pages-active .content { padding-bottom:32px; min-width:0; }
 body.ui-pages-active .main > .content { overflow-y:auto; min-height:0; }
 body.ui-pages-active .review-chart-legend { color:var(--muted); }
+/* GROUP-01…05: one shared category/range/quantile browser, matching the surrounding task tabs. */
+body.ui-pages-active .group-browser { min-width:0; max-width:100%; overflow:hidden; }
+body.ui-pages-active .group-tabs { display:flex; flex-wrap:nowrap; gap:0; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-color:var(--rv-before) var(--paper); border-bottom:1px solid var(--line); background:var(--panel); }
+body.ui-pages-active .group-tabs > button { flex:0 0 auto; display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 16px; border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; color:var(--muted); font-size:14px; text-align:left; white-space:nowrap; }
+body.ui-pages-active .group-tabs > button > span { max-width:28ch; overflow:hidden; text-overflow:ellipsis; }
+body.ui-pages-active .group-tabs > button small { font-size:12px; font-variant-numeric:tabular-nums; }
+body.ui-pages-active .group-tabs > button[aria-selected=true] { border-bottom-color:var(--blue); background:var(--blue-soft); color:var(--ink); font-weight:600; }
+body.ui-pages-active .group-tabs > button:hover { color:var(--blue); background:var(--blue-soft); }
+body.ui-pages-active .group-browser > [role=tabpanel] { min-width:0; }
+body.ui-pages-active .group-summary { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding:12px 16px; border-bottom:1px solid var(--line); font-size:13px; overflow-wrap:anywhere; }
+body.ui-pages-active .group-summary > span { color:var(--muted); }
+body.ui-pages-active .group-summary .check { display:inline-flex; align-items:center; gap:8px; }
+body.ui-pages-active .group-browser > [role=tabpanel] > .scroll-x { max-height:min(50dvh,420px); overflow:auto; overscroll-behavior:contain; scrollbar-color:var(--rv-before) var(--paper); }
+body.ui-pages-active .group-progress { padding:8px 16px; border-top:1px solid var(--line); font-size:12px; color:var(--muted); }
+body.ui-pages-active .group-browser .group-browser { border:0; border-radius:0; }
 body.ui-pages-active .mono { font-family:ui-monospace,monospace; }
 body.ui-pages-active button:focus-visible, body.ui-pages-active a:focus-visible, body.ui-pages-active [tabindex="0"]:focus-visible { outline:3px solid #83a9f1; outline-offset:2px; }
 @media (max-width:800px) {
