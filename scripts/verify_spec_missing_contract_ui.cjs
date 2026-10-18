@@ -78,7 +78,7 @@ const base=process.env.BASE_URL || "http://localhost:4174",folder="docs/screensh
       await choose("constant");await page.locator("#missingBlankMeans").check();await ready();
       assert.equal(await page.evaluate(()=>ReviewCore.data(ReviewCore.current()).preview.afterMissing),0);
       await page.locator("#reviewApply").click();assert.equal(await page.evaluate(()=>observationState(state.rows[0],"measure")),"present");
-      assert.match(await page.locator('[data-ui="review.review.chart"]').innerText(),/\+3 filled at 0/);
+      assert.match(await page.locator('.review-chart-impact > figcaption').innerText(),/Filled 3 missing cells with 0/);
       assert.equal(await page.evaluate(()=>state.changes[0].reviewImpact.beforeExcludedIds.length),3);
       await undo();
       // MISS-A-02, MISS-A-03 / CORE-24, CORE-50: advice includes group medians/share and never applies itself.

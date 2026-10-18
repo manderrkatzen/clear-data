@@ -170,6 +170,19 @@ body.ui-pages-active [data-ui="review.explore.missing.sheet"]:not(.scroll-x):not
 .review-chart-legend .after::before { opacity:.4; }
 .review-chart-legend .filled::before { opacity:1; }
 .review-chart-edges { color:var(--rv-ink-3); font-size:12px; }
+/* CHART-01: impact first; populations, medians and clipped tails stay in one disclosure. */
+.review-chart-impact > figcaption { font-size:18px; line-height:1.45; margin-bottom:16px; max-width:65ch; color:var(--ink); }
+.review-chart-impact > .review-chart-legend { gap:12px 20px; margin-bottom:4px; font-size:13px; }
+.review-chart-impact .review-chart-legend .after::before,.review-chart-impact .review-chart-legend .filled::before { background:#2E6BD9; }
+.review-chart-impact > svg { margin-bottom:16px; }
+.review-chart-details { border-top:1px solid var(--line); padding-top:12px; }
+.review-chart-details > summary { color:var(--muted); font-size:13px; min-height:32px; }
+.review-chart-details > p { margin:8px 0 12px; font-size:13px; line-height:1.6; max-width:70ch; color:var(--muted); }
+.review-chart-details > table { width:100%; table-layout:fixed; font-size:13px; }
+.review-chart-details th,.review-chart-details td { padding:8px; white-space:normal; overflow-wrap:anywhere; }
+.review-chart-details th:first-child { width:50%; }
+.review-chart-details tbody th { background:transparent; font-weight:400; }
+.review-chart-details th:not(:first-child),.review-chart-details td { text-align:right; font-variant-numeric:tabular-nums; }
 .review-category-bars { display:grid; gap:12px; }
 .review-category-bars > div { display:grid; grid-template-columns:150px minmax(0,1fr) 120px; gap:12px; font-size:14px; }
 .review-category-bars > div > div { display:grid; gap:4px; }
