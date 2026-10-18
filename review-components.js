@@ -33,16 +33,23 @@ var ReviewComponents = (() => {
   // GROUP-01…05: inspection tabs never alter locks or treatment scope. Only active rows are mounted.
   const groupBrowsers=new Map(),groupBatch=100;
   function beginGroupedRender(){groupBrowsers.clear();}
-  function renderGroupView(host){
-    // Moving the reference shell during a render can reset its scroll ancestors.
-    const positions=[];
-    for(let element=host.parentElement;element;element=element.parentElement)positions.push({element,top:element.scrollTop,left:element.scrollLeft});
-    const top=window.scrollY,left=window.scrollX;
-    renderPreservingReviewFocus();
-    for(const saved of positions)if(saved.element.isConnected){saved.element.scrollTop=saved.top;saved.element.scrollLeft=saved.left;}
-    window.scrollTo({top,left,behavior:"instant"});
+  function renderGroupView(host,append=false){
+    const previous=groupBrowsers.get(host.dataset.groupBrowser),template=document.createElement("template");
+    template.innerHTML=previous.render();
+    const next=template.content.firstElementChild,nextPanel=next.querySelector(":scope > [role=tabpanel]"),currentPanel=host.querySelector(":scope > [role=tabpanel]");
+    if(append){
+      const rows=[...nextPanel.querySelector(":scope > .scroll-x tbody").children].slice(previous.shown);
+      currentPanel.querySelector(":scope > .scroll-x tbody").append(...rows);
+      currentPanel.querySelector(".group-progress").textContent=nextPanel.querySelector(".group-progress").textContent;
+      return;
+    }
+    // Keep the page, tab strip and surrounding controls mounted. Only the panel changes.
+    currentPanel.replaceWith(nextPanel);
+    const active=groupBrowsers.get(host.dataset.groupBrowser).active;
+    host.querySelectorAll(":scope > .group-tabs > [role=tab]").forEach((button,index)=>{button.setAttribute("aria-selected",String(index===active));button.tabIndex=index===active?0:-1;});
+    bindGroupBrowsers(host);
   }
-  function groupBrowser(groups,{ui="review.groups",session,columns,rowMap=row=>row,header=()=>"",panel,empty="No groups to inspect."}={}){
+  function groupBrowser(groups,{ui="review.groups",session,columns,rowMap=row=>row,header=()=>"",panel,onPanelMount,empty="No groups to inspect."}={}){
     session ||= ReviewCore.data(ReviewCore.current());
     session.groupBrowsers ||= {};
     const view=session.groupBrowsers[ui] ||= {active:"",positions:{},limits:{},tabScroll:0};
@@ -51,18 +58,19 @@ var ReviewComponents = (() => {
     if(!groups.length)return `<p class="meta">${text(empty)}</p>`;
     const group=groups[active],key=keys[active],shown=Math.min(group.rows.length,view.limits[key]||groupBatch);
     const id=`groups-${Array.from(ui).reduce((hash,char)=>(Math.imul(hash,31)+char.charCodeAt(0))>>>0,7).toString(36)}`;
-    groupBrowsers.set(ui,{view,groups,keys,active,shown});
+    groupBrowsers.set(ui,{view,groups,keys,active,shown,onPanelMount,render:()=>groupBrowser(groups,{ui,session,columns,rowMap,header,panel,onPanelMount,empty})});
     const content=panel?panel(group,active):table({columns,rows:group.rows.slice(0,shown).map(row=>rowMap(row,group)),card:false,progressive:true,ui:`${ui}.rows`}),summary=header(group,active);
     return `<div class="card group-browser" data-group-browser="${escapeHtml(ui)}" data-ui="${escapeHtml(ui)}"><div class="group-tabs" role="tablist" aria-label="Row groups" aria-orientation="horizontal">${groups.map((entry,index)=>`<button type="button" role="tab" id="${id}-tab-${index}" aria-controls="${id}-panel" aria-selected="${index===active}" tabindex="${index===active?0:-1}" data-group-tab="${index}" title="${text(entry.label??entry.value??`Group ${index+1}`)}"><span>${text(entry.label??entry.value??`Group ${index+1}`)}</span><small>${entry.rows.length.toLocaleString()}</small></button>`).join("")}</div><div id="${id}-panel" role="tabpanel" aria-labelledby="${id}-tab-${active}">${summary?`<div class="group-summary">${summary}</div>`:""}${content}${!panel?`<p class="group-progress" role="status">${shown.toLocaleString()} of ${group.rows.length.toLocaleString()} rows${shown<group.rows.length?" · Scroll for more":""}</p>`:""}</div></div>`;
   }
   function bindGroupBrowsers(root){
-    root.querySelectorAll("[data-group-browser]").forEach(host=>{
+    const hosts=[...(root.matches?.("[data-group-browser]")?[root]:[]),...root.querySelectorAll("[data-group-browser]")];
+    hosts.forEach(host=>{
       const config=groupBrowsers.get(host.dataset.groupBrowser);if(!config)return;
       const {view,keys,active,groups}=config,tabs=host.querySelector(":scope > .group-tabs"),buttons=[...tabs.querySelectorAll("[data-group-tab]")];
       tabs.scrollLeft=view.tabScroll||0;
-      tabs.addEventListener("scroll",()=>{view.tabScroll=tabs.scrollLeft;},{passive:true});
+      tabs.onscroll=()=>{view.tabScroll=tabs.scrollLeft;};
       const select=index=>{
-        if(index===active)return;
+        if(index===groupBrowsers.get(host.dataset.groupBrowser).active)return;
         view.active=keys[index];renderGroupView(host);
         const next=document.getElementById(buttons[index].id);next?.focus({preventScroll:true});
         // Reveal only along the tab strip: scrollIntoView also moves the page vertically.
@@ -72,13 +80,15 @@ var ReviewComponents = (() => {
         button.onclick=()=>select(index);
         button.onkeydown=event=>{let next=index;if(event.key==="ArrowRight")next=(index+1)%buttons.length;else if(event.key==="ArrowLeft")next=(index+buttons.length-1)%buttons.length;else if(event.key==="Home")next=0;else if(event.key==="End")next=buttons.length-1;else return;event.preventDefault();event.stopPropagation();select(next);};
       });
+      config.onPanelMount?.(host.querySelector(":scope > [role=tabpanel]"));
       const scroller=host.querySelector(":scope > [role=tabpanel] > .scroll-x");if(!scroller)return;
       const position=view.positions[keys[active]]||{top:0,left:0};scroller.scrollTop=position.top;scroller.scrollLeft=position.left;
       scroller.setAttribute("aria-label",`Rows in ${groups[active].label??groups[active].value??"selected group"}`);
-      scroller.addEventListener("scroll",()=>{
+      scroller.onscroll=()=>{
+        const current=groupBrowsers.get(host.dataset.groupBrowser);
         view.positions[keys[active]]={top:scroller.scrollTop,left:scroller.scrollLeft};
-        if(config.shown<groups[active].rows.length&&scroller.scrollTop+scroller.clientHeight>=scroller.scrollHeight-80){view.limits[keys[active]]=config.shown+groupBatch;renderGroupView(host);}
-      },{passive:true});
+        if(current.shown<groups[active].rows.length&&scroller.scrollTop+scroller.clientHeight>=scroller.scrollHeight-80){view.limits[keys[active]]=current.shown+groupBatch;renderGroupView(host,true);}
+      };
     });
   }
   function groupedTable(groups,{columns,target,ui="review.table",selectedIds=new Set(),overall=0,session,path=[]}={}){

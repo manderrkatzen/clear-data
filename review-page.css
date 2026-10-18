@@ -268,7 +268,7 @@ body.ui-pages-active .group-browser > [role=tabpanel] { min-width:0; }
 body.ui-pages-active .group-summary { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding:12px 16px; border-bottom:1px solid var(--line); font-size:13px; overflow-wrap:anywhere; }
 body.ui-pages-active .group-summary > span { color:var(--muted); }
 body.ui-pages-active .group-summary .check { display:inline-flex; align-items:center; gap:8px; }
-body.ui-pages-active .group-browser > [role=tabpanel] > .scroll-x { max-height:min(50dvh,420px); overflow:auto; overscroll-behavior:contain; scrollbar-color:var(--rv-before) var(--paper); }
+body.ui-pages-active .group-browser > [role=tabpanel] > .scroll-x { height:min(50dvh,420px); max-height:min(50dvh,420px); overflow:auto; overscroll-behavior:contain; scrollbar-color:var(--rv-before) var(--paper); }
 body.ui-pages-active .group-progress { padding:8px 16px; border-top:1px solid var(--line); font-size:12px; color:var(--muted); }
 body.ui-pages-active .group-browser .group-browser { border:0; border-radius:0; }
 body.ui-pages-active .mono { font-family:ui-monospace,monospace; }
