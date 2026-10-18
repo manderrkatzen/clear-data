@@ -47,7 +47,7 @@ function renderReviewPage() {
   ReviewComponents.beginGroupedRender();
   $("#topEyebrow").textContent="REVIEW";
   if(!reviewScreenParent){reviewScreenParent=screen.parentNode;reviewScreenNext=screen.nextSibling;}
-  screen.classList.add("reference-screen");document.body.append(screen);document.body.classList.add("ui-pages-active");document.querySelector(".app-shell")?.classList.add("reference-hidden");document.querySelector("#reviewReferenceStyles").disabled=false;
+  screen.classList.add("reference-screen");if(screen.parentNode!==document.body)document.body.append(screen);document.body.classList.add("ui-pages-active");document.querySelector(".app-shell")?.classList.add("reference-hidden");document.querySelector("#reviewReferenceStyles").disabled=false;
   const open=state.issues.filter(issue=>issue.status==="open"),selected=state.issues.find(issue=>issue.id===state.selectedIssue)||open[0]||state.issues[0];if(selected)state.selectedIssue=selected.id;
   const ordered=[...state.issues].sort((a,b)=>state.headers.indexOf(a.displayColumn||a.column)-state.headers.indexOf(b.displayColumn||b.column)||ReviewCore.order.indexOf(a.reviewType)-ReviewCore.order.indexOf(b.reviewType));
   const grouped=new Map();for(const issue of ordered){const column=issue.displayColumn||issue.column;if(!grouped.has(column))grouped.set(column,[]);grouped.get(column).push(issue);}

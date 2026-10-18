@@ -33,6 +33,15 @@ var ReviewComponents = (() => {
   // GROUP-01…05: inspection tabs never alter locks or treatment scope. Only active rows are mounted.
   const groupBrowsers=new Map(),groupBatch=100;
   function beginGroupedRender(){groupBrowsers.clear();}
+  function renderGroupView(host){
+    // Moving the reference shell during a render can reset its scroll ancestors.
+    const positions=[];
+    for(let element=host.parentElement;element;element=element.parentElement)positions.push({element,top:element.scrollTop,left:element.scrollLeft});
+    const top=window.scrollY,left=window.scrollX;
+    renderPreservingReviewFocus();
+    for(const saved of positions)if(saved.element.isConnected){saved.element.scrollTop=saved.top;saved.element.scrollLeft=saved.left;}
+    window.scrollTo({top,left,behavior:"instant"});
+  }
   function groupBrowser(groups,{ui="review.groups",session,columns,rowMap=row=>row,header=()=>"",panel,empty="No groups to inspect."}={}){
     session ||= ReviewCore.data(ReviewCore.current());
     session.groupBrowsers ||= {};
@@ -52,7 +61,13 @@ var ReviewComponents = (() => {
       const {view,keys,active,groups}=config,tabs=host.querySelector(":scope > .group-tabs"),buttons=[...tabs.querySelectorAll("[data-group-tab]")];
       tabs.scrollLeft=view.tabScroll||0;
       tabs.addEventListener("scroll",()=>{view.tabScroll=tabs.scrollLeft;},{passive:true});
-      const select=index=>{if(index===active)return;view.active=keys[index];renderPreservingReviewFocus();const next=document.getElementById(buttons[index].id);next?.focus({preventScroll:true});next?.scrollIntoView({block:"nearest",inline:"nearest"});};
+      const select=index=>{
+        if(index===active)return;
+        view.active=keys[index];renderGroupView(host);
+        const next=document.getElementById(buttons[index].id);next?.focus({preventScroll:true});
+        // Reveal only along the tab strip: scrollIntoView also moves the page vertically.
+        if(next){const strip=next.parentElement,tabBox=next.getBoundingClientRect(),stripBox=strip.getBoundingClientRect();if(tabBox.left<stripBox.left)strip.scrollLeft+=tabBox.left-stripBox.left;else if(tabBox.right>stripBox.right)strip.scrollLeft+=tabBox.right-stripBox.right;view.tabScroll=strip.scrollLeft;}
+      };
       buttons.forEach((button,index)=>{
         button.onclick=()=>select(index);
         button.onkeydown=event=>{let next=index;if(event.key==="ArrowRight")next=(index+1)%buttons.length;else if(event.key==="ArrowLeft")next=(index+buttons.length-1)%buttons.length;else if(event.key==="Home")next=0;else if(event.key==="End")next=buttons.length-1;else return;event.preventDefault();event.stopPropagation();select(next);};
@@ -62,7 +77,7 @@ var ReviewComponents = (() => {
       scroller.setAttribute("aria-label",`Rows in ${groups[active].label??groups[active].value??"selected group"}`);
       scroller.addEventListener("scroll",()=>{
         view.positions[keys[active]]={top:scroller.scrollTop,left:scroller.scrollLeft};
-        if(config.shown<groups[active].rows.length&&scroller.scrollTop+scroller.clientHeight>=scroller.scrollHeight-80){view.limits[keys[active]]=config.shown+groupBatch;renderPreservingReviewFocus();}
+        if(config.shown<groups[active].rows.length&&scroller.scrollTop+scroller.clientHeight>=scroller.scrollHeight-80){view.limits[keys[active]]=config.shown+groupBatch;renderGroupView(host);}
       },{passive:true});
     });
   }
