@@ -224,6 +224,7 @@ var ReviewCore = (() => {
     const table=panel.querySelector(".review-table-scroll");table?.setAttribute("tabindex","0");table?.setAttribute("aria-label","Affected rows table");
     panel.addEventListener("keydown",event=>{if(event.key!=="Tab")return;const controls=[...panel.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href],[tabindex="0"]')].filter(node=>node.getClientRects().length),first=controls[0],last=controls.at(-1);if(event.shiftKey&&document.activeElement===first||!event.shiftKey&&document.activeElement===last){event.preventDefault();(event.shiftKey?last:first)?.focus();}});
     document.body.append(panel);panel.querySelector("#reviewCloseRows").onclick=()=>panel.close();panel.showModal();panel.querySelector("#reviewCloseRows").focus();
+    ReviewCharts.bindInteractions(panel);
   }
   function showRows(issue,blockedOnly = false) { // CORE-25, CORE-58
     if (moduleFor(issue).showRows) return moduleFor(issue).showRows(issue,blockedOnly);

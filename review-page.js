@@ -64,6 +64,7 @@ function renderReviewPage() {
   app.querySelector('[data-ui="top.undo"]')?.addEventListener("click",()=>{const change=state.changes[0];if(change)rollbackChange(change.id);render();});
   if(selected)ReviewCore.bindShared(selected);
   ReviewComponents.bindGroupBrowsers(app);
+  ReviewCharts.bindInteractions(app);
   app.querySelectorAll("button.text-button").forEach(button=>button.classList.add("link"));
 }
 function reviewIssueHtml(issue) { // CORE-14, CORE-15, CORE-16, CORE-20, CORE-49, CORE-61, CORE-62
