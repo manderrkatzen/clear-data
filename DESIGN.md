@@ -371,6 +371,8 @@ Sensitive Explore uses local type locks and masked examples. Mask, deterministic
 
 ### Dialogs and feedback
 
+**Peek at worksheet** is a secondary top-right control available only in Fix. It opens a non-modal, fixed-position pane showing the original source worksheet above the existing task. It never navigates or invokes the workspace renderer. Horizontal/vertical table scrolling, sticky column headers and row numbers, and 250-row batches remain inside the pane. Hover provides a temporary peek; clicking/tapping pins it, and keyboard activation enters the scroll region. Close/Escape dismiss the pane without moving the underlying page or committing an underlying draft input. Keyboard focus returns to the opener when it leaves the pane. Review shortcuts are suspended while the pane is open. The retained trigger is rebound after preview updates; switching away from Fix hides the control and closes the pane.
+
 The application uses native `dialog` with the documented backdrop and shadow, padding (25px), reduced to (20px) on narrow screens. Cleaning/rule dialogs use bounded width `min(760px, 94vw)`; the cleaning dialog is capped at (90vh) and scrolls internally. Toast feedback uses `role="status"`, navy fill (`#193757`), text (14px), padding (13px 17px), and a maximum width `min(520px, 90vw)`.
 
 ### Observed limitations, not canonized

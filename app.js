@@ -149,10 +149,15 @@ function renderOriginalPreviewRows() {
   viewport.innerHTML = `<table id="originalPreviewTable"><thead><tr><th scope="col">#</th>${headers.map((header) => `<th scope="col">${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${content}</tbody></table>${end < rows.length ? `<button class="secondary" id="loadMoreOriginalRows" type="button">Show next ${Math.min(originalPreviewBatchSize, rows.length - end).toLocaleString()} rows</button>` : ""}`;
   $("#originalPreviewSummary").textContent = `${end.toLocaleString()} of ${rows.length.toLocaleString()} original rows · ${headers.length.toLocaleString()} columns`;
   const loadMore = $("#loadMoreOriginalRows");
-  if (loadMore) loadMore.onclick = () => { originalPreviewRowsShown = Math.min(originalPreviewRowsShown + originalPreviewBatchSize, rows.length); renderOriginalPreviewRows(); $("#loadMoreOriginalRows")?.focus(); };
+  if (loadMore) loadMore.onclick = () => {
+    const focusInPane=viewport.contains(document.activeElement),top=viewport.scrollTop,left=viewport.scrollLeft;
+    originalPreviewRowsShown = Math.min(originalPreviewRowsShown + originalPreviewBatchSize, rows.length);
+    renderOriginalPreviewRows();viewport.scrollTop=top;viewport.scrollLeft=left;
+    if(focusInPane)viewport.focus({preventScroll:true});
+  };
 }
 function showOriginalPreview({ pinned = false, trigger = originalPreviewTrigger } = {}) {
-  if (!state.original.length) return;
+  if (!state.original.length || state.screen !== "issues" || !ReviewCore.current() || ReviewCore.data(ReviewCore.current()).tab !== "fix") return;
   if (trigger) originalPreviewTrigger = trigger;
   clearOriginalPreviewCloseTimer();
   originalPreviewPinned = pinned;
@@ -165,10 +170,11 @@ function showOriginalPreview({ pinned = false, trigger = originalPreviewTrigger 
 }
 function hideOriginalPreview({ restoreFocus = false } = {}) {
   clearOriginalPreviewCloseTimer();
+  const focusInPane = $("#originalPreview").contains?.(document.activeElement);
   originalPreviewPinned = false;
   $("#originalPreview").hidden = true;
   originalPreviewTrigger?.setAttribute("aria-expanded", "false");
-  if (restoreFocus && originalPreviewTrigger?.isConnected && document.activeElement !== originalPreviewTrigger) { suppressOriginalPreviewFocus = true; originalPreviewTrigger.focus(); }
+  if (restoreFocus && focusInPane && originalPreviewTrigger?.isConnected && document.activeElement !== originalPreviewTrigger) { suppressOriginalPreviewFocus = true; originalPreviewTrigger.focus({ preventScroll: true }); }
 }
 function scheduleOriginalPreviewClose() {
   clearOriginalPreviewCloseTimer();
@@ -178,25 +184,27 @@ function scheduleOriginalPreviewClose() {
     hideOriginalPreview();
   }, 400);
 }
-const originalPreviewBoundTriggers = new WeakSet();
 function bindOriginalPreviewTrigger(trigger) {
-  if (!trigger || originalPreviewBoundTriggers.has(trigger)) return;
-  originalPreviewBoundTriggers.add(trigger);
+  // prepareReviewBindings removes previous callbacks before each render. Rebind retained triggers too.
+  if (!trigger) return;
   let ignoreClickUntil = 0;
   trigger.addEventListener("pointerenter", (event) => { if (event.pointerType === "touch") return; originalPreviewKeyboardMode = false; showOriginalPreview({ trigger }); });
   trigger.addEventListener("pointerleave", scheduleOriginalPreviewClose);
   trigger.addEventListener("focus", () => { if (suppressOriginalPreviewFocus) suppressOriginalPreviewFocus = false; else { originalPreviewKeyboardMode = true; showOriginalPreview({ trigger, pinned: originalPreviewPinned }); } });
   trigger.addEventListener("blur", scheduleOriginalPreviewClose);
+  trigger.addEventListener("mousedown", event => event.preventDefault());
   trigger.addEventListener("pointerdown", (event) => {
     if (event.pointerType !== "touch") return;
+    event.preventDefault();
     ignoreClickUntil = Date.now() + 800;
     if (originalPreviewPinned) hideOriginalPreview();
     else showOriginalPreview({ pinned: true, trigger });
   });
   trigger.addEventListener("click", (event) => {
+    event.preventDefault();
     if (Date.now() < ignoreClickUntil) { ignoreClickUntil = 0; return; }
     if (originalPreviewPinned) hideOriginalPreview({ restoreFocus: true });
-    else showOriginalPreview({ pinned: true, trigger });
+    else { showOriginalPreview({ pinned: true, trigger }); if (event.detail === 0) $("#originalPreviewViewport").focus({ preventScroll: true }); }
   });
   trigger.addEventListener("keydown", closeOriginalPreviewOnEscape);
 }
@@ -204,11 +212,14 @@ $("#originalPreview").addEventListener("pointerenter", () => { originalPreviewKe
 $("#originalPreview").addEventListener("pointerleave", scheduleOriginalPreviewClose);
 $("#originalPreview").addEventListener("focusin", clearOriginalPreviewCloseTimer);
 $("#originalPreview").addEventListener("focusout", scheduleOriginalPreviewClose);
+$("#originalPreview").addEventListener("mousedown", event => { if(event.target.closest("button"))event.preventDefault(); });
+$("#originalPreview").addEventListener("pointerdown", event => { if(event.pointerType === "touch" && event.target.closest("button"))event.preventDefault(); });
 $("#closeOriginalPreview").addEventListener("click", () => hideOriginalPreview({ restoreFocus: true }));
 const closeOriginalPreviewOnEscape = (event) => {
-  if (event.key === "Escape" && !$("#originalPreview").hidden) hideOriginalPreview({ restoreFocus: true });
+  if (event.key === "Escape" && !$("#originalPreview").hidden) { event.preventDefault(); event.stopPropagation(); hideOriginalPreview({ restoreFocus: true }); }
 };
 $("#originalPreview").addEventListener("keydown", closeOriginalPreviewOnEscape);
+document.addEventListener?.("keydown", closeOriginalPreviewOnEscape, true);
 let renderingWorkspace = false, workspaceRenderQueued = false;
 function render() {
   // CORE-17, CORE-22: input blur/change may request another render during a background DOM replacement.

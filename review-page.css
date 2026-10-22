@@ -12,6 +12,7 @@
 .app-shell:has(.review-page) { grid-template-columns:168px minmax(0,1fr); }
 .app-shell:has(.review-page) .topbar { height:60px; min-height:60px; }
 .top [data-original-preview-trigger] { flex-shrink:0; white-space:nowrap; }
+body.ui-pages-active .top:has([data-original-preview-trigger]) { position:sticky; top:0; z-index:10; }
 .app-shell:has(.review-page) .eyebrow, .app-shell:has(.review-page) .product-label, .app-shell:has(.review-page) .sidebar-bottom { display:none; }
 .app-shell:has(.review-page) .sidebar { padding:24px 16px; }
 .app-shell:has(.review-page) .brand { font-size:22px; }

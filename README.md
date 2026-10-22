@@ -152,6 +152,7 @@ PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/veri
 PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_ui_consistency.cjs
 PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_group_tabs_ui.cjs
 PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_chart_clarity_ui.cjs
+PLAYWRIGHT_MODULE=/tmp/cleardata-tools/node_modules/playwright node scripts/verify_worksheet_peek_ui.cjs
 ```
 
 `BASE_URL` selects another server. `ARTIFACT_DIR` selects an existing screenshot

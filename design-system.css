@@ -114,10 +114,12 @@ dialog > header h2 { margin: 0; }
 #originalPreviewViewport { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; }
 #originalPreviewTable { width: max-content; min-width: 100%; font-size: 13px; white-space: nowrap; }
 #originalPreviewTable th, #originalPreviewTable td { padding: 8px 12px; }
-#originalPreviewTable thead { position: sticky; top: 0; z-index: 1; }
-#originalPreviewTable thead th { border-bottom: 1px solid #cbd6e4; }
+#originalPreviewTable thead { position: sticky; top: 0; z-index: 3; }
+#originalPreviewTable thead th { border-bottom: 1px solid #cbd6e4; background:var(--paper); }
+#originalPreviewTable thead th:first-child { position:sticky; left:0; z-index:4; }
 #originalPreviewTable tbody th { position: sticky; left: 0; z-index: 1; font-weight: 600; }
 #originalPreviewViewport > button { margin: 12px; }
+#originalPreviewViewport:focus-visible { outline:3px solid #83a9f1; outline-offset:-3px; }
 .empty-state { max-width: 850px; margin: 54px auto 32px; padding: 34px 38px; background: white; border: 1px solid var(--line); border-radius: 10px; text-align: left; }
 .source-icon { margin: 0 0 18px; width: 38px; height: 38px; border-radius: var(--radius); background: var(--blue-soft); color: var(--blue); font-size: 22px; }
 .source-icon svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
