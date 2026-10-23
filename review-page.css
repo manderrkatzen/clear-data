@@ -277,6 +277,35 @@ body.ui-pages-active .inline-edit input { min-height:28px; border:0; padding:2px
 body.ui-pages-active .foot { position:static; flex-shrink:0; background:var(--paper); backdrop-filter:none; }
 body.ui-pages-active .content { padding-bottom:32px; min-width:0; }
 body.ui-pages-active .main > .content { overflow-y:auto; min-height:0; }
+/* LAY-27…31: size evidence by its task column, not the full viewport. */
+body.ui-pages-active .main { container-type:inline-size; min-width:0; }
+body.ui-pages-active .top .file { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+body.ui-pages-active .head { gap:12px 24px; }
+body.ui-pages-active .head > div { min-width:0; }
+body.ui-pages-active .head h1 { overflow-wrap:anywhere; }
+body.ui-pages-active .head > .link { flex-shrink:0; }
+body.ui-pages-active .btn, body.ui-pages-active .btn2 { display:inline-flex; align-items:center; justify-content:center; gap:8px; text-align:center; }
+@container (max-width:900px) {
+  body.ui-pages-active .vals { grid-template-columns:minmax(0,1fr); }
+  body.ui-pages-active .vals > * { min-width:0; }
+  body.ui-pages-active .vrow, body.ui-pages-active .vrow.v-out, body.ui-pages-active .vrow.v-rule { grid-template-columns:22px minmax(0,1fr) auto auto; gap:6px 8px; }
+  body.ui-pages-active .vrow .mono { overflow-wrap:anywhere; white-space:normal; }
+  body.ui-pages-active .vrow .m { grid-column:2/-1; text-align:left; white-space:normal; }
+  body.ui-pages-active .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  body.ui-pages-active .metrics .v { white-space:normal; overflow-wrap:anywhere; }
+  body.ui-pages-active .ghead { grid-template-columns:20px minmax(0,1fr) auto; gap:4px 8px; }
+  body.ui-pages-active .ghead .rate { grid-column:2/-1; justify-content:flex-start; }
+}
+@container (max-width:520px) {
+  body.ui-pages-active .content { padding-inline:24px; }
+  body.ui-pages-active .foot { padding-inline:24px; }
+  body.ui-pages-active .foot .in { flex-wrap:wrap; gap:12px; }
+  body.ui-pages-active .foot .sum { flex-basis:100%; }
+  body.ui-pages-active .foot .btn { width:100%; white-space:normal; }
+  body.ui-pages-active .opt { grid-template-columns:24px minmax(0,1fr); gap:4px 10px; }
+  body.ui-pages-active .opt .badge, body.ui-pages-active .opt .desc, body.ui-pages-active .opt .extra { grid-column:2; white-space:normal; }
+  body.ui-pages-active .crow { grid-template-columns:minmax(0,1fr); }
+}
 body.ui-pages-active .review-chart-legend { color:var(--muted); }
 /* GROUP-01…05: one shared category/range/quantile browser, matching the surrounding task tabs. */
 body.ui-pages-active .group-browser { min-width:0; max-width:100%; overflow:hidden; }

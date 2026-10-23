@@ -267,6 +267,10 @@ This is a practical, stepped type hierarchy, not a mathematical modular scale. C
 
 ## Layout
 
+Shared screen containers are centered within the available workspace at their maximum width. Import and resume-project surfaces share an 850px column and aligned content insets (720px while choosing a sample). Shared action controls center their labels and icons; mobile actions use a 44px minimum target. Long filenames retain ellipsis in the topbar.
+
+The active reference Review main column is an inline-size container. Below 900px of task-column width, value evidence and AI notes stack and fixed-width value rows reflow. Below 520px, action summaries and full-width primary actions stack, options wrap their risk/details beneath the title, and task/footer gutters align at 24px (16px on mobile). These rules respond to remaining task space after navigation and issue browsing, rather than relying only on viewport width.
+
 Desktop shell: CSS grid with a navigation column (196px) and `minmax(0, 1fr)` content. The sidebar is sticky at the viewport top, with height (100vh) and padding (26px 16px 20px). The dataset topbar is (72px) high with inline padding (30px). Screens have maximum width (1600px) and padding (28px 30px 40px).
 
 Review overrides the screen cap and uses (20px 24px) screen padding. In Review, the navigation rail narrows to (168px), the topbar becomes (60px), and redundant eyebrow/continuation copy recedes. Its desktop grid has a column-grouped issue list (220px), a flexible white task surface, and a (20px) gap. Height is `calc(100dvh - 100px)` with a (620px) minimum. The task surface has (8px) corners, a hairline border, and (24px) padding. Header and tabs remain above an internally scrolling evidence area. The issue list has its own bounded scroll container. Apply/Undo footers occupy separate space below the tab content, so they neither cover charts nor disappear into the evidence scroll. Dataset definitions remain under `dataset.setup`.

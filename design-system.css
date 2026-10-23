@@ -90,7 +90,7 @@ textarea { resize: vertical; }
 .sheet-grid .table-wrap { overscroll-behavior: contain; scrollbar-color: #a5b9d5 var(--paper); }
 dialog > header, .cleaning-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 dialog > header h2 { margin: 0; }
-.screen { max-width: 1600px; padding: 28px 30px 40px; }
+.screen { max-width: 1600px; margin-inline: auto; padding: 28px 30px 40px; }
 .page-head { margin-bottom: 22px; }
 .page-head h1, .empty-state h1 { font: 600 29px/1.25 var(--font-ui); letter-spacing: -.6px; }
 .page-head p { font-size: 14px; }
@@ -123,6 +123,17 @@ dialog > header h2 { margin: 0; }
 .empty-state { max-width: 850px; margin: 54px auto 32px; padding: 34px 38px; background: white; border: 1px solid var(--line); border-radius: 10px; text-align: left; }
 .source-icon { margin: 0 0 18px; width: 38px; height: 38px; border-radius: var(--radius); background: var(--blue-soft); color: var(--blue); font-size: 22px; }
 .source-icon svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+/* The import and resume tasks share one centered column and the same inset. */
+.screen:has(> .empty-state) > .workspace-card { max-width:850px; margin-inline:auto; padding:24px 38px; }
+.screen:has(> .sample-picker) > .workspace-card { max-width:720px; }
+.primary, .secondary, .ghost { display:inline-flex; align-items:center; justify-content:center; gap:8px; text-align:center; }
+.primary svg, .secondary svg, .ghost svg { flex-shrink:0; }
+.page-head > div, .review-launch > div, .workspace-heading > div, .change-card header > div { min-width:0; }
+.page-head > button, .review-launch > button, .change-card header > button { flex-shrink:0; }
+.workspace-heading { flex-wrap:wrap; }
+.review-launch > button { white-space:nowrap; }
+.metric-grid article { min-width:0; overflow-wrap:anywhere; }
+.change-card h2, .empty-panel, .workspace-card p { overflow-wrap:anywhere; }
 .empty-state > .eyebrow { display: none; }
 .empty-state h1 { max-width: 620px; font-size: 34px; margin: 10px 0 16px; }
 .empty-state > p:not(.eyebrow) { margin: 0; max-width: 65ch; font-size: 16px; color: var(--muted); }
@@ -307,6 +318,14 @@ table, .metric-grid strong { font-variant-numeric: tabular-nums; }
   .workspace-heading > label select { width: 100%; max-width: 100%; }
   .saved-rule-list article { flex-wrap: wrap; }
   .review-fields .wide-field { grid-column: auto; }
+  .screen:has(> .empty-state) > .workspace-card { padding:20px; }
+  .primary, .secondary, .ghost, .profile-finding { min-height:44px; }
+  .source-actions { align-items:stretch; }
+  .source-actions > button { flex:1 1 140px; }
+  .topbar { flex-wrap:wrap; }
+  .topbar > div:first-child { flex:1 1 120px; }
+  .header-actions { max-width:100%; flex-shrink:1; }
+  .dialog-actions > button { flex:1 1 120px; }
 }
 @media (max-width: 700px) {
   #originalPreview { top:auto; bottom:2vh; width:90vw; height:78vh; transform:translateX(-50%); }

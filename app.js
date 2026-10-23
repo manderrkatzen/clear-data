@@ -250,7 +250,7 @@ function reviewOverview() {
 function renderData() {
   $("#topEyebrow").textContent = "DATA SOURCE";
   if (!state.headers.length) {
-    screen.innerHTML = `<section class="empty-state"><span class="source-icon">▤</span><h1>Import a dataset</h1><p>Open a CSV or choose a sample dataset.</p><div class="source-actions"><button class="primary" id="openCsv">Open CSV</button><button class="secondary" id="sampleCsv">Try a sample dataset</button></div><p class="ai-status" id="aiStatus" aria-live="polite">Checking AI availability...</p></section>`;
+    screen.innerHTML = `<section class="empty-state"><span class="source-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16M10 9v12"/></svg></span><h1>Import a dataset</h1><p>Open a CSV or choose a sample dataset.</p><div class="source-actions"><button class="primary" id="openCsv">Open CSV</button><button class="secondary" id="sampleCsv">Try a sample dataset</button></div><p class="ai-status" id="aiStatus" aria-live="polite">Checking AI availability...</p></section>`;
     $("#openCsv").onclick = () => $("#fileInput").click();
     $("#sampleCsv").onclick = () => loadSample();
     updateAiStatus();
