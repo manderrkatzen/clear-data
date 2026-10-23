@@ -122,16 +122,17 @@ var ReviewCore = (() => {
   }
   function fixHtml(issue) { // CORE-18, CORE-21, CORE-22, CORE-23, CORE-24, CORE-26, CORE-27, CORE-28
     const session=data(issue),option=choice(issue),preview=session.preview;
-    const measured=measure(issue),sub=session.updated||`${measured.metric?`Sum of ${measured.metric}: ${money(measured.carry,measured.metric)} (${measured.share.toFixed(1)}% of the column sum).`:`${measured.rows.length} ${ReviewComponents.noun()} selected.`}`;
+    const sub=session.updated||"";
     const change=preview?moduleFor(issue).fixContent?.(issue,session,preview,option):null;
-    return ReviewComponents.fix(issue,{lead:`Decide what these ${ReviewComponents.count(exploreScope(issue).length)} should become.`,sub,options:optionsHtml(issue),change:change?ReviewComponents.change(change):ReviewComponents.change({text:session.pending?"Checking this fix…":session.error||"Choose a fix to compute its effect."}),action:ReviewComponents.actionLabel(issue,option,preview)});
+    return ReviewComponents.fix(issue,{sub,options:optionsHtml(issue),change:change?ReviewComponents.change(change):ReviewComponents.change({text:session.pending?"Computing preview…":session.error||"Select a treatment to preview."}),action:ReviewComponents.actionLabel(issue,option,preview)});
   }
   function reviewHtml(issue) { // CORE-36, CORE-38, CORE-39, CORE-56
     const change=state.changes.find(change=>change.issue.id===issue.id);
     if(!change)return `<p class="review-empty-copy">${issue.status==="resolved"?"The current data no longer matches this finding. No separate decision was recorded; inspect the changes in Decisions.":"Apply a fix to see changes."}</p>`;
     const noChange=change.treatment?.operation==="retain"&&!change.patches.length&&!change.removedRows.length;
     const content=noChange?{lead:change.treatment.repeatableColumn?"Accepted: repeats allowed":"Accepted without changes",sub:change.note||"The source values are retained.",count:change.rows.length,change:{text:"No values change."}}:moduleFor(issue).reviewContent(issue,change);
-    return ReviewComponents.review(issue,{...content,change:ReviewComponents.change(content.change)});
+    const label=change.reviewSpec?.label||change.title,recorded=new Date(change.createdAt),metadata=`<div class="review-decision-meta" data-ui="review.review.metadata"><span>${escapeHtml(label)}</span><time datetime="${escapeHtml(change.createdAt)}">${escapeHtml(recorded.toLocaleString())}</time>${change.note?`<p>${escapeHtml(change.note)}</p>`:""}${change.reviewSpec?.aiRulePlan?`<details><summary>AI rule</summary><p>${escapeHtml(change.reviewSpec.aiRulePlan)}</p><span>${escapeHtml(change.reviewSpec.aiRuleProvider||"configured provider")}</span></details>`:""}</div>`;
+    return ReviewComponents.review(issue,{...content,metadata,change:ReviewComponents.change(content.change)});
   }
   function aiStatus(issue,override = {}) { // CORE-53: visible progress and specific failure reason; local controls remain usable.
     const session={...data(issue),...override},pending=session.aiStatus==="pending";
@@ -189,9 +190,11 @@ var ReviewCore = (() => {
     bind("reviewAccept","click",()=>accept(issue)); bind("reviewReminder","click",()=>switchTab(issue,"explore"));
     bind("reviewChooseFix","click",()=>switchTab(issue,"fix"));
     document.querySelectorAll("[data-option-setup]").forEach(button=>button.onclick=()=>{switchTab(issue,"explore");document.getElementById("missingAddLock")?.focus();});
-    document.querySelectorAll("[data-fix]").forEach(button=>button.onclick=()=>{session.fix=button.dataset.fix;session.skipBlocked=false;compute(issue);});
-    document.querySelectorAll(".opt[data-o]").forEach(option=>option.onclick=event=>{if(event.target.closest("button,input,select"))return;session.fix=option.dataset.o;session.skipBlocked=false;compute(issue);});
+    document.querySelectorAll("[data-fix]").forEach(button=>button.onclick=()=>{session.fix=button.dataset.fix;session.skipBlocked=false;const menu=button.closest(".review-more-methods");if(menu){menu.open=false;session.more=false;}compute(issue);});
+    document.querySelectorAll(".opt[data-o]").forEach(option=>option.onclick=event=>{if(event.target.closest("button,input,select,textarea,details,a"))return;session.fix=option.dataset.o;session.skipBlocked=false;compute(issue);});
     bind("reviewMore","change",event=>{if(event.target.value){session.fix=event.target.value;session.skipBlocked=false;compute(issue);}});
+    bind("reviewMoreMethods","toggle",event=>{session.more=event.target.open;});
+    bind("reviewImpactDetails","toggle",event=>{session.impactOpen=event.target.open;});
     bind("reviewAskAi","click",()=>{session.askOpen=!session.askOpen;renderPreservingReviewFocus();if(session.askOpen)document.getElementById("reviewAiInstruction")?.focus();});
     bind("reviewAskAiRule","click",()=>{session.ruleOpen=!session.ruleOpen;renderPreservingReviewFocus();if(session.ruleOpen)document.getElementById("reviewRuleInstruction")?.focus();});
     bind("reviewRuleInstruction","input",event=>{session.ruleInstruction=event.target.value;});

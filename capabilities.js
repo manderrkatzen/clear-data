@@ -52,9 +52,10 @@ function enhanceCapabilityPages() {
   if (state.screen === "data") { enhanceRuleSuggestions(); enhanceQualityScorecard(); }
   if (state.screen === "report") {
     state.exportOptions ||= { includeFlags: true, includeMethods: false };
-    screen.querySelector(".report-head").insertAdjacentHTML("afterend", `<section class="workspace-card"><h2>Cleaned CSV provenance</h2><label class="check"><input id="exportImputedFlags" type="checkbox" ${state.exportOptions.includeFlags ? "checked" : ""}> Include imputation flags (default)</label><label class="check"><input id="exportImputationMethods" type="checkbox" ${state.exportOptions.includeMethods ? "checked" : ""}> Include imputation method columns</label><p class="review-scope">Flags follow active approved fills; rollback removes their effects. Formula-like text is quoted safely. Generated names avoid source headers.</p></section>`);
-    $("#exportImputedFlags").onchange = event => { state.exportOptions.includeFlags = event.target.checked; };
-    $("#exportImputationMethods").onchange = event => { state.exportOptions.includeMethods = event.target.checked; };
+    screen.querySelector(".report-metrics").insertAdjacentHTML("afterend", `<details class="workspace-card export-options"><summary>CSV options <span>${state.exportOptions.includeFlags?"Fill flags included":"Fill flags off"}${state.exportOptions.includeMethods?" · methods included":""}</span></summary><div class="export-option-fields"><label class="check"><input id="exportImputedFlags" type="checkbox" ${state.exportOptions.includeFlags ? "checked" : ""}> Include imputation flags</label><label class="check"><input id="exportImputationMethods" type="checkbox" ${state.exportOptions.includeMethods ? "checked" : ""}> Include imputation method columns</label></div><p class="review-scope">Flags follow active approved fills; rollback removes their effects. Formula-like text is quoted safely. Generated names avoid source headers.</p></details>`);
+    const updateExportSummary = () => { screen.querySelector(".export-options summary span").textContent = `${state.exportOptions.includeFlags?"Fill flags included":"Fill flags off"}${state.exportOptions.includeMethods?" · methods included":""}`; };
+    $("#exportImputedFlags").onchange = event => { state.exportOptions.includeFlags = event.target.checked; updateExportSummary(); };
+    $("#exportImputationMethods").onchange = event => { state.exportOptions.includeMethods = event.target.checked; updateExportSummary(); };
   }
 }
 function enhanceRuleSuggestions() {

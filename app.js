@@ -140,10 +140,10 @@ function refreshChrome() {
   $("#headerIssues").textContent = `${openCount()} open findings`;
   $("#navChangeCount").textContent = state.changes.length;
   $("#navChangeCount").classList.toggle("hidden", !state.changes.length);
-  $("#undoButton").classList.toggle("hidden", !state.changes.length);
+  $("#undoButton").classList.toggle("hidden", !state.changes.length || ["issues", "changes"].includes(state.screen));
   $("#contextAction").textContent = state.screen === "data" ? "Inspect data" : state.screen === "report" ? "Export cleaned CSV" : state.screen === "issues" && openCount() ? "Next finding →" : openCount() ? "Review findings →" : "View report →";
-  $("#contextAction").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
-  $("#headerIssues").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
+  $("#contextAction").classList.toggle("hidden", !state.headers.length || state.screen !== "view");
+  $("#headerIssues").classList.add("hidden");
 }
 let originalPreviewPinned = false, originalPreviewRowsShown = 0, originalPreviewTrigger = null;
 const originalPreviewBatchSize = 250;
@@ -419,16 +419,16 @@ function openIssue(id) {
 }
 function renderChanges() {
   $("#topEyebrow").textContent = "CHANGE HISTORY";
-  screen.innerHTML = `<section class="page-head compact"><div><p class="eyebrow">WORKING VERSION</p><h1>Transparent change history</h1></div></section>${state.changes.length ? `<section class="change-list" tabindex="0" aria-label="Approved decision history">${state.changes.map((change) => `<article class="change-card"><header><div><span class="status-badge success">${change.disposition === "valid" ? "ACCEPTED — NO CHANGE" : "FINALIZED"}</span><h2>${escapeHtml(change.issue.column)} · ${escapeHtml(change.title)}</h2><p>${change.rows.length} records reviewed · ${change.patches.length} cells modified · ${(change.removedRows || []).length} records removed</p><small>${escapeHtml(change.createdAt)}</small></div><button class="secondary" data-rollback="${change.id}">Rollback</button></header><div class="comparison"><div><small>BEFORE THIS DECISION</small><p>${escapeHtml(change.before)}</p></div><span>→</span><div><small>AFTER THIS DECISION</small><p>${escapeHtml(change.after)}</p></div></div><p>${escapeHtml(change.reason)}</p>${change.note ? `<p><b>Analyst rationale:</b> ${escapeHtml(change.note)}</p>` : ""}</article>`).join("")}</section>` : `<section class="empty-panel"><h2>No approved decisions yet</h2><button class="secondary" id="reviewIssues">Review issues</button></section>`}`;
+  screen.innerHTML = `<section class="page-head compact"><div><h1>Decisions</h1><p>${state.changes.length} approved</p></div></section>${state.changes.length ? `<section class="change-list" tabindex="0" aria-label="Approved decision history">${state.changes.map((change) => `<article class="change-card"><header><div><span class="status-badge ${change.disposition === "valid" ? "neutral" : "success"}">${change.disposition === "valid" ? "Accepted unchanged" : "Applied"}</span><h2>${escapeHtml(change.issue.column)} · ${escapeHtml(change.title)}</h2><p>${change.patches.length} cells changed${change.removedRows?.length?` · ${change.removedRows.length} rows removed`:""}</p><small>${escapeHtml(change.createdAt)}</small></div><button class="secondary" data-rollback="${change.id}">Undo decision</button></header><div class="comparison"><div><small>Before</small><p>${escapeHtml(change.before)}</p></div><span aria-hidden="true">→</span><div><small>After</small><p>${escapeHtml(change.after)}</p></div></div>${change.note ? `<p><b>Note:</b> ${escapeHtml(change.note)}</p>` : ""}<details class="decision-details"><summary>Decision details</summary><p>${change.rows.length} records reviewed</p><p>${escapeHtml(change.reason)}</p></details></article>`).join("")}</section>` : `<section class="empty-panel"><h2>No approved decisions</h2><button class="secondary" id="reviewIssues">Review findings</button></section>`}`;
   $("#reviewIssues")?.addEventListener("click", () => go("issues"));
   document.querySelectorAll("[data-rollback]").forEach((button) => button.onclick = () => confirmRollback(button.dataset.rollback));
 }
 function renderReport() {
   $("#topEyebrow").textContent = "QUALITY REPORT";
   const m = metrics();
-  screen.innerHTML = `<section class="page-head report-head"><div><p class="eyebrow">WORKING VERSION SUMMARY</p><h1>Quality report</h1><p>${openCount()} findings remain for review. Accepted findings may retain blanks or unusual values.</p></div><button class="primary" id="downloadCsv">Export cleaned CSV ↓</button></section><section class="metric-grid report-metrics"><article><span>DATASET</span><strong>${m.rows.toLocaleString()} × ${m.columns}</strong></article><article><span>FINDINGS</span><strong>${state.issues.length}</strong><small>${m.resolved} closed · ${m.decisions} approved decisions</small></article><article><span>MODIFIED ROWS</span><strong>${m.changedRows}</strong><small>${m.changedCells} modified cells compared with source</small></article><article><span>OPEN</span><strong>${openCount()}</strong><small>${m.blanks} blank cells retained</small></article></section>`;
+  screen.innerHTML = `<section class="page-head report-head"><div><h1>Quality report</h1><p>${m.decisions} approved ${m.decisions===1?"decision":"decisions"} · ${openCount()} open ${openCount()===1?"finding":"findings"}</p></div><button class="primary" id="downloadCsv">Export cleaned CSV</button></section><section class="metric-grid report-metrics"><article><span>Rows × columns</span><strong>${m.rows.toLocaleString()} × ${m.columns}</strong></article><article><span>Reviewed findings</span><strong>${m.resolved} / ${state.issues.length}</strong></article><article><span>Modified cells</span><strong>${m.changedCells}</strong><small>${m.changedRows} ${m.changedRows===1?"row":"rows"} affected</small></article><article><span>Blank cells</span><strong>${m.blanks.toLocaleString()}</strong></article></section>`;
   $("#downloadCsv").onclick = downloadCsv;
-  screen.insertAdjacentHTML?.("beforeend", `<p class="review-scope">${m.removedRows} source records removed from the working dataset. Removed rows are separate from modified cells.</p>${reportExportControls()}`);
+  screen.insertAdjacentHTML?.("beforeend", `${m.removedRows?`<p class="review-scope">${m.removedRows} source rows removed</p>`:""}${reportExportControls()}`);
   bindReportExports();
 }
 function rollbackChange(id) {

@@ -373,3 +373,70 @@ body.ui-pages-active button:focus-visible, body.ui-pages-active a:focus-visible,
   body.ui-pages-active .legend { flex-wrap:wrap; }
   body.ui-pages-active .foot .link { min-height:44px; display:inline-flex; align-items:center; }
 }
+
+/* DISTILL-03: evidence → treatment effect → action. No repeated stage introductions. */
+body.ui-pages-active .head h1 { font-size:24px; line-height:1.3; }
+body.ui-pages-active .head .sub { margin-top:6px; font-size:13px; }
+body.ui-pages-active .head .state { background:var(--status-bg); color:var(--muted); border-radius:4px; }
+body.ui-pages-active .tabs { margin:20px 0 24px; }
+body.ui-pages-active .main [data-review-section] { margin:0 0 24px; }
+body.ui-pages-active .main [data-review-section] > h2 { margin:0 0 12px; color:var(--ink); font-size:16px; line-height:1.4; font-weight:600; }
+body.ui-pages-active .lead { font-size:21px; line-height:1.4; margin:0 0 20px; max-width:65ch; }
+body.ui-pages-active .review-context { margin:0 0 18px; color:var(--muted); font-size:13px; max-width:70ch; }
+body.ui-pages-active .headline { padding:0; margin:0 0 12px; background:none; border-radius:0; color:var(--muted); font-size:14px; }
+body.ui-pages-active .vals { grid-template-columns:minmax(0,1fr); gap:12px; }
+body.ui-pages-active .review-assistance { padding:0; color:var(--muted); font-size:13px; max-width:70ch; }
+body.ui-pages-active .review-assistance p { margin:0 0 8px; }
+body.ui-pages-active .review-assistance .link { font-size:13px; margin-inline-end:16px; }
+body.ui-pages-active .selection-value { min-width:0; overflow-wrap:anywhere; }
+body.ui-pages-active .selection-context { display:block; margin-top:4px; color:var(--muted); font:13px/1.5 var(--font-ui); }
+body.ui-pages-active .selection-value > .mono { overflow-wrap:anywhere; white-space:normal; }
+body.ui-pages-active .review-scope-line { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 20px; margin:0 0 24px; color:var(--muted); font-size:14px; }
+body.ui-pages-active .review-scope-line b { color:var(--ink); font-weight:600; }
+body.ui-pages-active .review-scope-line .link { font-size:13px; }
+body.ui-pages-active .treatment-list { border-block:1px solid var(--line); }
+body.ui-pages-active .opt { grid-template-columns:20px minmax(0,1fr) auto; align-items:start; gap:6px 12px; padding:14px 16px; }
+body.ui-pages-active .opt.on { background:var(--blue-soft); box-shadow:none; }
+body.ui-pages-active .opt .title { font-size:15px; line-height:1.5; }
+body.ui-pages-active .opt .inline-edit { border:0; padding:0; margin-left:6px; }
+body.ui-pages-active .treatment-radio { width:16px; height:16px; margin:3px 0 0; padding:0; accent-color:var(--blue); }
+body.ui-pages-active .opt .badge { align-self:center; font-size:12px; font-weight:400; border-radius:4px; }
+body.ui-pages-active .opt:not(.on) .badge { background:none; padding:0; color:var(--muted); }
+body.ui-pages-active .opt .desc { grid-column:2/-1; margin:0; font-size:14px; max-width:70ch; }
+body.ui-pages-active .opt .extra { margin-top:6px; }
+body.ui-pages-active .treatment-caveat { grid-column:2/-1; margin:0; font-size:13px; color:var(--muted); }
+body.ui-pages-active .review-treatment-details { grid-column:2/-1; margin:2px 0 0; font-size:13px; color:var(--muted); }
+body.ui-pages-active .review-treatment-details summary { font-size:13px; font-weight:400; }
+body.ui-pages-active .review-treatment-details p { margin:10px 0; max-width:70ch; }
+body.ui-pages-active .review-treatment-details dl { margin:12px 0; }
+body.ui-pages-active .review-treatment-details dl > div { display:flex; justify-content:space-between; gap:16px; max-width:520px; padding-block:4px; }
+body.ui-pages-active .review-treatment-details dd { margin:0; color:var(--ink); font-variant-numeric:tabular-nums; }
+body.ui-pages-active .review-more-methods { margin:0; border-bottom:1px solid var(--line); }
+body.ui-pages-active .review-more-methods summary { padding:12px 0; font-weight:400; color:var(--muted); }
+body.ui-pages-active .review-more-methods summary span { margin-inline-start:4px; }
+body.ui-pages-active .review-more-methods > div { display:flex; flex-wrap:wrap; gap:8px; padding:0 0 14px; max-height:220px; overflow:auto; }
+body.ui-pages-active .review-tools { display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px 24px; padding-top:14px; }
+body.ui-pages-active .review-settings, body.ui-pages-active .review-ai-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px 16px; }
+body.ui-pages-active .review-tools .link { font-size:13px; }
+body.ui-pages-active .review-ai-tools .meta { font-size:12px; }
+body.ui-pages-active .review-ai-request, body.ui-pages-active #reviewAiRuleRequest { background:none; border:0; border-top:1px solid var(--line); border-radius:0; padding:18px 0 0; margin-top:18px; }
+body.ui-pages-active .change { border:0; border-radius:0; padding:0; background:none; }
+body.ui-pages-active .change .metrics { padding-bottom:16px; border-bottom:1px solid var(--line); margin-bottom:20px; gap:16px 24px; }
+body.ui-pages-active .change .metrics .l { margin-bottom:4px; }
+body.ui-pages-active .change .metrics .v { font-size:21px; line-height:1.3; }
+body.ui-pages-active .review-decision-meta { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:24px; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font-size:13px; }
+body.ui-pages-active .review-decision-meta p, body.ui-pages-active .review-decision-meta details { flex-basis:100%; margin:4px 0 0; }
+body.ui-pages-active .foot .in { gap:16px; }
+body.ui-pages-active .foot .sum { display:flex; align-items:center; flex-wrap:wrap; gap:8px 20px; }
+body.ui-pages-active .foot .sum > .link { margin:0; }
+body.ui-pages-active .foot .sum > [role=status] { flex-basis:100%; }
+@container (max-width:600px) {
+  body.ui-pages-active .opt { grid-template-columns:20px minmax(0,1fr); }
+  body.ui-pages-active .opt .badge, body.ui-pages-active .opt .desc, body.ui-pages-active .opt .extra { grid-column:2; justify-self:start; }
+}
+@media (max-width:620px) {
+  body.ui-pages-active .review-tools .link, body.ui-pages-active .review-scope-line .link { display:inline-flex; align-items:center; min-height:44px; }
+  body.ui-pages-active .review-more-methods summary { min-height:44px; }
+  body.ui-pages-active .change .metrics .v { font-size:18px; }
+  body.ui-pages-active .review-tools { gap:8px 20px; }
+}

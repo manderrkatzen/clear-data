@@ -1,10 +1,11 @@
 // CORE-40, CORE-41, CORE-42, CORE-43, CORE-44, CORE-45, CORE-46, CORE-47: traceable chart primitives.
 var ReviewCharts = (() => {
   const colors = {before:"#C9CFD8",after:"#2E6BD9",neutral:"#C9CFD8",problem:"#E07B39"};
-  const chartWidth = options => {
+  const chartWidth = (options = {}) => {
     if(typeof window==="undefined")return 720;
-    const main=document.querySelector(".review-main"),style=main&&getComputedStyle(main),available=main?main.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight):window.innerWidth-56;
-    return Math.max(240,Math.min(720,options.small&&window.innerWidth>620?(available-14)/2:available));
+    const viewport=window.innerWidth,rail=viewport>800?(document.querySelector(".sidebar")?.offsetWidth||196):0,task=viewport-rail-(viewport>800?260:0),gutters=viewport<=800?32:task<=520?48:96;
+    const wrap=document.querySelector("#screen .main .wrap"),available=wrap?.clientWidth||task-gutters;
+    return Math.max(240,Math.min(options.max||720,options.small&&viewport>620?(available-14)/2:available));
   };
   const numeric = (rows,column,excluded = new Set(),options = {}) => {
     const classifications=options.snapshot?[]:effectiveClassifications(),policy=options.policy || columnPolicy(column),index=new Map(classifications.map(entry=>[`${entry.rowId}:${entry.column}`,entry]));
@@ -77,5 +78,5 @@ var ReviewCharts = (() => {
       root.addEventListener("pointerdown",event=>{if(!figure.contains(event.target))hide();},true);
     });
   }
-  return {colors,numeric,skew,histogram:histogramChart,categories:categoryChart,timeline,bindInteractions};
+  return {colors,numeric,skew,width:chartWidth,histogram:histogramChart,categories:categoryChart,timeline,bindInteractions};
 })();

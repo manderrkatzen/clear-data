@@ -91,11 +91,38 @@ function showManualCorrection() {
 function decorateDecisionHistory() {
   document.querySelectorAll(".change-card").forEach((card, index) => {
     const change = state.changes[index]; if (!change?.interpretation || !card.insertAdjacentHTML) return;
-    card.insertAdjacentHTML("beforeend", `<p class="decision-interpretation"><b>Analyst interpretation:</b> ${escapeHtml(change.interpretation.replaceAll("_", " "))} · <b>Scope:</b> ${change.rows.length} reviewed source records. ${change.treatment?.scope?.mode === "condition" ? `Condition: ${escapeHtml(change.treatment.scope.column)} ${escapeHtml(change.treatment.scope.operator)} ${escapeHtml(change.treatment.scope.value)}.` : ""}</p>`);
+    (card.querySelector(".decision-details") || card).insertAdjacentHTML("beforeend", `<p class="decision-interpretation"><b>Interpretation:</b> ${escapeHtml(change.interpretation.replaceAll("_", " "))}${change.treatment?.scope?.mode === "condition" ? ` · ${escapeHtml(change.treatment.scope.column)} ${escapeHtml(change.treatment.scope.operator)} ${escapeHtml(change.treatment.scope.value)}` : ""}</p>`);
     if (typeof analyticalFillMetadataHtml === "function" && change.treatment?.fillMetadata) card.insertAdjacentHTML("beforeend", analyticalFillMetadataHtml(change.treatment.fillMetadata, true));
   });
 }
 function enhanceDatasetScreen() {
+  // DISTILL-02: concise, source-grounded presentation; never rewrite dataset values or analyst notes.
+  if (state.headers.length) {
+    const overview = reviewOverview(), m = metrics();
+    screen.querySelectorAll(".eyebrow").forEach(node => node.remove());
+    const summary = screen.querySelector(".page-head p");
+    if (summary) summary.textContent = state.changes.length ? `${state.changes.length} approved ${state.changes.length===1?"decision":"decisions"} · ${m.changedCells} modified cells` : "Original data";
+    const launch = screen.querySelector(".review-launch");
+    if (launch) {
+      launch.querySelector("h2").textContent = overview.open.length ? `${overview.open.length} open ${overview.open.length===1?"finding":"findings"} · ${overview.columns} ${overview.columns === 1 ? "column" : "columns"}` : "No open findings";
+      launch.querySelector("p").textContent = `${overview.rows.toLocaleString()} of ${m.rows.toLocaleString()} rows flagged`;
+    }
+    const labels = ["Rows", "Columns", "Blank cells", "Reviewed findings"];
+    screen.querySelectorAll(".metric-grid article").forEach((article, index) => {
+      article.querySelector("span").textContent = labels[index];
+      const note = article.querySelector("small");
+      if (index === 0 && m.removedRows) note.textContent = `${m.removedRows} removed`;
+      else note?.remove();
+    });
+    screen.querySelector(".column-profile header p")?.remove();
+    const coverage = screen.querySelector(".coverage-note");
+    if (coverage) {
+      coverage.querySelector("summary").textContent = "Checks and definitions";
+      const definitions = document.createElement("p");
+      definitions.textContent = "Types are inferred unless declared. Blank cells and flagged values need context; reviewed findings may be retained unchanged.";
+      coverage.append(definitions);
+    }
+  }
   screen.querySelectorAll?.(".profile-table tbody tr").forEach((row, index) => {
     const column = state.headers[index], metadata = row.cells[1]?.querySelector("small");
     const declared = columnPolicy(column).role !== "auto" || state.ruleConfig.schema.some(rule => rule.column === column && rule.type !== "any");

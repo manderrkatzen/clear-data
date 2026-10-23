@@ -313,6 +313,18 @@ There are no raster assets in the new visual system. Its assets are inline SVG p
 
 ## Components
 
+### Editorial hierarchy (current)
+
+The workspace defaults to an analyst-first, evidence-led interface. This distillation supersedes the earlier question-at-the-top composition: do not narrate the stage, repeat selected counts in every block, show empty-note placeholders, or add motivational next-step sentences. The issue header supplies identity; section headings name the evidence. Explore opens directly on rules and selection, Fix on selected scope and treatments, and Review on recorded metrics and the comparison. Supporting instructions are retained only when they explain a real interaction or decision consequence. Dataset/user values and analyst notes are never passed through copy-replacement filters.
+
+Shared section headings use 16px semibold, treatment labels 15px, main evidence 14px, supporting context 13px, and compact metadata 12px. Selection context sits below the source value rather than running into it. Generic headline boxes and chart cards are flattened. Blue identifies selection and the primary action; unselected treatment risks are muted, with a colored risk label for the selected method. Native treatment radio controls support keyboard selection. Only the selected method expands parameters and consequences; disabled prerequisites remain explained and actionable. Complete existing consequences, metric sums, and before/after figures remain available in Impact details without recomputing the preview.
+
+Other treatments is a collapsed disclosure; choosing an alternative closes it and exposes the selected method. Scope/metric controls and AI assistance are separate groups. AI inputs are opt-in and preserve the existing proposal/approval contract. Explore's action is Fix selected beside one scope summary; Fix names the concrete operation and count; Review makes Next issue primary and Undo decision secondary. Recorded method, timestamp, optional note and AI-rule metadata follow the evidence. No note is rendered only when it is actual analyst-authored content, never as an empty-state fallback.
+
+Dataset leads with file identity, findings, compact metrics and the profile. Check caveats live under Checks and definitions. Decisions leads with applied/accepted outcomes and source comparisons; interpretation, full scope and reasons live under Decision details. Report leads with metrics and a single primary CSV export action. CSV options is a collapsed disclosure with live flag/method status; artifact downloads are secondary. The persistent shell and original-data popup keep their state-preserving contracts.
+
+Charts measure the current `.main .wrap` rather than the obsolete `.review-main` container. Histograms and outlier strips recompose their drawing width while retaining existing bins, domains, bounds and row identities. Outlier tick formatting follows the column rather than forcing currency, retaining subunit precision for logarithmic ticks.
+
 ### Shared workspace foundations
 
 The general design layer owns fields, checkbox-label spacing, field grids, Explore's search toolbar, spreadsheet header padding, and Dataset's distribution legend/axis layout. These definitions remain available when the Review reference stylesheet is disabled. Review's reference shell aliases its action, surface, and secondary-text colors to the application tokens; shared evidence tokens are defined at root so chart legends never depend on a `.review-page` ancestor. Review buttons retain the common six-pixel control radius and keyboard focus treatment.

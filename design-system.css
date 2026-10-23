@@ -351,3 +351,18 @@ table, .metric-grid strong { font-variant-numeric: tabular-nums; }
   #originalPreview { width:calc(100vw - 24px); height:calc(100dvh - var(--peek-top,0px) - 32px); }
   #historyOriginalPreview { flex:1 1 auto; }
 }
+/* DISTILL-04: app-wide information hierarchy; supporting facts do not compete with evidence. */
+.review-launch { background:none; border:0; border-block:1px solid var(--line); border-radius:0; padding:18px 0; }
+.review-launch h2 { color:var(--ink); font-size:18px; }
+.review-launch p { color:var(--muted); font-size:13px; }
+.metric-grid strong { font-size:23px; }
+.profile-finding { background:none; border-color:var(--line); }
+.column-profile header h2 { margin:0; }
+.decision-details { margin-top:16px; padding-top:12px; border-top:1px solid var(--line); }
+.decision-details summary { font-size:13px; font-weight:400; }
+.decision-details p { font-size:13px; }
+.change-card h2 { font-size:18px; }
+.report-downloads .workspace-actions { margin-top:16px; }
+.export-options summary { font-size:14px; }
+.export-option-fields { display:flex; flex-wrap:wrap; gap:12px 24px; margin-top:16px; }
+.topbar .eyebrow { display:none; }
