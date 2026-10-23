@@ -122,7 +122,19 @@ function metrics() {
 function refreshChrome() {
   $("#datasetName").textContent = state.fileName || "No dataset loaded";
   $("#versionBadge").textContent = state.changes.length ? "Working version" : "Original";
-  if (state.screen !== "issues" && !$("#originalPreview").hidden) hideOriginalPreview();
+  if (!["issues", "changes"].includes(state.screen) && !$("#originalPreview").hidden) hideOriginalPreview();
+  let peek = document.querySelector("#historyOriginalPreview");
+  if (state.screen === "changes" && state.original.length && !peek) {
+    peek = document.createElement("button");
+    peek.id = "historyOriginalPreview";
+    peek.className = "secondary";
+    peek.textContent = "Peek at original data";
+    peek.setAttribute("aria-controls", "originalPreview");
+    peek.setAttribute("aria-expanded", "false");
+    document.querySelector(".header-actions").prepend(peek);
+    bindOriginalPreviewTrigger(peek);
+  }
+  if (peek) peek.hidden = state.screen !== "changes";
   $("#navIssueCount").textContent = openCount();
   $("#headerIssues").textContent = `${openCount()} open findings`;
   $("#navChangeCount").textContent = state.changes.length;
@@ -132,13 +144,8 @@ function refreshChrome() {
   $("#contextAction").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
   $("#headerIssues").classList.toggle("hidden", !state.headers.length || state.screen === "issues");
 }
-let originalPreviewCloseTimer = 0, originalPreviewPinned = false, originalPreviewRowsShown = 0, suppressOriginalPreviewFocus = false, originalPreviewKeyboardMode = false, originalPreviewTrigger = null;
+let originalPreviewPinned = false, originalPreviewRowsShown = 0, originalPreviewTrigger = null;
 const originalPreviewBatchSize = 250;
-function clearOriginalPreviewCloseTimer() {
-  if (originalPreviewCloseTimer && typeof clearTimeout === "function") clearTimeout(originalPreviewCloseTimer);
-  else if (originalPreviewCloseTimer) window.clearTimeout?.(originalPreviewCloseTimer);
-  originalPreviewCloseTimer = 0;
-}
 function renderOriginalPreviewRows() {
   const viewport = $("#originalPreviewViewport");
   if (!state.original.length || !viewport) return;
@@ -147,7 +154,7 @@ function renderOriginalPreviewRows() {
   const end = Math.min(originalPreviewRowsShown, rows.length);
   const content = rows.slice(0, end).map((row) => `<tr><th scope="row">${escapeHtml(row._row)}</th>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`).join("");
   viewport.innerHTML = `<table id="originalPreviewTable"><thead><tr><th scope="col">#</th>${headers.map((header) => `<th scope="col">${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${content}</tbody></table>${end < rows.length ? `<button class="secondary" id="loadMoreOriginalRows" type="button">Show next ${Math.min(originalPreviewBatchSize, rows.length - end).toLocaleString()} rows</button>` : ""}`;
-  $("#originalPreviewSummary").textContent = `${end.toLocaleString()} of ${rows.length.toLocaleString()} original rows · ${headers.length.toLocaleString()} columns`;
+  $("#originalPreviewSummary").textContent = `${state.fileName} · ${end.toLocaleString()} of ${rows.length.toLocaleString()} original rows · ${headers.length.toLocaleString()} columns`;
   const loadMore = $("#loadMoreOriginalRows");
   if (loadMore) loadMore.onclick = () => {
     const focusInPane=viewport.contains(document.activeElement),top=viewport.scrollTop,left=viewport.scrollLeft;
@@ -157,41 +164,36 @@ function renderOriginalPreviewRows() {
   };
 }
 function showOriginalPreview({ pinned = false, trigger = originalPreviewTrigger } = {}) {
-  if (!state.original.length || state.screen !== "issues" || !ReviewCore.current() || ReviewCore.data(ReviewCore.current()).tab !== "fix") return;
+  if (!state.original.length || !["issues", "changes"].includes(state.screen)) return;
   if (trigger) originalPreviewTrigger = trigger;
-  clearOriginalPreviewCloseTimer();
   originalPreviewPinned = pinned;
   if ($("#originalPreview").hidden) {
     originalPreviewRowsShown = Math.min(originalPreviewBatchSize, state.original.length);
     renderOriginalPreviewRows();
     $("#originalPreview").hidden = false;
   }
+  const nav = document.querySelector(document.body.classList.contains("ui-pages-active") ? "#screen .nav" : ".sidebar");
+  const bounds = nav?.getBoundingClientRect();
+  const horizontal = bounds && bounds.width > innerWidth / 2;
+  document.documentElement.style.setProperty("--peek-left", horizontal ? "0px" : `${bounds?.right || 0}px`);
+  document.documentElement.style.setProperty("--peek-top", horizontal ? `${Math.max(0, bounds.bottom)}px` : "0px");
+  $("#originalPreviewBackdrop").hidden = false;
+  document.body.classList.add("original-preview-open");
   originalPreviewTrigger?.setAttribute("aria-expanded", "true");
 }
 function hideOriginalPreview({ restoreFocus = false } = {}) {
-  clearOriginalPreviewCloseTimer();
   const focusInPane = $("#originalPreview").contains?.(document.activeElement);
   originalPreviewPinned = false;
   $("#originalPreview").hidden = true;
+  $("#originalPreviewBackdrop").hidden = true;
+  document.body?.classList.remove("original-preview-open");
   originalPreviewTrigger?.setAttribute("aria-expanded", "false");
-  if (restoreFocus && focusInPane && originalPreviewTrigger?.isConnected && document.activeElement !== originalPreviewTrigger) { suppressOriginalPreviewFocus = true; originalPreviewTrigger.focus({ preventScroll: true }); }
-}
-function scheduleOriginalPreviewClose() {
-  clearOriginalPreviewCloseTimer();
-  originalPreviewCloseTimer = window.setTimeout(() => {
-    const preview = $("#originalPreview"), trigger = originalPreviewTrigger;
-    if (originalPreviewPinned || preview.matches(":hover") || trigger?.matches(":hover") || originalPreviewKeyboardMode && (preview.contains(document.activeElement) || trigger === document.activeElement)) return;
-    hideOriginalPreview();
-  }, 400);
+  if (restoreFocus && focusInPane && originalPreviewTrigger?.isConnected && document.activeElement !== originalPreviewTrigger) originalPreviewTrigger.focus({ preventScroll: true });
 }
 function bindOriginalPreviewTrigger(trigger) {
   // prepareReviewBindings removes previous callbacks before each render. Rebind retained triggers too.
   if (!trigger) return;
   let ignoreClickUntil = 0;
-  trigger.addEventListener("pointerenter", (event) => { if (event.pointerType === "touch") return; originalPreviewKeyboardMode = false; showOriginalPreview({ trigger }); });
-  trigger.addEventListener("pointerleave", scheduleOriginalPreviewClose);
-  trigger.addEventListener("focus", () => { if (suppressOriginalPreviewFocus) suppressOriginalPreviewFocus = false; else { originalPreviewKeyboardMode = true; showOriginalPreview({ trigger, pinned: originalPreviewPinned }); } });
-  trigger.addEventListener("blur", scheduleOriginalPreviewClose);
   trigger.addEventListener("mousedown", event => event.preventDefault());
   trigger.addEventListener("pointerdown", (event) => {
     if (event.pointerType !== "touch") return;
@@ -208,10 +210,17 @@ function bindOriginalPreviewTrigger(trigger) {
   });
   trigger.addEventListener("keydown", closeOriginalPreviewOnEscape);
 }
-$("#originalPreview").addEventListener("pointerenter", () => { originalPreviewKeyboardMode = false; clearOriginalPreviewCloseTimer(); });
-$("#originalPreview").addEventListener("pointerleave", scheduleOriginalPreviewClose);
-$("#originalPreview").addEventListener("focusin", clearOriginalPreviewCloseTimer);
-$("#originalPreview").addEventListener("focusout", scheduleOriginalPreviewClose);
+$("#originalPreviewBackdrop").addEventListener("mousedown", event => event.preventDefault());
+$("#originalPreviewBackdrop").addEventListener("click", () => hideOriginalPreview({ restoreFocus: true }));
+$("#originalPreviewBackdrop").addEventListener("wheel", event => event.preventDefault(), { passive: false });
+$("#originalPreviewBackdrop").addEventListener("touchmove", event => event.preventDefault(), { passive: false });
+$("#originalPreview").addEventListener("keydown", event => {
+  if (event.key !== "Tab") return;
+  const controls = [...$("#originalPreview").querySelectorAll("button, [tabindex='0']")];
+  const first = controls[0], last = controls[controls.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus({ preventScroll: true }); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus({ preventScroll: true }); }
+});
 $("#originalPreview").addEventListener("mousedown", event => { if(event.target.closest("button"))event.preventDefault(); });
 $("#originalPreview").addEventListener("pointerdown", event => { if(event.pointerType === "touch" && event.target.closest("button"))event.preventDefault(); });
 $("#closeOriginalPreview").addEventListener("click", () => hideOriginalPreview({ restoreFocus: true }));
@@ -220,6 +229,14 @@ const closeOriginalPreviewOnEscape = (event) => {
 };
 $("#originalPreview").addEventListener("keydown", closeOriginalPreviewOnEscape);
 document.addEventListener?.("keydown", closeOriginalPreviewOnEscape, true);
+// PEEK-03: opening by pointer preserves the active draft; keyboard input cannot act behind the pane.
+document.addEventListener?.("keydown", event => {
+  if ($("#originalPreview").hidden || $("#originalPreview").contains(event.target) || event.target.closest(".sidebar, #screen .nav")) return;
+  if (event.key === "Escape") return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.key === "Tab") $("#originalPreviewViewport").focus({ preventScroll: true });
+}, true);
 let renderingWorkspace = false, workspaceRenderQueued = false;
 function render() {
   // CORE-17, CORE-22: input blur/change may request another render during a background DOM replacement.
@@ -448,7 +465,7 @@ function confirmRollback(id) {
   $("#cancelRollback").onclick = () => $("#confirmDialog").close();
   $("#doRollback").onclick = () => { rollbackChange(id); $("#confirmDialog").close(); render(); };
 }
-function go(name) { if (!state.headers.length && name !== "data") return; state.screen = name; render(); }
+function go(name) { if (!state.headers.length && name !== "data") return; if (name !== state.screen) hideOriginalPreview(); state.screen = name; render(); }
 function loadSample(name) {
   const samples = [
     ["healthcare_patient_visits.csv", "Healthcare patient visits", "Patient visits, clinical measurements, and readmissions"],

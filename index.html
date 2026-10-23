@@ -36,8 +36,9 @@
     <input type="file" id="rulesInput" accept=".json,application/json" hidden />
     <dialog id="confirmDialog"><div id="dialogContent"></div></dialog>
     <div class="toast" id="toast" role="status"></div>
-    <section id="originalPreview" role="region" aria-label="Original worksheet preview" aria-describedby="originalPreviewSummary" hidden>
-      <header><div><strong>Original worksheet</strong><span id="originalPreviewSummary"></span></div><button class="ghost" id="closeOriginalPreview" type="button" aria-label="Close original worksheet preview">Close</button></header>
+    <div id="originalPreviewBackdrop" hidden></div>
+    <section id="originalPreview" role="dialog" aria-label="Original data — read-only" aria-describedby="originalPreviewSummary" hidden>
+      <header><div><strong>Original data · read-only</strong><span id="originalPreviewSummary"></span></div><button class="ghost" id="closeOriginalPreview" type="button" aria-label="Close original data preview">Close</button></header>
       <div class="table-wrap" id="originalPreviewViewport" tabindex="0" aria-label="Scrollable original data table"></div>
     </section>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
