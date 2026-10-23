@@ -14,6 +14,7 @@ for (const asset of ["review-core.js", "review-charts.js", "issues/missing.js", 
 assets.add("issues/multi-value.js");
 assets.add("issues/sensitive.js");
 assets.add("review-components.js");
+assets.add("review-reference.css");
 
 async function sendWebResponse(response, result) {
   response.writeHead(result.status, Object.fromEntries(result.headers));

@@ -9,14 +9,8 @@
   background:var(--rv-bg); color:var(--rv-ink); font-size:15px; line-height:1.5; font-variant-numeric:tabular-nums;
 }
 .screen:has(.review-page) { padding:0; max-width:none; }
-.app-shell:has(.review-page) { grid-template-columns:168px minmax(0,1fr); }
-.app-shell:has(.review-page) .topbar { height:60px; min-height:60px; }
 .top [data-original-preview-trigger] { flex-shrink:0; white-space:nowrap; }
 body.ui-pages-active .top:has([data-original-preview-trigger]) { position:sticky; top:0; z-index:10; }
-.app-shell:has(.review-page) .eyebrow, .app-shell:has(.review-page) .product-label, .app-shell:has(.review-page) .sidebar-bottom { display:none; }
-.app-shell:has(.review-page) .sidebar { padding:24px 16px; }
-.app-shell:has(.review-page) .brand { font-size:22px; }
-.app-shell:has(.review-page) .sidebar nav { margin-top:32px; }
 .review-issues { display:flex; flex-direction:column; min-width:0; min-height:0; padding:24px 0; background:var(--rv-surface); border-right:1px solid var(--rv-line); }
 .review-issues-heading { display:flex; justify-content:space-between; align-items:center; margin:0 24px 12px; }
 .review-issues-heading h2 { font-size:13px; color:var(--rv-ink-3); margin:0; font-weight:600; text-transform:uppercase; }
@@ -257,7 +251,7 @@ body.ui-pages-active [data-ui="review.explore.missing.sheet"]:not(.scroll-x):not
 }
 
 /* LAY-27…31: keep the reference shell usable on narrow screens without changing shared.css. */
-body.ui-pages-active .shell { grid-template-rows:56px minmax(0,1fr); height:100%; min-height:0; }
+body.ui-pages-active .shell { grid-template-rows:minmax(0,1fr); height:100%; min-height:0; }
 body.ui-pages-active .body { height:100%; min-height:0; overflow:hidden; }
 body.ui-pages-active .issues { min-height:0; }
 body.ui-pages-active .main { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
@@ -326,12 +320,12 @@ body.ui-pages-active .mono { font-family:ui-monospace,monospace; }
 body.ui-pages-active button:focus-visible, body.ui-pages-active a:focus-visible, body.ui-pages-active [tabindex="0"]:focus-visible { outline:3px solid #83a9f1; outline-offset:2px; }
 @media (max-width:800px) {
   body.ui-pages-active { height:auto; min-height:100dvh; overflow-x:hidden; overflow-y:auto; overscroll-behavior-y:contain; -webkit-overflow-scrolling:touch; }
-  #screen.reference-screen { position:relative; inset:auto; min-height:100dvh; overflow:visible; z-index:auto; }
-  body.ui-pages-active .app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); height:auto; min-height:100dvh; }
+  #screen.reference-screen { min-height:0; overflow:visible; }
+  body.ui-pages-active .app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto; height:auto; min-height:0; }
   body.ui-pages-active .nav { display:flex; align-items:center; gap:4px; min-width:0; overflow-x:auto; padding:8px 12px; }
   body.ui-pages-active .nav .brand { flex:0 0 auto; padding:0 8px 0 0; font-size:18px; white-space:nowrap; }
   body.ui-pages-active .nav a { flex:0 0 auto; min-height:40px; margin:0; padding:8px 10px; white-space:nowrap; }
-  body.ui-pages-active .shell { grid-template-rows:auto auto; width:100%; min-width:0; height:auto; min-height:calc(100dvh - 56px); overflow:visible; }
+  body.ui-pages-active .shell { grid-template-rows:auto; width:100%; min-width:0; height:auto; min-height:0; overflow:visible; }
   body.ui-pages-active .top { min-width:0; min-height:56px; height:auto; flex-wrap:wrap; gap:8px 12px; padding:8px 16px; }
   body.ui-pages-active .top .file { flex:1 1 100%; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   body.ui-pages-active .body { grid-template-columns:minmax(0,1fr); width:100%; height:auto; min-width:0; min-height:0; overflow:visible; }

@@ -1,6 +1,7 @@
 /* Shared application foundations. Review's composition lives in review-page.css. */
 * { box-sizing: border-box; }
 body { margin: 0; }
+@media (min-width:801px) { html { scrollbar-gutter:stable; } }
 button { cursor: pointer; font: inherit; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 input, select, textarea { font: inherit; min-width: 0; }
@@ -68,5 +69,4 @@ dialog h2 { margin-top: 0; }
   .change-card header { flex-wrap: wrap; }
   .comparison { grid-template-columns: 1fr; gap: 10px; }
 }
-.app-shell.reference-hidden { display: none; }
-#screen.reference-screen { display: block; position: fixed; inset: 0; z-index: 1000; max-width: none; margin: 0; padding: 0; overflow: hidden; }
+#screen.reference-screen { display:block; max-width:none; margin:0; padding:0; overflow:hidden; }

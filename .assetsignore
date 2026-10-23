@@ -27,6 +27,7 @@
 ui_pages/*
 !ui_pages/shared.css
 !review-page.css
+!review-reference.css
 !review-bands.js
 !value-review.js
 !design-system.css

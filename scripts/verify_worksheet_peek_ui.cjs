@@ -57,7 +57,7 @@ const base = process.env.BASE_URL || "http://localhost:4174";
       assert.ok(await pane.evaluate(element => getComputedStyle(element).position === "fixed"), "The worksheet is an overlay pane");
       assert.ok(await page.locator("#originalPreviewBackdrop").evaluate(element => getComputedStyle(element).backdropFilter.includes("blur")), "Workspace is blurred");
       assert.ok(await page.evaluate(() => {
-        const nav = document.querySelector("#screen .nav").getBoundingClientRect();
+        const nav = document.querySelector(".sidebar").getBoundingClientRect();
         const backdrop = document.querySelector("#originalPreviewBackdrop").getBoundingClientRect();
         return nav.width > innerWidth / 2 ? backdrop.top >= nav.bottom : backdrop.left >= nav.right;
       }), "Navigation is outside the blur backdrop");
@@ -119,7 +119,7 @@ const base = process.env.BASE_URL || "http://localhost:4174";
       await historyTrigger.click();
       await page.locator('#navigation [data-screen="issues"]').click();
       assert.equal(await pane.isVisible(),false,"Mode navigation remains usable and dismisses the popup");
-      assert.equal(await historyTrigger.isVisible(),false,"Decisions trigger is hidden outside Decisions");
+      assert.equal(await historyTrigger.isVisible(),true,"Shared peek trigger stays visible in Review");
       await page.locator("#reviewUndo").click();
       assert.equal(await page.evaluate(() => metrics().changedCells), 0);
       assert.deepEqual(errors, []);

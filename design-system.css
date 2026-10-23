@@ -275,7 +275,7 @@ table, .metric-grid strong { font-variant-numeric: tabular-nums; }
   .sidebar { padding-inline: 12px; }
 }
 @media (max-width: 800px) {
-  .app-shell { grid-template-columns: minmax(0, 1fr); }
+  .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows:auto minmax(0, 1fr); }
   .sidebar { position: relative; height: auto; display: block; padding: 15px 18px 0; }
   .brand { font-size: 22px; }
   .brand-symbol { width: 25px; height: 25px; }

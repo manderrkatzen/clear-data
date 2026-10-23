@@ -37,33 +37,27 @@ function prepareReviewBindings(root) {
     registration.list=[];
   }
 }
-let reviewScreenParent=null,reviewScreenNext=null,reviewReferenceMounted=false;
+let reviewReferenceMounted=false;
 function restoreReviewReferenceShell(){
   if(!document.body.classList.contains("ui-pages-active"))return;
-  if(reviewScreenParent)reviewScreenParent.insertBefore(screen,reviewScreenNext?.parentNode===reviewScreenParent?reviewScreenNext:null);
-  screen.classList.remove("reference-screen");document.querySelector(".app-shell")?.classList.remove("reference-hidden");document.querySelector("#reviewReferenceStyles").disabled=true;document.body.classList.remove("ui-pages-active");reviewReferenceMounted=false;
+  screen.classList.remove("reference-screen");document.body.classList.remove("ui-pages-active");reviewReferenceMounted=false;
 }
 function renderReviewPage() {
   ReviewComponents.beginGroupedRender();
   $("#topEyebrow").textContent="REVIEW";
-  if(!reviewScreenParent){reviewScreenParent=screen.parentNode;reviewScreenNext=screen.nextSibling;}
-  screen.classList.add("reference-screen");if(screen.parentNode!==document.body)document.body.append(screen);document.body.classList.add("ui-pages-active");document.querySelector(".app-shell")?.classList.add("reference-hidden");document.querySelector("#reviewReferenceStyles").disabled=false;
+  // SHELL-01: only the workspace content changes; navigation and topbar remain mounted.
+  screen.classList.add("reference-screen");document.body.classList.add("ui-pages-active");
   const open=state.issues.filter(issue=>issue.status==="open"),selected=state.issues.find(issue=>issue.id===state.selectedIssue)||open[0]||state.issues[0];if(selected)state.selectedIssue=selected.id;
   const ordered=[...state.issues].sort((a,b)=>state.headers.indexOf(a.displayColumn||a.column)-state.headers.indexOf(b.displayColumn||b.column)||ReviewCore.order.indexOf(a.reviewType)-ReviewCore.order.indexOf(b.reviewType));
   const grouped=new Map();for(const issue of ordered){const column=issue.displayColumn||issue.column;if(!grouped.has(column))grouped.set(column,[]);grouped.get(column).push(issue);}
   const list=[...grouped].map(([column,issues])=>`<div class="col" data-column="${escapeHtml(column)}">${escapeHtml(column==="All columns"?"(all columns)":column)}</div>${issues.map(issue=>{const module=ReviewCore.moduleFor(issue),count=module.queueCount?module.queueCount(issue):module.count?module.count(issue):reviewRows(issue).length,status=issue.status==="open"?"open":issue.status==="valid"?"accepted":"fixed",uniqueness=issue.reviewType==="duplicate-values"?ReviewCore.data(issue).uniquenessAssessment:null,displayCount=uniqueness&&uniqueness.confidence>=80?count.toLocaleString():issue.reviewType==="duplicate-values"?"ask":count.toLocaleString();return `<a href="#" class="item ${selected?.id===issue.id?"on":""}" id="reviewIssue${issue.id}" data-ui="review.list.item" data-review-issue="${issue.id}" aria-current="${selected?.id===issue.id?"page":"false"}"><span>${escapeHtml(issue.displayName||ReviewPageEngine.labels[issue.reviewType]||issue.type)}</span><span class="c num">${status==="open"?displayCount:status}</span></a>`;}).join("")}`).join("");
-  const decision=selected&&state.changes.find(change=>change.issue.id===selected.id),main=selected?reviewIssueHtml(selected):'<div class="wrap"><h1>No findings</h1><p>The current checks found no issues to review.</p></div>';
-  // PEEK-01: original evidence remains available throughout issue review.
-  const worksheetPeek=`<button class="secondary" data-original-preview-trigger type="button" aria-expanded="${!document.getElementById("originalPreview").hidden}" aria-controls="originalPreview">Peek at original data</button>`;
+  const main=selected?reviewIssueHtml(selected):'<div class="wrap"><h1>No findings</h1><p>The current checks found no issues to review.</p></div>';
   const template=document.createElement("template");
-  template.innerHTML=`<div class="app"><nav class="nav" data-ui="app.nav"><div class="brand">ClearData</div><a href="#" data-workspace-screen="data">Dataset</a><a href="#" data-workspace-screen="view">Explore</a><a href="#" class="on" data-workspace-screen="issues">Review <span class="pill">${open.length}</span></a><a href="#" data-workspace-screen="changes">Decisions</a><a href="#" data-workspace-screen="report">Report</a></nav><div class="shell"><header class="top" data-ui="app.top"><span class="file">${escapeHtml(state.fileName||"Dataset")}</span><span class="ver">${state.changes.length?"Working version":"Original"}</span>${worksheetPeek}${decision?'<button class="link" data-ui="top.undo">Undo last change</button>':""}</header><div class="body"><aside class="issues" data-ui="review.list"><div class="hd"><span>ISSUES</span><span>${open.length} open</span></div>${list}</aside><main class="main" data-ui="review.main"><div class="content"><div class="wrap">${main}</div></div></main></div></div></div>`;
+  template.innerHTML=`<div class="app"><div class="shell"><div class="body"><aside class="issues" data-ui="review.list"><div class="hd"><span>ISSUES</span><span>${open.length} open</span></div>${list}</aside><main class="main" data-ui="review.main"><div class="content"><div class="wrap">${main}</div></div></main></div></div></div>`;
   const nextApp=template.content.firstElementChild,footer=nextApp.querySelector(".main .foot");if(footer)nextApp.querySelector(".main").append(footer);
   const currentApp=screen.firstElementChild;if(reviewReferenceMounted&&currentApp?.classList.contains("app"))patchReviewDom(currentApp,nextApp);else screen.replaceChildren(nextApp);const app=screen.firstElementChild;reviewReferenceMounted=true;
   prepareReviewBindings(app);
-  bindOriginalPreviewTrigger(app.querySelector("[data-original-preview-trigger]"));
   app.querySelectorAll("[data-review-issue]").forEach(button=>button.onclick=event=>{event.preventDefault();ReviewCore.select(Number(button.dataset.reviewIssue));});
-  app.querySelectorAll("[data-workspace-screen]").forEach(link=>link.onclick=event=>{event.preventDefault();go(link.dataset.workspaceScreen);});
-  app.querySelector('[data-ui="top.undo"]')?.addEventListener("click",()=>{const change=state.changes[0];if(change)rollbackChange(change.id);render();});
   if(selected)ReviewCore.bindShared(selected);
   ReviewComponents.bindGroupBrowsers(app);
   ReviewCharts.bindInteractions(app);

@@ -124,17 +124,18 @@ function refreshChrome() {
   $("#versionBadge").textContent = state.changes.length ? "Working version" : "Original";
   if (!["issues", "changes"].includes(state.screen) && !$("#originalPreview").hidden) hideOriginalPreview();
   let peek = document.querySelector("#historyOriginalPreview");
-  if (state.screen === "changes" && state.original.length && !peek) {
+  if (["issues", "changes"].includes(state.screen) && state.original.length && !peek) {
     peek = document.createElement("button");
     peek.id = "historyOriginalPreview";
     peek.className = "secondary";
     peek.textContent = "Peek at original data";
     peek.setAttribute("aria-controls", "originalPreview");
     peek.setAttribute("aria-expanded", "false");
+    peek.setAttribute("data-original-preview-trigger", "");
     document.querySelector(".header-actions").prepend(peek);
     bindOriginalPreviewTrigger(peek);
   }
-  if (peek) peek.hidden = state.screen !== "changes";
+  if (peek) peek.hidden = !["issues", "changes"].includes(state.screen);
   $("#navIssueCount").textContent = openCount();
   $("#headerIssues").textContent = `${openCount()} open findings`;
   $("#navChangeCount").textContent = state.changes.length;
@@ -172,7 +173,7 @@ function showOriginalPreview({ pinned = false, trigger = originalPreviewTrigger 
     renderOriginalPreviewRows();
     $("#originalPreview").hidden = false;
   }
-  const nav = document.querySelector(document.body.classList.contains("ui-pages-active") ? "#screen .nav" : ".sidebar");
+  const nav = document.querySelector(".sidebar");
   const bounds = nav?.getBoundingClientRect();
   const horizontal = bounds && bounds.width > innerWidth / 2;
   document.documentElement.style.setProperty("--peek-left", horizontal ? "0px" : `${bounds?.right || 0}px`);
@@ -193,18 +194,16 @@ function hideOriginalPreview({ restoreFocus = false } = {}) {
 function bindOriginalPreviewTrigger(trigger) {
   // prepareReviewBindings removes previous callbacks before each render. Rebind retained triggers too.
   if (!trigger) return;
-  let ignoreClickUntil = 0;
   trigger.addEventListener("mousedown", event => event.preventDefault());
   trigger.addEventListener("pointerdown", (event) => {
     if (event.pointerType !== "touch") return;
     event.preventDefault();
-    ignoreClickUntil = Date.now() + 800;
     if (originalPreviewPinned) hideOriginalPreview();
     else showOriginalPreview({ pinned: true, trigger });
   });
   trigger.addEventListener("click", (event) => {
     event.preventDefault();
-    if (Date.now() < ignoreClickUntil) { ignoreClickUntil = 0; return; }
+    if (event.pointerType === "touch" || event.sourceCapabilities?.firesTouchEvents) return;
     if (originalPreviewPinned) hideOriginalPreview({ restoreFocus: true });
     else { showOriginalPreview({ pinned: true, trigger }); if (event.detail === 0) $("#originalPreviewViewport").focus({ preventScroll: true }); }
   });

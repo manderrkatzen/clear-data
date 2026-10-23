@@ -73,7 +73,7 @@ const base = process.env.BASE_URL || "http://localhost:4174";
     assert.ok(!(await page.locator("#reviewApply").isDisabled()));
     await page.locator("#reviewApply").click();
     await page.waitForFunction(() => state.changes.length === 1);
-    await page.locator('[data-workspace-screen="data"]').click();
+    await page.locator('#navigation [data-screen="data"]').click();
     await page.waitForSelector(".cumulative-view");
     await page.locator("#cumulativeColumn").selectOption("delivery_days__missing_pattern");
     const effect = await page.evaluate(() => ({ original: interpretedNumericValues(state.original, "delivery_days__missing_pattern", null, true).length, working: interpretedNumericValues(state.rows, "delivery_days__missing_pattern").length, bins: document.querySelectorAll(".cumulative-view .bars > .pairs").length, visibleBars: [...document.querySelectorAll(".cumulative-view .bars .bar")].filter(mark => mark.getBoundingClientRect().height > 0).length }));
